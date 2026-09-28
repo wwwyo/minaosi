@@ -1,5 +1,2 @@
-[env]
-DEVIN_TRACE_TO_LANGFUSE = "true"
-
 [tools]
 bun = "1.4.2"
