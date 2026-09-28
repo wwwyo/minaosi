@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+.env
+.env.local
+*.log
+.agent/
+.output/
+.wxt/
+web-ext-artifacts/
+.claude/settings.local.json
+.codex/langfuse.json
