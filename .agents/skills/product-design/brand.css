@@ -9,7 +9,7 @@
  */
 
 :root {
-  /* Colors — 中立グレーの面に、単一アクセント（濃い藍）だけを機能に紐づける。
+  /* Colors — 中立グレーの面に、単一アクセント色だけを機能に紐づける。
    * 色は OKLCH で管理する（知覚均一。brand-css-check は OKLCH を sRGB へ解決してコントラストを計算する）。 */
   --color-bg-canvas: oklch(99% 0.002 264); /* 拡張 chrome が載る基底面。host の本文色とは区別しない */
   --color-bg-panel: oklch(97% 0.004 264); /* サイドパネルの面。canvas より一段沈める */
