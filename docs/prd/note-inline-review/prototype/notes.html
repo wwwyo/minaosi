@@ -57,17 +57,17 @@
     padding: 0 3px; margin-left: 2px;
   }
 
-  /* apply tooltip on suggestion hover */
+  /* apply tooltip on suggestion hover — 位置は JS がカーソル下の行に合わせて置く */
   .fx { position: relative; }
   .fx-tip {
-    position: absolute; bottom: calc(100% + 2px); left: 50%;
-    transform: translateX(-50%) translateY(2px);
+    position: absolute; top: 0; left: 0;
+    transform: translateX(-50%) translateY(calc(-100% + 2px));
     padding-bottom: 4px;
     opacity: 0; pointer-events: none;
     transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
     z-index: 45; white-space: nowrap;
   }
-  .fx:hover .fx-tip, .fx:focus-within .fx-tip { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+  .fx:hover .fx-tip, .fx:focus-within .fx-tip { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(-100%); }
   .fx-tip button {
     display: inline-flex; align-items: center; gap: 4px;
     font: inherit; font-size: 12px; font-weight: 700; line-height: 1;
@@ -457,6 +457,24 @@ function wire(root) {
     };
     el.addEventListener('click', activate);
     el.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); activate(); } });
+  });
+  root.querySelectorAll('.fx').forEach(el => {
+    const tip = el.querySelector('.fx-tip');
+    if (!tip) return;
+    const place = (x, y) => {
+      const fxr = el.getBoundingClientRect();
+      const rects = [...el.getClientRects()];
+      if (!rects.length) return;
+      const line = rects.find(r => y >= r.top - 2 && y <= r.bottom)
+        || rects.reduce((a, b) => Math.abs(b.top - y) < Math.abs(a.top - y) ? b : a);
+      const half = tip.offsetWidth / 2;
+      const cx = Math.min(Math.max(x, half + 8), innerWidth - half - 8);
+      tip.style.left = `${cx - fxr.left}px`;
+      tip.style.top = `${line.top - fxr.top}px`;
+    };
+    el.addEventListener('mouseenter', e => place(e.clientX, e.clientY));
+    el.addEventListener('mousemove', e => place(e.clientX, e.clientY));
+    el.addEventListener('focusin', () => { const r = el.getClientRects()[0]; if (r) place(r.left + r.width / 2, r.top); });
   });
 }
 
