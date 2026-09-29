@@ -27,10 +27,10 @@
 
   /* Accent — suggestion（修正案）と selection（選択中の指摘）だけに使う。
    * これ以外の場面で accent を使うと「どこを見ればいいか」が薄まるので禁止。 */
-  --color-accent: oklch(48% 0.11 264);
+  --color-accent: oklch(48% 0.13 155);
   --color-on-accent: oklch(100% 0 0);
-  --color-accent-ink: oklch(40% 0.12 268); /* 淡い面上での accent 文字色（AA 確保済み） */
-  --color-accent-tint: oklch(94% 0.012 264); /* 修正案チップ・選択マークの背景 */
+  --color-accent-ink: oklch(43% 0.12 155); /* 淡い面上での accent 文字色（AA 確保済み） */
+  --color-accent-tint: oklch(94.5% 0.03 155); /* 修正案チップ・選択マークの背景 */
 
   /* Strike — 削除対象（修正案の「前」の文字列）の取り消し線だけに使う。
    * エラーや警告の赤ではない。危険色として流用しない。 */
