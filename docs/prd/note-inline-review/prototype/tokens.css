@@ -1,6 +1,13 @@
 /* Hallmark · component: findings-panel · genre: editorial · theme: mono+accent
  * states: default · hover · focus · active · selected · resolved · dismissed · suppressed
  * Hallmark · pre-emit critique: P5 H4 E5 S4 R4 V4
+ *
+ * このファイルは Hallmark 時代の語彙のまま残す prototype 用スナップショット。
+ * 正本の役割ベース語彙は .agents/skills/product-design/brand.css:
+ *   paper→bg-canvas  panel→bg-panel  card→bg-surface  hover-bg→bg-hover
+ *   ink→ink  dim→ink-sub  faint→ink-mute  hairline→line  edge→line-strong
+ *   accent→accent  accent-ink→accent-ink  suggest-bg→accent-tint
+ *   strike→strike  flash-ring→flash
  */
 :root {
   --color-paper: oklch(99% 0.002 264);
