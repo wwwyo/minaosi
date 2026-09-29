@@ -291,20 +291,7 @@ def rule_undefined_and_fallback_var(css: str, filename: str, all_props: dict[str
     findings = []
     for name, fallback, ln, matched in find_var_refs(css):
         if name in all_props:
-            # Check for undefined vars in fallback recursively
-            if fallback:
-                for fb_name, _ in find_var_refs_in_fallback(fallback):
-                    if fb_name not in all_props:
-                        findings.append(
-                            Finding(
-                                "undefined-var",
-                                "error",
-                                filename,
-                                ln,
-                                matched,
-                                f"{fb_name} が fallback 内で参照されているが未定義",
-                            )
-                        )
+            # 主変数が解決できるなら fallback は評価されないので検査対象外
             continue
         if fallback is not None:
             findings.append(

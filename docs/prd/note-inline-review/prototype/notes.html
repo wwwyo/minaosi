@@ -96,6 +96,7 @@
   .panel h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .02em; }
   .panel .prog { color: var(--color-dim); font-size: 11.5px; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .list { overflow-y: auto; flex: 1; }
+  .list .empty { padding: 24px 16px; color: var(--color-faint); font-size: 12.5px; text-align: center; }
 
   .filters { display: flex; gap: 2px; margin-top: 10px; }
   .filters button {
@@ -206,7 +207,7 @@
 
 <script>
 const KINDS = { typo:'誤字', fact:'事実', rule:'日本語ルール', style:'文体規範' };
-const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 const ARTICLE = [
   { t:'h1', h:'なんでこれ存在しているんや' },
@@ -244,23 +245,23 @@ const FINDINGS = [
   { id:3, kind:'fact', block:8, span:'96行', fix:{from:'96行',to:'62行'},
     title:'地銀の行数',
     reason:'地方銀行協会の加盟行は62行です。「96行」が何を数えた数字か確認してください。範囲が不明なら62行に直します。',
-    source:{ label:'地方銀行協会', url:'https://www.chiginkyo.or.jp/' } },
+    source:{ label:'地方銀行協会', url:'https://www.chiginkyo.or.jp/', loc:'加盟行一覧（62行）' } },
   { id:4, kind:'fact', block:15, span:'企業数の合計は337.5万者', fix:{from:'企業数の合計は337.5万者',to:'事業所数の合計は337.5万者'},
     title:'企業数の集計と定義',
     reason:'中小企業白書の集計対象は「企業」ではなく「事業所」です。「事業所数」に直すか、企業数を数えた一次出典に差し替えてください。',
-    source:{ label:'2021年版 中小企業白書', url:'https://www.chusho.meti.go.jp/pamflet/hakusyo/' } },
+    source:{ label:'2021年版 中小企業白書', url:'https://www.chusho.meti.go.jp/pamflet/hakusyo/', loc:'第1部 第1-1-4図 事業所数の推移' } },
   { id:5, kind:'fact', block:19, span:'2023年度の営業純益に占める海外の割合は56%',
     fix:{from:'2023年度の営業純益に占める海外の割合は56%',to:'2023年度の営業純益に占める海外の割合は56%（統合報告書より）'},
     title:'MUFG の海外収益比率',
     reason:'統合報告書2023の管理計数（モルガン・スタンレー持分法損益を含む）ベースの数値です。出典を明記してください。',
-    source:{ label:'MUFG 統合報告書 2023', url:'https://www.mufg.jp/ir/report/annual_report/' } },
+    source:{ label:'MUFG 統合報告書 2023', url:'https://www.mufg.jp/ir/report/annual_report/', loc:'経営成績 セグメント情報（海外収益比率）' } },
   { id:6, kind:'rule', block:13, span:'わけ', all:true,
     fixes:[{from:'わけ',to:'のだ'},{from:'わけ',to:'のではない'},{from:'わけ',to:'のだ'}],
     title:'語尾「わけ」の連続',
     reason:'同一段落内で語尾「わけ」が3回連続しています。修正案のうち2箇所を適用してください。' },
   { id:7, kind:'rule', block:8, suppressed:true,
     title:'です・ます調と常体の混在',
-    reason:'敬体（「です」「ありません」）と常体（「ないでしょう」「あるんや」）が段落内で混在しています。あなたの文体規範では混在を許容しているため、一覧に残しているだけです。直すなら常体または敬体に統一してください。' },
+    reason:'敬体（「です」「ありません」）と常体（「ないでしょう」「あるんや」）が段落内で混在しています。あなたの文体規範では混在を許容しているため、この指摘は抑制され UI には表示されません。' },
   { id:8, kind:'style', block:22, span:'ということで', fix:{from:'ということで',to:'つまり'},
     title:'接続詞「ということで」の多用',
     reason:'この記事内で3回目です。作者の過去記事でも多用傾向にあります。意図的な口癖なら残しても良いですが、1箇所は「つまり」への置き換えや削除を検討してください。' },
@@ -355,7 +356,7 @@ function render() {
   const list = FINDINGS.filter(f => !f.suppressed && fstate.get(f.id)===filter);
   const c = counts();
   const prog = [[`未対応 ${c.o}`,c.o],[`適用済み ${c.r}`,c.r],[`削除 ${c.d}`,c.d]]
-    .filter(([,n])=>n>0).map(([t])=>t).join(' · ') || '未対応 0';
+    .filter(([,n])=>n>0).map(([t])=>t).join(' · ');
   const meta = '下書き — note エディタ（模） — 校閲実行済み';
   const head = `<header><div class="head-row"><button class="brand" data-close title="パネルを閉じる" aria-label="パネルを閉じる">${LOGO_MARK}<span class="brand-name">minaosi</span><svg class="chev" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M5 3.5l3.5 3.5L5 10.5M9.5 3.5L13 7l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="run-btn sm" data-rerun ${running?'disabled':''}>${running?'見直し中…':`<svg class="pre" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M7.5 1.5l1.5 4.1 4.1 1.5-4.1 1.5-1.5 4.1-1.5-4.1-4.1-1.5 4.1-1.5 1.5-4.1z" fill="currentColor"/><path d="M12.6 9.6l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z" fill="currentColor"/></svg>見直す`}</button></div>
@@ -363,15 +364,15 @@ function render() {
         <div class="filters">${tabs.map(([k,l])=>`<button data-f="${k}" class="${filter===k?'on':''}" aria-pressed="${filter===k}">${l}</button>`).join('')}</div>
       </header>`;
   const body = `<div class="list">${list.map(f => `
-        <div class="n-item is-${fstate.get(f.id)}" data-fid="${f.id}" tabindex="0"${f.id===selFid?' data-sel':''}>
+        <div class="n-item is-${fstate.get(f.id)}" data-fid="${f.id}" tabindex="0" role="button"${f.id===selFid?' data-sel':''}>
           <div class="meta"><span class="kind">${KINDS[f.kind]}</span></div>
           <div class="ttl">${f.title}</div>
           <div class="detail">
             <div class="rsn">${f.reason}</div>
-            ${f.source?`<div class="src">出典: <a href="${f.source.url}" target="_blank" rel="noopener">${f.source.label}</a></div>`:''}
+            ${f.source?`<div class="src">出典: <a href="${f.source.url}" target="_blank" rel="noopener">${esc(f.source.label)}</a>${f.source.loc?` — ${esc(f.source.loc)}`:''}</div>`:''}
           </div>
           ${actsHTML(f)}
-        </div>`).join('')}</div>`;
+        </div>`).join('') || '<div class="empty">指摘はありません</div>'}</div>`;
   return `<div class="with-panel">
     <div class="editor"><div class="doc-meta">${meta}</div>
     <div class="doc-body">${articleHTML()}</div></div>
@@ -438,7 +439,10 @@ function wire(root) {
       if (e.target.closest('a')) return;
       select();
     });
-    it.addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); select(); } });
+    it.addEventListener('keydown', e => {
+      if (e.target !== it) return;
+      if (e.key==='Enter' || e.key===' ') { e.preventDefault(); select(); }
+    });
   });
   root.querySelectorAll('.mk, .bmark').forEach(el => {
     const activate = (e) => {
