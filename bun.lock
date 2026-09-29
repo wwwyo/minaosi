@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "minaosu",
+      "name": "minaosi",
       "devDependencies": {
         "typescript": "7.0.2",
         "wxt": "0.21.4",
