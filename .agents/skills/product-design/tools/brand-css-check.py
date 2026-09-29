@@ -356,11 +356,12 @@ def rule_contrast_same_block(css: str, filename: str, all_props: dict[str, tuple
     for selector, body, start_offset in rules:
         if not body.endswith(";"):
             body += ";"
-        color_m = re.search(r"(?<![-\w])color\s*:\s*([^;]+);", body)
-        bg_m = re.search(r"background(?:-color)?\s*:\s*([^;]+);", body)
+        # CSS は後の宣言が勝つので最後のマッチを採用する
+        color_m = list(re.finditer(r"(?<![-\w])color\s*:\s*([^;]+);", body))
+        bg_m = list(re.finditer(r"background(?:-color)?\s*:\s*([^;]+);", body))
         if not color_m or not bg_m:
             continue
-        color_val, bg_val = color_m.group(1).strip(), bg_m.group(1).strip()
+        color_val, bg_val = color_m[-1].group(1).strip(), bg_m[-1].group(1).strip()
         ln = line_of(css, start_offset)
 
         color_rgb = resolve_color(color_val, all_props)

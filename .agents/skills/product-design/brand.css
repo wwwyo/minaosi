@@ -17,7 +17,7 @@
   --color-bg-hover: oklch(95% 0.006 264); /* hover・選択行の背景。存在感を出しすぎない */
   --color-ink: oklch(24% 0.02 264); /* 本文級の墨色。純黒にせずわずかに藍を含ませる */
   --color-ink-sub: oklch(44% 0.02 264); /* 理由文・メタ情報など二次テキスト */
-  --color-ink-mute: oklch(58% 0.02 264); /* 件数・補助ラベル・消えゆくアイコン */
+  --color-ink-mute: oklch(52% 0.02 264); /* 件数・補助ラベル・消えゆくアイコン（panel 面上で AA 4.5 確保） */
   --color-line: oklch(87% 0.008 264); /* 区切り線（ヘアライン） */
   --color-line-strong: oklch(80% 0.01 264); /* 操作枠線（ghost button 等） */
 
@@ -141,15 +141,12 @@
 .card-finding:hover { background: var(--color-bg-hover); }
 .card-finding.is-selected { border-left-color: var(--color-ink); background: var(--color-bg-surface); }
 .card-finding.is-resolved { color: var(--color-ink-mute); }
-.card-finding.is-deleted { opacity: 0.5; }
-.card-finding.is-deleted .card-finding-title { text-decoration: line-through; }
 
 .card-finding-kind {
   font-size: var(--font-size-micro);
   font-weight: 700; letter-spacing: var(--letter-spacing-micro);
   color: var(--color-ink-sub);
 }
-.card-finding-stat { font-size: var(--font-size-micro); font-weight: 600; color: var(--color-ink-mute); }
 .card-finding-title { font-size: var(--font-size-body); font-weight: 600; margin-top: 2px; }
 .card-finding-reason { font-size: var(--font-size-small); color: var(--color-ink-sub); margin-top: var(--space-2); }
 .card-finding-source { font-size: var(--font-size-caption); margin-top: var(--space-1); }
@@ -164,25 +161,22 @@
 .card-actions .icon-danger:hover { color: var(--color-ink-sub); }
 .card-actions .icon-danger svg { width: 12px; height: 12px; display: block; }
 
-/* Text mark — 本文上の指摘印。点線下線のみ、hover/選択で濃くする。 */
-.mark {
-  border-bottom: 2px dotted var(--color-ink-mute);
-  padding-bottom: 1px; cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
-}
+/* Mark — 本文上の指摘印。下線で状態を示す装飾は使わない（点線/実線の違いは判別しにくい）。
+   選択中は指摘の範囲だけを 1.5px の細いリングで囲う。段落や文全体は囲わない。 */
+.mark { cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
 .mark:hover { background: var(--color-bg-hover); }
-.mark.is-selected { border-bottom: 2px solid var(--color-accent); background: var(--color-accent-tint); }
+.mark.is-selected { background: var(--color-accent-tint); box-shadow: 0 0 0 1.5px var(--color-ring); border-radius: var(--radius-sm); }
 
 /* Block mark — 段落全体への指摘。左の細バーで示す。 */
 .block-mark { border-left: 3px solid var(--color-line); padding-left: 10px; cursor: pointer; }
 .block-mark:hover { border-left-color: var(--color-ink); }
 .block-mark.is-selected { border-left-color: var(--color-accent); background: var(--color-bg-hover); }
 
-/* 選択中の指摘を含むブロックを囲う細いリング（1.5px、太くしない）。 */
-.block-ring { box-shadow: 0 0 0 1.5px var(--color-ring); border-radius: var(--radius-sm); }
-
 /* Suggestion — 修正案のインライン表現。「前」は取り消し線、「後」は色つき文字。
-   挿入候補はボタンではなく色のついたテキストとして扱う（操作は tooltip の動詞ボタンが担う）。 */
+   挿入候補はボタンではなく色のついたテキストとして扱う（操作は tooltip の動詞ボタンが担う）。
+   選択中は .suggest 自身（修正範囲）にリングを付ける。 */
+.suggest { cursor: pointer; }
+.suggest.is-selected { background: var(--color-accent-tint); box-shadow: 0 0 0 1.5px var(--color-ring); border-radius: var(--radius-sm); }
 .suggest-del { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: var(--color-strike); color: var(--color-ink-sub); }
 .suggest-ins { color: var(--color-accent-ink); background: var(--color-accent-tint); border-radius: var(--radius-sm); padding: 0 3px; margin-left: 2px; text-decoration: none; }
 
@@ -196,9 +190,13 @@
 .filter-tab:hover { color: var(--color-ink); background: var(--color-bg-hover); }
 .filter-tab.is-on { color: var(--color-ink); background: var(--color-bg-surface); border-color: var(--color-line-strong); }
 
-/* Brand — パネル左上のサービス識別。マーク＋ワードマーク。 */
-.brand { display: flex; align-items: center; gap: 6px; }
-.brand svg { width: 17px; height: 17px; display: block; color: var(--color-ink); }
+/* Brand — パネル左上のサービス識別兼パネルトグル。マーク＋ワードマーク＋畳み方向の »。 */
+.brand { display: flex; align-items: center; gap: 6px; border: 0; background: transparent;
+  padding: 3px 6px 3px 4px; border-radius: var(--radius-sm); cursor: pointer; color: var(--color-ink); }
+.brand:hover { background: var(--color-bg-hover); }
+.brand svg:not(.brand-chev) { width: 17px; height: 17px; display: block; color: var(--color-ink); }
+.brand .brand-chev { width: 13px; height: 13px; color: var(--color-ink-mute); }
+.brand:hover .brand-chev { color: var(--color-ink); }
 .brand-name { font-size: var(--font-size-brand); font-weight: 800; letter-spacing: var(--letter-spacing-brand); }
 
 /* Progress — 非ゼロの状態だけを列挙する件数表示（0件の状態と合計は出さない）。 */
