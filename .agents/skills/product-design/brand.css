@@ -1,0 +1,205 @@
+/*
+ * minaosi — 執筆面（surface）の上に重ねる校閲 UI のデザインシステム。
+ *
+ * 方針は「編集者の朱書き、ただし控えめに」。chrome（パネル・ボタン・マーク）は
+ * モノクロで沈黙させ、指摘の修正案だけを単一アクセント色で運ぶ。
+ * 色に意味を持たせるのは suggestion と selection の2箇所だけで、
+ * 残りは階調とタイポグラフィで階層を作る。
+ * キーワード: 編集面の客、静粛、素読み可能、一色の示唆。
+ */
+
+:root {
+  /* Colors — 中立グレーの面に、単一アクセント（濃い藍）だけを機能に紐づける。
+   * 色は OKLCH で管理する（知覚均一。brand-css-check は OKLCH を sRGB へ解決してコントラストを計算する）。 */
+  --color-bg-canvas: oklch(99% 0.002 264); /* 拡張 chrome が載る基底面。host の本文色とは区別しない */
+  --color-bg-panel: oklch(97% 0.004 264); /* サイドパネルの面。canvas より一段沈める */
+  --color-bg-surface: oklch(100% 0 0); /* カード・ボタン等、浮いた面 */
+  --color-bg-hover: oklch(95% 0.006 264); /* hover・選択行の背景。存在感を出しすぎない */
+  --color-ink: oklch(24% 0.02 264); /* 本文級の墨色。純黒にせずわずかに藍を含ませる */
+  --color-ink-sub: oklch(44% 0.02 264); /* 理由文・メタ情報など二次テキスト */
+  --color-ink-mute: oklch(58% 0.02 264); /* 件数・補助ラベル・消えゆくアイコン */
+  --color-line: oklch(87% 0.008 264); /* 区切り線（ヘアライン） */
+  --color-line-strong: oklch(80% 0.01 264); /* 操作枠線（ghost button 等） */
+
+  /* Action — 主操作は墨の塗りボタン。「適用」「校閲」「再実行」はこれを使う。 */
+  --color-primary: oklch(24% 0.02 264);
+  --color-on-primary: oklch(100% 0 0);
+
+  /* Accent — suggestion（修正案）と selection（選択中の指摘）だけに使う。
+   * これ以外の場面で accent を使うと「どこを見ればいいか」が薄まるので禁止。 */
+  --color-accent: oklch(48% 0.11 264);
+  --color-on-accent: oklch(100% 0 0);
+  --color-accent-ink: oklch(40% 0.12 268); /* 淡い面上での accent 文字色（AA 確保済み） */
+  --color-accent-tint: oklch(94% 0.012 264); /* 修正案チップ・選択マークの背景 */
+
+  /* Strike — 削除対象（修正案の「前」の文字列）の取り消し線だけに使う。
+   * エラーや警告の赤ではない。危険色として流用しない。 */
+  --color-strike: oklch(52% 0.07 20);
+
+  /* Focus / selection ring — キーボード操作と選択中の指摘ブロックの縁取り。 */
+  --color-ring: var(--color-accent);
+  --color-flash: oklch(24% 0.02 264 / 0.25); /* アンカーへ一瞬表示するフラッシュの縁 */
+
+  /* Typography — 和文はゴシック体。chrome 文字は小さい階調で組む（本文は host のもの）。 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Noto Sans JP", "Segoe UI", sans-serif;
+
+  --font-size-micro: 10px; /* 種類ラベル・状態タグ */
+  --font-size-caption: 11.5px; /* 進捗・フィルタ・出典リンク */
+  --font-size-small: 12.5px; /* 理由文 */
+  --font-size-body: 13px; /* カードタイトル・UI 本文 */
+  --font-size-brand: 14px; /* ワードマーク */
+
+  --line-height-ui: 1.6; /* chrome の行間。日本語UIの読みやすさの下限 */
+  --letter-spacing-micro: 0.08em; /* 小さな大文字感ラベル用 */
+  --letter-spacing-brand: 0.04em;
+
+  /* Shapes — 角丸は2段＋丸。カードは角丸を持たない（区切り線で分ける）。 */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-full: 999px;
+
+  /* Spacing — 4 の倍数で 6 段。 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Elevation — 浮くのは tooltip と FAB のみ。パネルは影を落とさず境界線で分ける。 */
+  --shadow-pop: 0 4px 14px oklch(0% 0 0 / 0.25);
+  --shadow-fab: 0 2px 8px oklch(0% 0 0 / 0.18);
+  --shadow-fab-hover: 0 4px 14px oklch(0% 0 0 / 0.24);
+
+  /* Motion — 速い ease-out 一本。装飾的な動きは持たない。 */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-fast: 150ms;
+  --dur-med: 220ms;
+}
+
+/* ========== 基盤 component ========== */
+
+/* Buttons — 主操作は .btn-primary（墨塗り）、副操作は .btn-ghost、icon-only は .icon-btn。 */
+.btn {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 1px solid var(--color-primary);
+}
+.btn-primary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-ghost {
+  background: var(--color-bg-surface);
+  color: var(--color-ink-sub);
+  border: 1px solid var(--color-line-strong);
+}
+.btn-ghost:hover { color: var(--color-ink); border-color: var(--color-ink); }
+
+.icon-btn {
+  width: 24px; height: 24px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; background: transparent; color: var(--color-ink-mute);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.icon-btn:hover { color: var(--color-ink); background: var(--color-bg-hover); }
+.icon-btn svg { width: 13px; height: 13px; display: block; }
+
+/* 校閲を起こす丸い浮動ボタン。書き手の邪魔にならない右上隅に置く。 */
+.fab {
+  width: 44px; height: 44px; border-radius: var(--radius-full);
+  background: var(--color-primary); color: var(--color-on-primary);
+  border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-fab);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.fab:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-fab-hover); }
+.fab:active:not(:disabled) { transform: translateY(1px); }
+.fab:disabled { opacity: 0.55; cursor: default; }
+
+/* Finding card — 一覧の1行。区切り線で分け、選択時は左に墨バー。 */
+.card-finding {
+  display: block; width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  border-left: 3px solid transparent;
+  cursor: pointer; position: relative;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.card-finding:hover { background: var(--color-bg-hover); }
+.card-finding.is-selected { border-left-color: var(--color-ink); background: var(--color-bg-surface); }
+.card-finding.is-resolved { color: var(--color-ink-mute); }
+.card-finding.is-deleted { opacity: 0.5; }
+.card-finding.is-deleted .card-finding-title { text-decoration: line-through; }
+
+.card-finding-kind {
+  font-size: var(--font-size-micro);
+  font-weight: 700; letter-spacing: var(--letter-spacing-micro);
+  color: var(--color-ink-sub);
+}
+.card-finding-stat { font-size: var(--font-size-micro); font-weight: 600; color: var(--color-ink-mute); }
+.card-finding-title { font-size: var(--font-size-body); font-weight: 600; margin-top: 2px; }
+.card-finding-reason { font-size: var(--font-size-small); color: var(--color-ink-sub); margin-top: var(--space-2); }
+.card-finding-source { font-size: var(--font-size-caption); margin-top: var(--space-1); }
+.card-finding-source a { color: var(--color-accent-ink); font-weight: 600; }
+
+/* カード右上のアクション。主操作（適用）は .btn-primary、削除は borderless の静かな icon。 */
+.card-actions { position: absolute; top: 16px; right: 12px; display: flex; gap: 6px; align-items: center; }
+.card-actions .icon-danger {
+  width: 20px; height: 20px; padding: 0; border: 0; background: transparent;
+  color: var(--color-ink-mute); cursor: pointer;
+}
+.card-actions .icon-danger:hover { color: var(--color-ink-sub); }
+.card-actions .icon-danger svg { width: 12px; height: 12px; display: block; }
+
+/* Text mark — 本文上の指摘印。点線下線のみ、hover/選択で濃くする。 */
+.mark {
+  border-bottom: 2px dotted var(--color-ink-mute);
+  padding-bottom: 1px; cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.mark:hover { background: var(--color-bg-hover); }
+.mark.is-selected { border-bottom: 2px solid var(--color-accent); background: var(--color-accent-tint); }
+
+/* Block mark — 段落全体への指摘。左の細バーで示す。 */
+.block-mark { border-left: 3px solid var(--color-line); padding-left: 10px; cursor: pointer; }
+.block-mark:hover { border-left-color: var(--color-ink); }
+.block-mark.is-selected { border-left-color: var(--color-accent); background: var(--color-bg-hover); }
+
+/* 選択中の指摘を含むブロックを囲う細いリング（1.5px、太くしない）。 */
+.block-ring { box-shadow: 0 0 0 1.5px var(--color-ring); border-radius: var(--radius-sm); }
+
+/* Suggestion — 修正案のインライン表現。「前」は取り消し線、「後」は色つき文字。
+   挿入候補はボタンではなく色のついたテキストとして扱う（操作は tooltip の動詞ボタンが担う）。 */
+.suggest-del { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: var(--color-strike); color: var(--color-ink-sub); }
+.suggest-ins { color: var(--color-accent-ink); background: var(--color-accent-tint); border-radius: var(--radius-sm); padding: 0 3px; margin-left: 2px; text-decoration: none; }
+
+/* Filter tabs — 状態切替は3つまで（「すべて」は置かない）。 */
+.filter-tabs { display: flex; gap: 2px; }
+.filter-tab {
+  font-family: var(--font-ui); font-size: var(--font-size-caption); font-weight: 600;
+  border: 1px solid transparent; background: transparent; color: var(--color-ink-sub);
+  padding: 3px 8px; border-radius: var(--radius-md); cursor: pointer;
+}
+.filter-tab:hover { color: var(--color-ink); background: var(--color-bg-hover); }
+.filter-tab.is-on { color: var(--color-ink); background: var(--color-bg-surface); border-color: var(--color-line-strong); }
+
+/* Brand — パネル左上のサービス識別。マーク＋ワードマーク。 */
+.brand { display: flex; align-items: center; gap: 6px; }
+.brand svg { width: 17px; height: 17px; display: block; color: var(--color-ink); }
+.brand-name { font-size: var(--font-size-brand); font-weight: 800; letter-spacing: var(--letter-spacing-brand); }
+
+/* Progress — 非ゼロの状態だけを列挙する件数表示（0件の状態と合計は出さない）。 */
+.progress { font-size: var(--font-size-caption); color: var(--color-ink-sub); font-variant-numeric: tabular-nums; }
