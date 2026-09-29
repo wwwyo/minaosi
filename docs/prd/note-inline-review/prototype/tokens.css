@@ -1,0 +1,36 @@
+/* Hallmark · component: findings-panel · genre: editorial · theme: mono+accent
+ * states: default · hover · focus · active · selected · resolved · dismissed · suppressed
+ * Hallmark · pre-emit critique: P5 H4 E5 S4 R4 V4
+ *
+ * このファイルは Hallmark 時代の語彙のまま残す prototype 用スナップショット。
+ * 正本の役割ベース語彙は repo root の design.md:
+ *   paper→bg-canvas  panel→bg-panel  card→bg-surface  hover-bg→bg-hover
+ *   ink→ink  dim→ink-sub  faint→ink-mute  hairline→line  edge→line-strong
+ *   accent→accent  accent-ink→accent-ink  suggest-bg→accent-tint
+ *   strike→strike  flash-ring→flash
+ */
+:root {
+  --color-paper: oklch(99% 0.002 264);
+  --color-panel: oklch(97% 0.004 264);
+  --color-card: oklch(100% 0 0);
+  --color-ink: oklch(24% 0.02 264);
+  --color-dim: oklch(44% 0.02 264);
+  --color-faint: oklch(52% 0.02 264);
+  --color-hairline: oklch(87% 0.008 264);
+  --color-edge: oklch(80% 0.01 264);
+  --color-accent: oklch(48% 0.13 155);
+  --color-accent-ink: oklch(43% 0.12 155);
+  --color-suggest-bg: oklch(94.5% 0.03 155);
+  --color-strike: oklch(52% 0.07 20);
+  --color-hover-bg: oklch(95% 0.006 264);
+  --color-flash-ring: oklch(24% 0.02 264 / 0.25);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif;
+
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px;
+
+  --radius-sm: 3px; --radius-md: 5px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-fast: 150ms; --dur-med: 220ms;
+}
