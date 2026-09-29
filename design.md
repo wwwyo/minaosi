@@ -127,8 +127,9 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 
 ## Exports
 
-- `.agent/prototypes/finding-display/tokens.css` / `notes.html` および `docs/prd/note-inline-review/prototype/` は検証用スナップショットで、ここから同期される
-- 検査: `python3 .agents/skills/product-design/tools/brand-css-check.py design.md`（未定義 var・`--on-*` ペアの AA コントラスト）
+- `docs/prd/note-inline-review/prototype/` の `notes.html` + `tokens.css` — 検証済み prototype のスナップショット。値は本ファイルから手動で写す（生成スクリプトはない）
+- `.agent/prototypes/finding-display/` は同内容の作業用コピー（gitignore 内・未追跡）
+- `tokens.css` の変数名は本ファイルの語彙への手動マッピング。drift は検査で拾う: `python3 .agents/skills/product-design/tools/brand-css-check.py design.md`（未定義 var・`--on-*` ペアの AA コントラスト）
 
 ## Notes
 

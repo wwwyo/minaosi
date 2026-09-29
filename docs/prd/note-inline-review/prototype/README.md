@@ -17,6 +17,10 @@ cd docs/prd/note-inline-review/prototype && python3 -m http.server 8317
 - 複数箇所の指摘は箇所ごとに部分適用できる
 - パネルはロゴ+» のトグルで畳める。閉じても状態は保持され、再オープンで再実行は要らない
 
+## 選定ハーネス（選定時の名残）
+
+`notes.html` は query param で identity 候補を実 UI に適用して比較できる（design-md フローの選定に使った）。`?font=sys|noto|plex|zen`・`?logo=<variant>`・`?state=open`。webfont の読込はこの比較のためだけで、製品は system stack を持ち webfont は同梱しない（design.md 参照）。棄却した variant は再比較用に残してある。
+
 ## 棄却した方向
 
 `.agent/prototypes/finding-display/` 側の `index.html`（Inline/Margin/Panel/Walkthrough の4方向比較）と `round2.html`（Notes/Redline/Sections の3方向比較）はコピーしていない。再現したければ同 dir を `python3 -m http.server` で開く（`.agent` は gitignore 内のため repo には残らない）。

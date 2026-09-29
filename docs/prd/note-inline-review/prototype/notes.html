@@ -373,7 +373,8 @@ const LOGO_VARIANTS = {
 let LOGO_MARK = LOGO_VARIANTS.m2;
 let BRAND_TEXT = 'minaosi';
 
-/* identity 比較用 query param（?font=sys|noto|plex|zen & logo=check|caret|pen|paper|nib|none & state=open） */
+/* design-md 選定用の比較ハーネス（?font=sys|noto|plex|zen & logo=... & state=open）。
+   webfont 読込は比較のためだけ — 製品は system stack で webfont は持たない（design.md） */
 {
   const qp = new URLSearchParams(location.search);
   const FONT_STACKS = {
@@ -393,7 +394,6 @@ let BRAND_TEXT = 'minaosi';
   const lg = qp.get('logo');
   if (lg && lg in LOGO_VARIANTS) {
     LOGO_MARK = LOGO_VARIANTS[lg];
-    if (lg === 'none') BRAND_TEXT = 'minaosi<span style="color:var(--color-accent-ink)">.</span>';
   }
   if (qp.get('state') === 'open') { reviewed = true; panelOpen = true; }
 }
