@@ -5,7 +5,7 @@ description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パ
 
 # product-design — minaosi
 
-執筆面（surface）の上に重ねる校閲 UI の設計規約。判断原則と、brand.css の変数・クラスの語彙表を持つ。CSS 本体は読まず、この表だけを見て当てる。
+執筆面（surface）の上に重ねる校閲 UI の設計規約。判断原則と、brand.css の変数・クラスの語彙表を持つ。CSS 本体は読まず、この表だけを見て当てる。視覚値・font・icon・logo の正本は repo root の `design.md`。
 
 ## 判断原則
 

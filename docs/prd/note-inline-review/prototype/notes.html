@@ -267,9 +267,9 @@ const FINDINGS = [
     reason:'この記事内で3回目です。作者の過去記事でも多用傾向にあります。意図的な口癖なら残しても良いですが、1箇所は「つまり」への置き換えや削除を検討してください。' },
 ];
 
-const ICON_APPLY = `<svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2 7.5l3.2 3L12 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const ICON_TRASH = `<svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M2.6 3.8h8.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M5.2 3.8V2.7c0-.4.3-.7.7-.7h2.2c.4 0 .7.3.7.7v1.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M4 3.8l.5 7.5c0 .5.4.9.9.9h3.2c.5 0 .9-.4.9-.9l.5-7.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 6.2v3.6M8 6.2v3.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>`;
-const ICON_UNDO = `<svg viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M6.5 3L3.5 6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 6h5.5a3.5 3.5 0 1 1 0 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+const ICON_APPLY = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_TRASH = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_UNDO = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 14 4 9l5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const fstate = new Map(FINDINGS.map(f => [f.id, 'open']));
 const fapplied = new Map(); // fid -> Set<fix index>（複数 fix の部分適用を記録）
@@ -339,12 +339,64 @@ function actsHTML(f) {
   return `<div class="acts">${apply}<button class="trash" data-delete="${f.id}" title="削除" aria-label="削除">${ICON_TRASH}</button></div>`;
 }
 
-const FAB_ICON = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-  <path d="M3.5 5.5h9M3.5 9.5h9M3.5 13.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M10.8 14.6l2.1 2.1 4.1-4.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const LOGO_MARK = `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-  <path d="M3.5 5.5h9M3.5 9.5h9M3.5 13.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-  <path d="M10.8 14.6l2.1 2.1 4.1-4.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const FAB_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const LOGO_VARIANTS = {
+  check: `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M3.5 5.5h9M3.5 9.5h9M3.5 13.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M10.8 14.6l2.1 2.1 4.1-4.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  caret: `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M3.5 5.5h9M3.5 9.5h9M3.5 13.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M10.5 16.5l3-6 3 6M10.5 16.5h6" stroke="var(--color-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  pen: `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M3.5 5.5h13M3.5 9.5h9M3.5 13.5h11" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M11.5 2.5h5M14 2.5v4" stroke="var(--color-accent)" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  paper: `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <rect x="4" y="3" width="12" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M7 7.5h6M7 10.5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M7 13.5l2 2 4-4.5" stroke="var(--color-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  nib: `<svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <path d="M4 15.5c3-1 4.5-6.5 4.5-9.5L12 9c2.5 1.5 4 4.5 4 6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M4 15.5l1.8-4.4L8 13z" fill="var(--color-accent)" stroke="var(--color-accent)" stroke-width="1" stroke-linejoin="round"/></svg>`,
+  m2: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M3 19V8l4.5-3L12 8v11"/><path d="M12 8l4.5-3L21 8v11"/></svg>`,
+  brackets: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M10 4H5v16h5"/><path d="M14 4h5v16h-5"/></svg>`,
+  frames: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M13 4H5v12h8"/><path d="M11 20h8V8h-8"/></svg>`,
+  loop: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M5 5v14h9c3 0 5-2 5-5V5"/><path d="M10 5v9h4"/></svg>`,
+  margin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
+    <path d="M5 4v16"/><path d="M9 7h8"/><path d="M9 12h11"/><path d="M9 17h8"/><path d="M20 9v6"/></svg>`,
+  none: '',
+};
+let LOGO_MARK = LOGO_VARIANTS.m2;
+let BRAND_TEXT = 'minaosi';
+
+/* identity 比較用 query param（?font=sys|noto|plex|zen & logo=check|caret|pen|paper|nib|none & state=open） */
+{
+  const qp = new URLSearchParams(location.search);
+  const FONT_STACKS = {
+    noto: ['"Noto Sans JP"', 'Noto+Sans+JP:wght@400;500;600;700'],
+    plex: ['"IBM Plex Sans JP"', 'IBM+Plex+Sans+JP:wght@400;500;600;700'],
+    zen:  ['"Zen Kaku Gothic New"', 'Zen+Kaku+Gothic+New:wght@400;500;700;900'],
+  };
+  const f = qp.get('font');
+  if (f && f !== 'sys' && FONT_STACKS[f]) {
+    const [stack, fam] = FONT_STACKS[f];
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `https://fonts.googleapis.com/css2?family=${fam}&display=swap`;
+    document.head.appendChild(l);
+    document.documentElement.style.setProperty('--font-ui', `${stack}, "Hiragino Sans", "Yu Gothic", sans-serif`);
+  }
+  const lg = qp.get('logo');
+  if (lg && lg in LOGO_VARIANTS) {
+    LOGO_MARK = LOGO_VARIANTS[lg];
+    if (lg === 'none') BRAND_TEXT = 'minaosi<span style="color:var(--color-accent-ink)">.</span>';
+  }
+  if (qp.get('state') === 'open') { reviewed = true; panelOpen = true; }
+}
 function render() {
   if (!reviewed || !panelOpen) {
     return `<div class="editor"><div class="doc-meta">下書き — note エディタ（模）</div>
@@ -358,8 +410,8 @@ function render() {
   const prog = [[`未対応 ${c.o}`,c.o],[`適用済み ${c.r}`,c.r],[`削除 ${c.d}`,c.d]]
     .filter(([,n])=>n>0).map(([t])=>t).join(' · ');
   const meta = '下書き — note エディタ（模） — 校閲実行済み';
-  const head = `<header><div class="head-row"><button class="brand" data-close title="パネルを閉じる" aria-label="パネルを閉じる">${LOGO_MARK}<span class="brand-name">minaosi</span><svg class="chev" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M5 3.5l3.5 3.5L5 10.5M9.5 3.5L13 7l-3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="run-btn sm" data-rerun ${running?'disabled':''}>${running?'見直し中…':`<svg class="pre" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M7.5 1.5l1.5 4.1 4.1 1.5-4.1 1.5-1.5 4.1-1.5-4.1-4.1-1.5 4.1-1.5 1.5-4.1z" fill="currentColor"/><path d="M12.6 9.6l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z" fill="currentColor"/></svg>見直す`}</button></div>
+  const head = `<header><div class="head-row"><button class="brand" data-close title="パネルを閉じる" aria-label="パネルを閉じる">${LOGO_MARK}<span class="brand-name">${BRAND_TEXT}</span><svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 17 6-6-6-6M13 17l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="run-btn sm" data-rerun ${running?'disabled':''}>${running?'見直し中…':`<svg class="pre" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>見直す`}</button></div>
         <div class="prog">${prog}</div>
         <div class="filters">${tabs.map(([k,l])=>`<button data-f="${k}" class="${filter===k?'on':''}" aria-pressed="${filter===k}">${l}</button>`).join('')}</div>
       </header>`;
