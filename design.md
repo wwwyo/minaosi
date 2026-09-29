@@ -1,7 +1,7 @@
 # Design — minaosi
 
 Locked design system。この repo の視覚値の正本。product-design skill（`.agents/skills/product-design/`）
-はこれを参照し、派生の `brand.css` はここから生成される。値を変えるときはこのファイルだけを編集する。
+はこれを参照する。値を変えるときはこのファイルだけを編集する。
 
 ## System
 
@@ -81,8 +81,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 ## Components
 
 ```css
-/* 基盤 component の完全な実装は派生物 brand.css を見る。ここに挙げるのは
-   組み合わせの規約だけ —— 値をここに複写して drift させない */
+/* 基盤 component の規約。実装は content script 側と prototype を見る */
 
 /* .btn-primary（墨塗り）= 適用・見直すの主操作。副操作は .btn-ghost。
    icon-only は .icon-btn */
@@ -128,8 +127,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 
 ## Exports
 
-- `.agents/skills/product-design/brand.css` — 本ファイルの Tokens + Components から生成する consumer 用 CSS。直接編集禁止（`brand-css-check.py` で検査される）
-- prototype `tokens.css` / `notes.html` は検証用スナップショットで、ここから同期される
+- `.agent/prototypes/finding-display/tokens.css` / `notes.html` および `docs/prd/note-inline-review/prototype/` は検証用スナップショットで、ここから同期される
+- 検査: `python3 .agents/skills/product-design/tools/brand-css-check.py design.md`（未定義 var・`--on-*` ペアの AA コントラスト）
 
 ## Notes
 

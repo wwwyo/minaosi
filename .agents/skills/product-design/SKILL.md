@@ -1,11 +1,11 @@
 ---
 name: product-design
-description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パネル・カード・本文マーク・修正案）を組む・見直す・文言を決めるときに使う。値の層は brand.css、ここには語彙表と判断原則だけを置く。
+description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パネル・カード・本文マーク・修正案）を組む・見直す・文言を決めるときに使う。値の正本は repo root の design.md、ここには語彙表と判断原則だけを置く。
 ---
 
 # product-design — minaosi
 
-執筆面（surface）の上に重ねる校閲 UI の設計規約。判断原則と、brand.css の変数・クラスの語彙表を持つ。CSS 本体は読まず、この表だけを見て当てる。視覚値・font・icon・logo の正本は repo root の `design.md`。
+執筆面（surface）の上に重ねる校閲 UI の設計規約。判断原則と、design.md の変数・component の語彙表を持つ。design.md 本体は読まず、この表だけを見て当てる。
 
 ## 判断原則
 
@@ -19,7 +19,7 @@ description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パ
 - **フィルタは3つまで**。状態タブは 未対応/適用済み/削除。「すべて」は置かない（削除・適用済みは各タブ内で undo/復元できる）
 - **進捗は非ゼロのみ**。0件の状態と「計」は出さない
 
-## 語彙表（brand.css）
+## 語彙表（design.md）
 
 | 名前 | 用途 |
 | :--- | :--- |
@@ -63,5 +63,5 @@ description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パ
 
 ```bash
 # repo root から
-python3 .agents/skills/product-design/tools/brand-css-check.py .agents/skills/product-design/brand.css
+python3 .agents/skills/product-design/tools/brand-css-check.py design.md
 ```
