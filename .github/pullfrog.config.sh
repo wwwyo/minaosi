@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Server-side Pullfrog config for wwwyo/minaosu — this file is the SSOT.
+# Server-side Pullfrog config for wwwyo/minaosi — this file is the SSOT.
 #
 # .github/workflows/pullfrog.yml is a Pullfrog-managed file kept pristine
 # (byte-identical across repos, updated by upstream PRs). Repo-level settings
@@ -7,12 +7,12 @@
 # backend and are invisible to git — this script records and reapplies them.
 #
 # Apply:  .github/pullfrog.config.sh        (uses gh auth)
-# Audit:  npx -y pullfrog@0.1.82 config list --repo wwwyo/minaosu
+# Audit:  npx -y pullfrog@0.1.82 config list --repo wwwyo/minaosi
 #
 # BYOK keys are org-scoped (OPENCODE_API_KEY inherited) — see `pf secret list`.
 set -euo pipefail
 
-REPO="wwwyo/minaosu"
+REPO="wwwyo/minaosi"
 PF=(npx -y pullfrog@0.1.82)
 
 pf_set()   { "${PF[@]}" config set   "$1" "$2" --repo "$REPO" --yes; }
