@@ -47,6 +47,7 @@ export class Decorations {
   private pageStyle: HTMLStyleElement | null = null;
   private mo: MutationObserver | null = null;
   private sites: Site[] = [];
+  private panelOpen = false;
   /** 本文 or 指摘集合が変わったか。scroll/resize では解決し直さず位置だけ追従する */
   private dirty = true;
 
@@ -118,9 +119,10 @@ export class Decorations {
     this.schedule();
   }
 
-  render(findings: Finding[], selectedId: string | null) {
+  render(findings: Finding[], selectedId: string | null, panelOpen: boolean) {
     this.findings = findings;
     this.selectedId = selectedId;
+    this.panelOpen = panelOpen;
     this.dirty = true;
     this.schedule();
   }
@@ -280,8 +282,9 @@ export class Decorations {
     } else {
       left = last.right + 3;
       top = last.top + (last.height - size.h) / 2;
-      // パネル（340px）と重ならないよう右端を避ける
-      if (left + size.w > window.innerWidth - PANEL_SAFE_MARGIN) {
+      // パネル開放時はその幅（340px）を避ける。閉じているときは右端のタブ分だけ避ける
+      const margin = this.panelOpen ? PANEL_SAFE_MARGIN : 44;
+      if (left + size.w > window.innerWidth - margin) {
         left = first.left;
         top = first.top - size.h - 2;
       }

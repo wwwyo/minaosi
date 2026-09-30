@@ -121,7 +121,7 @@ function settingsBody(s: PanelState): string {
       <label>文体規範（任意）</label>
       ${sg
         ? `<div class="filecur"><span class="nm">${esc(sg.name)}</span><button class="btn-ghost" data-act="clear-style">解除</button></div>`
-        : `<input type="file" data-set="styleFile" accept=".md,.txt,text/plain,text/markdown">
+        : `<label class="filepick btn-ghost">ファイルを選択<input type="file" data-set="styleFile" accept=".md,.txt,text/plain,text/markdown" hidden></label>
            <div class="help">書き手本人の文体規範ファイル（.md / .txt）を読み込みます</div>`}
     </div>
     <div class="fld">
