@@ -33,6 +33,7 @@ const HL_SUPPORTED = typeof CSS !== 'undefined' && 'highlights' in CSS;
 
 export class Decorations {
   private ovl: HTMLElement;
+  private flashLayer: HTMLElement;
   private tip: HTMLElement;
   private delHl: Highlight | null = null;
   private selHl: Highlight | null = null;
@@ -54,10 +55,13 @@ export class Decorations {
   ) {
     this.ovl = document.createElement('div');
     this.ovl.className = 'mn ovl';
+    // フラッシュは recompute の ovl クリアに巻き込まれないよう別レイヤにする
+    this.flashLayer = document.createElement('div');
+    this.flashLayer.className = 'mn ovl';
     this.tip = document.createElement('div');
     this.tip.className = 'tip';
     this.tip.innerHTML = `<button type="button">${ICON_APPLY}適用</button>`;
-    shadow.append(this.ovl, this.tip);
+    shadow.append(this.ovl, this.flashLayer, this.tip);
 
     if (HL_SUPPORTED) {
       this.delHl = new Highlight();
@@ -362,7 +366,10 @@ export class Decorations {
   }
 
   private showFlash(r: DOMRect) {
-    const el = this.el('flash', r.left - 6, r.top - 6, r.width + 12, r.height + 12);
+    const el = document.createElement('div');
+    el.className = 'flash';
+    el.style.cssText = `left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px`;
+    this.flashLayer.appendChild(el);
     requestAnimationFrame(() => {
       el.style.opacity = '1';
       setTimeout(() => {
@@ -385,6 +392,7 @@ export class Decorations {
     }
     this.pageStyle?.remove();
     this.ovl.remove();
+    this.flashLayer.remove();
     this.tip.remove();
   }
 }
