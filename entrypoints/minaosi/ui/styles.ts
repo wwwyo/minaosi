@@ -246,30 +246,6 @@ export const PANEL_CSS = `
 }
 .fld .help { font-size: var(--font-size-micro); color: var(--color-ink-mute); margin-top: 4px; }
 .rule { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: var(--font-size-small); }
-/* Apple 風のトグル。native checkbox の semantics（focus/keyboard/change）は残す */
-.rule input[type="checkbox"] {
-  appearance: none;
-  flex: none;
-  width: 34px; height: 20px;
-  margin: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-line-strong);
-  position: relative;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out);
-}
-.rule input[type="checkbox"]::after {
-  content: '';
-  position: absolute; top: 2px; left: 2px;
-  width: 16px; height: 16px;
-  border-radius: 50%;
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.22);
-  transition: transform var(--dur-fast) var(--ease-out);
-}
-.rule input[type="checkbox"]:checked { background: var(--color-ink); }
-.rule input[type="checkbox"]:checked::after { transform: translateX(14px); }
-.rule input[type="checkbox"]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .rule .nm { font-weight: 600; }
 .rule .hint { color: var(--color-ink-mute); font-size: var(--font-size-caption); }
 .filecur { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-small); }

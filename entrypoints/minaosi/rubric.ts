@@ -16,6 +16,4 @@ export const LANGUAGE_RULES: LanguageRule[] = [
   { id: 'unnatural', label: '不自然な日本語表現', hint: '意味を読まなければ判定できない不自然さ' },
 ];
 
-export const DEFAULT_RULE_STATE: Record<string, boolean> = Object.fromEntries(
-  LANGUAGE_RULES.map((r) => [r.id, true]),
-);
+

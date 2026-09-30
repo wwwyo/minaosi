@@ -19,7 +19,6 @@ export interface PanelState {
   apiKey: string;
   model: string;
   consented: boolean;
-  ruleToggles: Record<string, boolean>;
   styleGuide: { name: string; content: string } | null;
 }
 
@@ -38,7 +37,7 @@ export interface PanelHandlers {
   onSaveKey(key: string): void;
   onClearKey(): void;
   onSaveModel(model: string): void;
-  onToggleRule(id: string, on: boolean): void;
+
   onLoadStyleGuide(name: string, content: string): void;
   onClearStyleGuide(): void;
   onConsentAndRun(): void;
@@ -112,9 +111,9 @@ function settingsBody(s: PanelState): string {
       <input type="text" data-set="model" value="${esc(s.model)}">
     </div>
     <div class="fld">
-      <label>日本語ルール</label>
+      <label>日本語ルール（常時適用）</label>
       ${LANGUAGE_RULES.map(
-        (r) => `<label class="rule"><input type="checkbox" data-rule="${r.id}"${s.ruleToggles[r.id] !== false ? ' checked' : ''}><span><span class="nm">${esc(r.label)}</span> <span class="hint">${esc(r.hint)}</span></span></label>`,
+        (r) => `<div class="rule"><span><span class="nm">${esc(r.label)}</span> <span class="hint">${esc(r.hint)}</span></span></div>`,
       ).join('')}
     </div>
     <div class="fld">
@@ -229,7 +228,6 @@ export function wirePanel(
 
   root.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
-    if (t.dataset.rule) { h.onToggleRule(t.dataset.rule, t.checked); return; }
     if (t.dataset.set === 'styleFile' && t.files?.[0]) {
       const file = t.files[0];
       void file.text().then((content) => h.onLoadStyleGuide(file.name, content));
