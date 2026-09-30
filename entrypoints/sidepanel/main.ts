@@ -1,5 +1,5 @@
 import { browser } from '#imports';
-import { PANEL_PORT, type PanelCommand, type PanelUpdate } from '../minaosi/panel-messages';
+import { PanelConnection } from '../minaosi/panel-connection';
 import { wirePanel } from '../minaosi/ui/panel';
 import { updatePanel } from '../minaosi/ui/panel-view';
 import { PANEL_CSS } from '../minaosi/ui/styles';
@@ -9,14 +9,20 @@ const style = document.createElement('style');
 style.textContent = `${PANEL_CSS}\nhtml, body { margin: 0; background: transparent; }`;
 document.head.append(style);
 
-let port: ReturnType<typeof browser.tabs.connect> | null = null;
-let tabId: number | undefined;
 let selectedId: string | null = null;
-let connection = 0;
-
-function send(command: PanelCommand) {
-  port?.postMessage(command);
-}
+const connection = new PanelConnection(
+  (tabId, name) => browser.tabs.connect(tabId, { name }),
+  (state) => {
+    if (!state) { selectedId = null; showUnavailable(); return; }
+    updatePanel(root, state);
+    if (state.selectedId !== selectedId) {
+      selectedId = state.selectedId;
+      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  },
+  () => { void browser.runtime.lastError; },
+);
+const send = connection.send.bind(connection);
 
 function showUnavailable() {
   root.dataset.view = '';
@@ -40,43 +46,21 @@ wirePanel(root, {
   onRetry: () => send({ action: 'run' }),
 });
 
-function connectToTab(id: number | undefined) {
-  const generation = ++connection;
-  port?.disconnect();
-  port = null;
-  tabId = id;
-  selectedId = null;
-  showUnavailable();
-  if (id === undefined) return;
-
-  // URL を読む tabs permission は不要。content script のあるタブだけ接続に応答する。
-  const next = browser.tabs.connect(id, { name: PANEL_PORT });
-  port = next;
-  next.onMessage.addListener((update: PanelUpdate) => {
-    if (generation !== connection || update.type !== 'state') return;
-    if (!update.state) { showUnavailable(); return; }
-    updatePanel(root, update.state);
-    if (update.state.selectedId !== selectedId) {
-      selectedId = update.state.selectedId;
-      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-  });
-  next.onDisconnect.addListener(() => {
-    // 接続先に content script が無い場合の runtime.lastError を消費する。
-    void browser.runtime.lastError;
-    if (generation !== connection) return;
-    port = null;
-    showUnavailable();
-  });
-}
+const onContentReady: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender) => {
+  if (message?.type === 'minaosi:content-ready') connection.contentReady(sender.tab?.id);
+};
+browser.runtime.onMessage.addListener(onContentReady);
 
 const currentWindow = await browser.windows.getCurrent();
 browser.tabs.onActivated.addListener(({ tabId: id, windowId }) => {
-  if (windowId === currentWindow.id) void connectToTab(id);
+  if (windowId === currentWindow.id) connection.connectToTab(id);
 });
 browser.tabs.onUpdated.addListener((id, change) => {
-  if (id === tabId && change.status === 'complete') void connectToTab(id);
+  if (id === connection.activeTabId && change.status === 'complete') connection.connectToTab(id);
 });
 const [active] = await browser.tabs.query({ active: true, windowId: currentWindow.id });
-void connectToTab(active?.id);
-window.addEventListener('pagehide', () => { ++connection; port?.disconnect(); });
+connection.connectToTab(active?.id);
+window.addEventListener('pagehide', () => {
+  browser.runtime.onMessage.removeListener(onContentReady);
+  connection.dispose();
+});

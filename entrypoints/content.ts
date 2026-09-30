@@ -41,6 +41,8 @@ export default defineContentScript({
     browser.runtime.onConnect.addListener(onConnect);
 
     check();
+    // 先行接続したpaneにはonConnectが届かないため、登録完了後に接続し直してもらう。
+    void browser.runtime.sendMessage({ type: 'minaosi:content-ready' }).catch(() => {});
     // エディタの遅延描画・SPA 遷移を拾う。見つかってからも軽い querySelectorAll を定期実行するだけ
     ctx.setInterval(check, 3000);
     ctx.addEventListener(window, 'wxt:locationchange', check);
