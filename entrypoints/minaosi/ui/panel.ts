@@ -19,7 +19,6 @@ export interface PanelState {
   apiKey: string;
   model: string;
   consented: boolean;
-  styleGuide: { name: string; content: string } | null;
 }
 
 export interface PanelHandlers {
@@ -37,9 +36,6 @@ export interface PanelHandlers {
   onSaveKey(key: string): void;
   onClearKey(): void;
   onSaveModel(model: string): void;
-
-  onLoadStyleGuide(name: string, content: string): void;
-  onClearStyleGuide(): void;
   onConsentAndRun(): void;
   onRetry(): void;
 }
@@ -95,7 +91,6 @@ function listBody(s: PanelState): string {
 }
 
 function settingsBody(s: PanelState): string {
-  const sg = s.styleGuide;
   return `<div class="subview">
     <div class="fld">
       <label>送信先</label>
@@ -115,14 +110,6 @@ function settingsBody(s: PanelState): string {
       ${LANGUAGE_RULES.map(
         (r) => `<div class="rule"><span><span class="nm">${esc(r.label)}</span> <span class="hint">${esc(r.hint)}</span></span></div>`,
       ).join('')}
-    </div>
-    <div class="fld">
-      <label>文体規範（任意）</label>
-      ${sg
-        ? `<div class="filecur"><span class="nm">${esc(sg.name)}</span><button class="btn-ghost" data-act="clear-style">解除</button></div>`
-        : `<button type="button" class="btn-ghost" data-act="pick-style">ファイルを選択</button>
-           <input type="file" data-set="styleFile" accept=".md,.txt,text/plain,text/markdown" hidden>
-           <div class="help">書き手本人の文体規範ファイル（.md / .txt）を読み込みます</div>`}
     </div>
     <div class="fld">
       <label>送信への同意</label>
@@ -206,10 +193,6 @@ export function wirePanel(
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;
         case 'revert': if (fid) h.onRevert(fid); return;
-        case 'clear-style': h.onClearStyleGuide(); return;
-        case 'pick-style':
-          (root.querySelector('[data-set="styleFile"]') as HTMLInputElement | null)?.click();
-          return;
       }
     }
     if (t.closest('a')) return;
@@ -228,11 +211,6 @@ export function wirePanel(
 
   root.addEventListener('change', (e) => {
     const t = e.target as HTMLInputElement;
-    if (t.dataset.set === 'styleFile' && t.files?.[0]) {
-      const file = t.files[0];
-      void file.text().then((content) => h.onLoadStyleGuide(file.name, content));
-      return;
-    }
     if (t.dataset.set === 'apiKey') h.onSaveKey(t.value.trim());
     if (t.dataset.set === 'model') h.onSaveModel(t.value.trim());
   });

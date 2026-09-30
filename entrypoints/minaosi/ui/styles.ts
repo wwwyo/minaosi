@@ -248,8 +248,7 @@ export const PANEL_CSS = `
 .rule { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: var(--font-size-small); }
 .rule .nm { font-weight: 600; }
 .rule .hint { color: var(--color-ink-mute); font-size: var(--font-size-caption); }
-.filecur { display: flex; align-items: center; gap: 8px; font-size: var(--font-size-small); }
-.filecur .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .set-actions { display: flex; gap: 8px; margin-top: 8px; }
 .provider { font-size: var(--font-size-small); color: var(--color-ink-sub); }
 

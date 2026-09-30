@@ -76,26 +76,23 @@ function systemPrompt(enabledRules: LanguageRule[]): string {
 - typo: 誤字・脱字
 - fact: 事実の誤り
 - rule: 日本語ルールへの抵触
-- style: 文体規範からの逸脱
 
 # 要件
 - matches[].from にはブロック本文中の完全一致する文字列を入れる。同じ文字列がブロック内に複数出る場合は、指摘したい全箇所分を出現順に matches へ並べる。
 - 修正案がある場合は matches[].to に入れる。修正候補のない指摘は to を省略する。
 - fact は必ず web_search ツールで一次情報（公的統計・一次報告・公式発表など）を確認し、source.url に一次情報の URL、source.excerpt に根拠となる該当箇所の引用を入れる。一次情報を特定できない主張は指摘として出さない。
-- 文体規範が与えられた場合、規範に明示された例外・許容表現に直接該当する指摘は出さない。推測で抑制してはいけない。
 - 本文の無いブロック（画像・改行など）は (本文なし) と表示されている。
 - 過剰な指摘は避ける。書き手が採否を判断できる理由を reason に書く。
 
-# 有効な日本語ルール（無効化された規則の指摘は出さない）
-${rules || '（全て無効）'}`;
+# 日本語ルール（これらに抵触する箇所を指摘する）
+${rules}`;
 }
 
-function userPrompt(blocks: DraftBlock[], styleGuide: string | null): string {
+function userPrompt(blocks: DraftBlock[]): string {
   const body = blocks
     .map((b) => `[${b.index}] ${b.text || '(本文なし)'}`)
     .join('\n');
-  const style = styleGuide ? `# 文体規範\n${styleGuide}\n\n` : '# 文体規範\n（未設定）\n\n';
-  return `${style}# 原稿（ブロック番号つき）\n${body}`;
+  return `# 原稿（ブロック番号つき）\n${body}`;
 }
 
 /** Anthropic Messages API のリクエスト body を組み立てる */
@@ -103,7 +100,6 @@ export function buildRequest(opts: {
   model: string;
   blocks: DraftBlock[];
   enabledRules: LanguageRule[];
-  styleGuide: string | null;
 }): unknown {
   return {
     model: opts.model,
@@ -113,7 +109,7 @@ export function buildRequest(opts: {
       { type: 'web_search_20250305', name: 'web_search', max_uses: 8 },
       REPORT_TOOL,
     ],
-    messages: [{ role: 'user', content: userPrompt(opts.blocks, opts.styleGuide) }],
+    messages: [{ role: 'user', content: userPrompt(opts.blocks) }],
   };
 }
 

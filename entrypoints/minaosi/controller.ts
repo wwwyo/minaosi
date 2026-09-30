@@ -4,7 +4,7 @@ import type { SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
 import { buildRequest, parseReport, type ReviewedFinding } from './review/prompt';
 import { LANGUAGE_RULES } from './rubric';
-import { apiKeyItem, modelItem, consentedItem, styleGuideItem } from './store';
+import { apiKeyItem, modelItem, consentedItem } from './store';
 import { Decorations } from './ui/decorations';
 import { renderPanel, wirePanel, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
@@ -40,7 +40,6 @@ export class Controller {
     apiKey: '',
     model: '',
     consented: false,
-    styleGuide: null,
   };
 
   constructor(
@@ -85,12 +84,6 @@ export class Controller {
       onSaveKey: (k) => { this.s.apiKey = k; void apiKeyItem.setValue(k); },
       onClearKey: () => { this.s.apiKey = ''; void apiKeyItem.setValue(''); },
       onSaveModel: (m) => { this.s.model = m; void modelItem.setValue(m); },
-      onLoadStyleGuide: (name, content) => {
-        this.s.styleGuide = { name, content };
-        void styleGuideItem.setValue(this.s.styleGuide);
-        this.render();
-      },
-      onClearStyleGuide: () => { this.s.styleGuide = null; void styleGuideItem.setValue(null); this.render(); },
       onConsentAndRun: () => {
         this.s.consented = true;
         void consentedItem.setValue(true);
@@ -102,14 +95,12 @@ export class Controller {
   }
 
   async init() {
-    const [apiKey, model, consented, styleGuide] = await Promise.all([
+    const [apiKey, model, consented] = await Promise.all([
       apiKeyItem.getValue(), modelItem.getValue(), consentedItem.getValue(),
-      styleGuideItem.getValue(),
     ]);
     this.s.apiKey = apiKey;
     this.s.model = model;
     this.s.consented = consented;
-    this.s.styleGuide = styleGuide;
     this.render();
   }
 
@@ -247,7 +238,6 @@ export class Controller {
         model: this.s.model,
         blocks,
         enabledRules: LANGUAGE_RULES,
-        styleGuide: this.s.styleGuide?.content ?? null,
       });
       const msg: ReviewMessage = { type: 'minaosi:review', apiKey: this.s.apiKey, body };
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;

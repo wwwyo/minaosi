@@ -1,13 +1,12 @@
 /** 指摘・修正案・状態の型。LLM との wire 形式は review/prompt.ts 側の Raw* 型。 */
 
-export type FindingKind = 'typo' | 'fact' | 'rule' | 'style';
+export type FindingKind = 'typo' | 'fact' | 'rule';
 export type FindingState = 'open' | 'resolved' | 'deleted';
 
 export const KIND_LABEL: Record<FindingKind, string> = {
   typo: '誤字',
   fact: '事実',
   rule: '日本語ルール',
-  style: '文体規範',
 };
 
 export interface Source {
