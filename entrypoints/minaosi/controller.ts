@@ -267,7 +267,8 @@ export class Controller {
         title: rf.title ?? '',
         reason: rf.reason ?? '',
         matches,
-        source: rf.source?.url
+        // リンク先は http(s) のみ。モデル出力の javascript: 等のスキームは href に載せない
+        source: rf.source?.url && /^https?:\/\//i.test(rf.source.url)
           ? { url: rf.source.url, label: rf.source.label ?? rf.source.url, excerpt: rf.source.excerpt }
           : undefined,
         state: 'open',
