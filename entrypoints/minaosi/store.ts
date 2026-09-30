@@ -8,7 +8,11 @@ export const reviewModeItem = storage.defineItem<ReviewMode>('local:reviewMode',
 export const providerItem = storage.defineItem<ReviewProvider>('local:provider', { fallback: 'anthropic' });
 export const openaiKeyItem = storage.defineItem<string>('local:openaiKey', { fallback: '' });
 export const openaiModelItem = storage.defineItem<string>('local:openaiModel', { fallback: '' });
+export const opencodeKeyItem = storage.defineItem<string>('local:opencodeKey', { fallback: '' });
+export const opencodeModelItem = storage.defineItem<string>('local:opencodeModel', { fallback: 'space-bunny-free' });
+
 export const PROVIDER_SETTINGS = {
   anthropic: { key: apiKeyItem, model: modelItem },
   openai: { key: openaiKeyItem, model: openaiModelItem },
+  'opencode-go': { key: opencodeKeyItem, model: opencodeModelItem },
 };

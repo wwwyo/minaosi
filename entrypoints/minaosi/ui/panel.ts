@@ -25,7 +25,6 @@ export interface PanelHandlers {
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
   onRevert(fid: string): void;
-  onRetry(): void;
 }
 
 const esc = (s: string) =>
@@ -59,23 +58,22 @@ function cardHTML(f: PanelFinding, selectedId: string | null): string {
     <div class="detail">
       <div class="rsn">${esc(f.reason)}</div>
       ${f.source ? `<div class="src">出典: <a href="${esc(f.source.url)}" target="_blank" rel="noopener noreferrer">${esc(f.source.label || f.source.url)}</a>${f.source.excerpt ? `<span class="loc"> — ${esc(f.source.excerpt)}</span>` : ''}</div>` : ''}
-      ${stale ? '<div class="stale">対象箇所が編集され、修正案と一致しなくなりました。もう一度「見直す」で確認してください。</div>' : ''}
+      ${stale ? '<div class="stale">対象箇所が編集され、修正案と一致しなくなりました。</div>' : ''}
     </div>
     ${actsHTML(f)}
   </div>`;
 }
 
 function isEmptyState(s: PanelState): boolean {
-  return (s.phase === 'idle' || s.phase === 'done') && s.findings.length === 0;
+  return s.phase === 'idle' && s.findings.length === 0;
 }
 
 function listBody(s: PanelState): string {
   if (s.phase === 'error') {
-    return `<div class="notice">見直しが完了しませんでした。<br>${esc(s.error ?? '不明なエラー')}
-      <div class="actions"><button class="run-btn sm" data-act="retry">再試行</button></div></div>`;
+    return `<div class="notice">見直しが完了しませんでした。<br>${esc(s.error ?? '不明なエラー')}</div>`;
   }
   if (isEmptyState(s)) {
-    return `<div class="empty-start">${s.phase === 'done' ? '<span>指摘はありません</span>' : ''}<button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
+    return `<div class="empty-start"><button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
   if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
   const list = s.findings.filter((f) => f.state === s.filter);
@@ -92,15 +90,12 @@ export function renderPanel(s: PanelState): string {
     .map(([k, label]) => `${label} ${c[k]}`)
     .join(' · ');
 
-  const empty = isEmptyState(s);
   const tabs = `<div class="filters">${TABS.map(
     ([k, l]) => `<button data-act="filter" data-f="${k}" class="${s.filter === k ? 'on' : ''}" aria-pressed="${s.filter === k}">${l}</button>`,
   ).join('')}</div>`;
 
   return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
-    <header><div class="head-row">${tabs}
-      ${empty ? '' : `<button class="run-btn sm" data-act="run" ${s.phase === 'running' || s.connectionLoading ? 'disabled' : ''}>${s.connectionLoading ? '読込中…' : s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>`}
-    </div>${prog ? `<div class="prog">${prog}</div>` : ''}</header>
+    <header><div class="head-row">${tabs}</div>${prog ? `<div class="prog">${prog}</div>` : ''}</header>
     <div class="list">${listBody(s)}</div>
   </aside>`;
 }
@@ -118,7 +113,6 @@ export function wirePanel(
     if (actEl) {
       switch (actEl.dataset.act) {
         case 'run': h.onRun(); return;
-        case 'retry': h.onRetry(); return;
         case 'filter': h.onFilter(actEl.dataset.f as FindingState); return;
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;

@@ -42,9 +42,10 @@ describe('review relay', () => {
 });
 
 
-test('providerは対応する2値だけを受け付け、継承プロパティを拒否する', () => {
+test('providerは対応する3値だけを受け付け、継承プロパティを拒否する', () => {
   expect(isReviewProvider('anthropic')).toBe(true);
   expect(isReviewProvider('openai')).toBe(true);
+  expect(isReviewProvider('opencode-go')).toBe(true);
   for (const value of ['__proto__', 'constructor', 'toString', null, undefined, {}]) {
     expect(isReviewProvider(value)).toBe(false);
   }

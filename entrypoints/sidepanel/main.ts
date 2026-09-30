@@ -36,7 +36,6 @@ wirePanel(root, {
   onApplyFinding: (id) => send({ action: 'apply', id }),
   onDelete: (id) => send({ action: 'delete', id }),
   onRevert: (id) => send({ action: 'revert', id }),
-  onRetry: () => send({ action: 'run' }),
 });
 
 const onContentReady: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender) => {

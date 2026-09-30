@@ -1,9 +1,11 @@
 import { reviewThroughGateway, type GatewayEnv } from './review';
+import { reviewWithOpenCode } from './opencode';
 import { INVALID_TOOL_INPUT } from './anthropic';
 import { isReviewProvider, type ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
 
 export interface Env extends GatewayEnv {
   ALLOWED_ORIGINS?: string;
+  LOCAL_OPENCODE_BYOK?: boolean;
   DEFAULT_REVIEW_PROVIDER?: string;
   DEFAULT_REVIEW_MODEL?: string;
   DEFAULT_REVIEW_API_KEY?: string;
@@ -58,7 +60,7 @@ async function readBody(request: Request): Promise<unknown> {
 }
 
 /** 標準・BYOKの校閲を受け付け、原稿・キーを永続化しない。 */
-export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway): Promise<Response> {
+export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway, opencodeReviewer = reviewWithOpenCode): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get('origin');
   const allowed = (env.ALLOWED_ORIGINS ?? '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -99,11 +101,15 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
     selected = { provider: input.provider, model: input.model, blocks: input.blocks };
   }
 
-  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN) {
+  const localOpenCode = selected.provider === 'opencode-go' && env.LOCAL_OPENCODE_BYOK && input.mode !== 'default';
+  if (selected.provider === 'opencode-go' && !localOpenCode) {
+    return json({ error: 'OpenCode Goの試用経路はローカルBYOKで利用できます' }, 503);
+  }
+  if (!localOpenCode && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
     return json({ error: 'Cloudflare AI Gateway の接続設定がまだ完了していません' }, 503);
   }
   try {
-    const findings = await reviewer(selected, apiKey, env);
+    const findings = localOpenCode ? await opencodeReviewer(selected, apiKey) : await reviewer(selected, apiKey, env);
     return json({ findings });
   } catch (error) {
     // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。

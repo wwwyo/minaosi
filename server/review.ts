@@ -21,6 +21,7 @@ export async function reviewThroughGateway(
   env: GatewayEnv,
   fetcher: HttpFetch = fetch,
 ): Promise<ReviewedFinding[]> {
+  if (request.provider === 'opencode-go') throw new Error('OpenCode GoはローカルBYOK経路で実行してください');
   const gateway = cloudflareGateway(request.provider, {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,

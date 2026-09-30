@@ -4,10 +4,10 @@ export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promis
 
 export type ReviewMode = 'default' | 'byok';
 
-export type ReviewProvider = 'anthropic' | 'openai';
+export type ReviewProvider = 'anthropic' | 'openai' | 'opencode-go';
 
 export function isReviewProvider(value: unknown): value is ReviewProvider {
-  return value === 'anthropic' || value === 'openai';
+  return value === 'anthropic' || value === 'openai' || value === 'opencode-go';
 }
 
 export interface ProviderReviewInput {

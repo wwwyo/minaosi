@@ -6,7 +6,7 @@
 
 既定はminaosiの標準モード。利用者に接続先・キー・モデルを選ばせず、サーバーの `DEFAULT_REVIEW_PROVIDER` / `DEFAULT_REVIEW_MODEL` / `DEFAULT_REVIEW_API_KEY` を使う。運営設定がない場合は503（準備中）を返す。標準モードのAI料金は運営者に発生する。
 
-自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系）から判定する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。プロバイダーへの直接接続へのフォールバックはない。
+自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系）から判定する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
 
 Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、BYOKモードで利用者のキーがないリクエストは必ず拒否する。標準モードへの自動切り替えはしない。標準モードのキーはサーバーのsecretとして保持する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化し、Worker の observability も無効にする。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
 
@@ -38,7 +38,7 @@ mise exec -- bun run dev
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
-開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。現時点のこの校閲経路にはOpenCode Go用のcustom provider / 外部検索ツールをまだ追加していないため、開発の検証は模擬応答で行う。Anthropic / OpenAIの実キーを開発QAに使わない。
+開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。ローカルサーバーだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を用意している。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカル校閲サーバーからOpenCode Goへ接続する。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。本番Workerや標準モードではこの経路を拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
 
 ## Worker の公開設定
 

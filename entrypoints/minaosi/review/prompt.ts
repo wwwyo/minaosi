@@ -68,19 +68,18 @@ export const REPORT_TOOL = {
   },
 };
 
-export function systemPrompt(enabledRules: LanguageRule[]): string {
+export function systemPrompt(enabledRules: LanguageRule[], factChecking = true): string {
   const rules = enabledRules.map((r) => `- ${r.label}: ${r.hint}`).join('\n');
   return `あなたは日本語の原稿を校閲する編集者です。文章の書き換えはせず、指摘だけを行います。結果は必ず report_findings ツール呼び出しで返してください。
 
 # 指摘の種類
 - typo: 誤字・脱字
-- fact: 事実の誤り
-- rule: 日本語ルールへの抵触
+${factChecking ? '- fact: 事実の誤り\n' : ''}- rule: 日本語ルールへの抵触
 
 # 要件
 - matches[].from にはブロック本文中の完全一致する文字列を入れる。同じ文字列がブロック内に複数出る場合は、指摘したい全箇所分を出現順に matches へ並べる。
 - 修正案がある場合は matches[].to に入れる。修正候補のない指摘は to を省略する。
-- fact は必ず web_search ツールで一次情報（公的統計・一次報告・公式発表など）を確認し、source.url に一次情報の URL、source.excerpt に根拠となる該当箇所の引用を入れる。一次情報を特定できない主張は指摘として出さない。
+${factChecking ? '- fact は必ず web_search ツールで一次情報（公的統計・一次報告・公式発表など）を確認し、source.url に一次情報の URL、source.excerpt に根拠となる該当箇所の引用を入れる。一次情報を特定できない主張は指摘として出さない。' : '- Web検索が使えないため、事実の正誤に関する指摘は出さない。対象は誤字・脱字と日本語表現だけにする。'}
 - 本文の無いブロック（画像・改行など）は (本文なし) と表示されている。
 - 過剰な指摘は避ける。書き手が採否を判断できる理由を reason に書く。
 

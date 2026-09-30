@@ -19,25 +19,29 @@ const radios = [...form.querySelectorAll<HTMLInputElement>('[name="mode"]')];
 const drafts: Record<ReviewProvider, { key: string; model: string }> = {
   anthropic: { key: '', model: 'claude-sonnet-5' },
   openai: { key: '', model: 'gpt-5.4-mini' },
+  'opencode-go': { key: '', model: 'space-bunny-free' },
 };
 let provider: ReviewProvider = 'anthropic';
 let saving = false;
+const dirtyProviders = new Set<ReviewProvider>();
 const mode = (): ReviewMode => radios.find((radio) => radio.checked)?.value === 'byok' ? 'byok' : 'default';
 function showMode() {
   fields.hidden = mode() !== 'byok';
   fields.disabled = fields.hidden || saving;
 }
-function stash() { drafts[provider] = { key: key.value, model: model.value }; }
+function stash() { drafts[provider] = { key: key.value, model: model.value }; dirtyProviders.add(provider); }
 function loadDraft() { key.value = drafts[provider].key; model.value = drafts[provider].model; }
 
 try {
-  const [savedMode, savedProvider, anthropicKey, anthropicModel, openaiKey, openaiModel] = await Promise.all([
+  const [savedMode, savedProvider, anthropicKey, anthropicModel, openaiKey, openaiModel, opencodeKey, opencodeModel] = await Promise.all([
     reviewModeItem.getValue(), providerItem.getValue(), PROVIDER_SETTINGS.anthropic.key.getValue(),
     PROVIDER_SETTINGS.anthropic.model.getValue(), PROVIDER_SETTINGS.openai.key.getValue(), PROVIDER_SETTINGS.openai.model.getValue(),
+    PROVIDER_SETTINGS['opencode-go'].key.getValue(), PROVIDER_SETTINGS['opencode-go'].model.getValue(),
   ]);
   provider = isReviewProvider(savedProvider) ? savedProvider : 'anthropic';
   drafts.anthropic = { key: anthropicKey, model: anthropicModel || 'claude-sonnet-5' };
   drafts.openai = { key: openaiKey, model: openaiModel || 'gpt-5.4-mini' };
+  drafts['opencode-go'] = { key: opencodeKey, model: opencodeModel || 'space-bunny-free' };
   loadDraft();
   for (const radio of radios) { radio.checked = radio.value === (savedMode === 'byok' ? 'byok' : 'default'); radio.disabled = false; }
   save.disabled = false;
@@ -66,7 +70,7 @@ form.addEventListener('submit', async (event) => {
   const selectedMode = mode();
   const selectedProvider = providerForModel(model.value.trim());
   if (selectedMode === 'byok' && !selectedProvider) {
-    model.setCustomValidity('ClaudeまたはGPTのモデルIDを入力してください');
+    model.setCustomValidity('候補からモデルを選ぶか、ClaudeまたはGPTのモデルIDを入力してください');
     model.reportValidity();
     return;
   }
@@ -76,9 +80,14 @@ form.addEventListener('submit', async (event) => {
   showMode();
   try {
     if (selectedMode === 'byok' && selectedProvider) {
-      const settings = PROVIDER_SETTINGS[selectedProvider];
-      await Promise.all([settings.key.setValue(key.value.trim()), settings.model.setValue(model.value.trim())]);
+      stash();
+      await Promise.all([...dirtyProviders].flatMap((changed) => {
+        const settings = PROVIDER_SETTINGS[changed];
+        const draft = drafts[changed];
+        return [settings.key.setValue(draft.key.trim()), settings.model.setValue(draft.model.trim())];
+      }));
       await providerItem.setValue(selectedProvider);
+      dirtyProviders.clear();
     }
     await reviewModeItem.setValue(selectedMode);
     status.textContent = '保存しました';

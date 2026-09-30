@@ -103,3 +103,20 @@ test('BYOKのキー未設定・モード指定の誤りを標準課金へフォ�
   expect((await handleRequest(request(body, { 'x-minaosi-api-key': '' }), standardEnv, neverReview)).status).toBe(401);
   expect((await handleRequest(request({ ...body, mode: 'other' }), standardEnv, neverReview)).status).toBe(400);
 });
+
+test('ローカルOpenCode BYOKだけはGateway未設定でも利用者のキーで校閲する', async () => {
+  const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free' };
+  const result = await handleRequest(request(opencode), { ...env, CF_AIG_TOKEN: '', LOCAL_OPENCODE_BYOK: true }, neverReview, async (input, key) => {
+    expect(input).toEqual(opencode);
+    expect(key).toBe('fixture-key');
+    return [];
+  });
+  expect(result.status).toBe(200);
+  expect((await handleRequest(request(opencode, { 'x-minaosi-api-key': '' }), { ...env, LOCAL_OPENCODE_BYOK: true }, neverReview, neverReview)).status).toBe(401);
+});
+
+test('本番と標準モードをOpenCodeの直接接続へ流さない', async () => {
+  const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free', LOCAL_OPENCODE_BYOK: true };
+  expect((await handleRequest(request(opencode), env, neverReview, neverReview)).status).toBe(503);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'opencode-go', LOCAL_OPENCODE_BYOK: true }, neverReview, neverReview)).status).toBe(503);
+});
