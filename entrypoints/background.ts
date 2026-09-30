@@ -62,4 +62,11 @@ export default defineBackground(() => {
     })();
     return true;
   });
+
+  // ツールバーの拡張アイコン → 開いているタブの minaosi パネルを開閉する
+  browser.action.onClicked.addListener((tab) => {
+    if (tab.id !== undefined) {
+      void browser.tabs.sendMessage(tab.id, { type: 'minaosi:toggle' }).catch(() => {});
+    }
+  });
 });

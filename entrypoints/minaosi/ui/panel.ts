@@ -3,7 +3,7 @@ import { LANGUAGE_RULES } from '../rubric';
 import { PROVIDER_LABEL } from '../store';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO, ICON_CHEVRONS,
-  ICON_SPARKLES, ICON_FAB, ICON_SETTINGS,
+  ICON_SPARKLES, ICON_SETTINGS,
 } from './icons';
 
 export type View = 'list' | 'settings' | 'consent';
@@ -150,7 +150,7 @@ export function renderPanel(s: PanelState): { panel: string; fab: string } {
   const reviewed = s.phase === 'done' || s.phase === 'error';
   const fabLabel = reviewed ? '指摘パネルを開く' : '校閲を実行';
   const fab = `<button class="mn fab" data-act="fab" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
-    title="${fabLabel}" aria-label="${fabLabel}">${ICON_FAB}</button>`;
+    title="${fabLabel}" aria-label="${fabLabel}">${LOGO_MARK}</button>`;
   if (!s.panelOpen) return { panel: '', fab };
 
   const c = counts(s.findings);

@@ -67,11 +67,7 @@ export class Controller {
     });
 
     wirePanel(this.shadow as unknown as HTMLElement, {
-      onFab: () => {
-        // FAB は「校閲を実行」か「パネルを開く」かを状態で切り替える
-        if (this.s.phase === 'done' || this.s.phase === 'error') this.togglePanel();
-        else void this.run();
-      },
+      onFab: () => this.toggle(),
       onRun: () => void this.run(),
       onTogglePanel: () => this.togglePanel(),
       onFilter: (f) => { this.s.filter = f; this.render(); },
@@ -148,6 +144,12 @@ export class Controller {
     // （prototype の .with-panel と同じ位置付け。position:fixed のホスト側 chrome は
     //  viewport 基準なので動かず、パネルの下に隠れる点は v1 では許容する）
     document.body.style.marginRight = this.s.panelOpen ? '340px' : '';
+  }
+
+  /** FAB・ツールバーアイコン共通のエントリ: 未レビューなら校閲実行、済みならパネル開閉 */
+  toggle() {
+    if (this.s.phase === 'done' || this.s.phase === 'error') this.togglePanel();
+    else void this.run();
   }
 
   private togglePanel() {

@@ -8,5 +8,8 @@ export default defineConfig({
     host_permissions: ['https://api.anthropic.com/*'],
     // 'wxt/storage'（chrome.storage.local）は storage permission が無いと content script で throw する
     permissions: ['storage'],
+    icons: { 16: 'icons/icon-16.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
+    // popup は置かず、クリックは background → content script に中継してパネルを開閉する
+    action: { default_title: 'minaosi' },
   },
 });

@@ -25,6 +25,11 @@ export default defineContentScript({
       }
     };
 
+    // ツールバーの拡張アイコンクリック（background 中継）でパネルを開閉
+    browser.runtime.onMessage.addListener((msg) => {
+      if (msg?.type === 'minaosi:toggle') ctrl?.toggle();
+    });
+
     check();
     // エディタの遅延描画・SPA 遷移を拾う。見つかってからも軽い querySelectorAll を定期実行するだけ
     ctx.setInterval(check, 3000);

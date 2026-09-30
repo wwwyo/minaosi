@@ -161,17 +161,17 @@ export const PANEL_CSS = `
 }
 .btn-ghost:hover { color: var(--color-ink); border-color: var(--color-ink); }
 
-/* ---- FAB（右端のサイドタブ。本文やホストのヘッダーと重ならない） ---- */
+/* ---- FAB（右下 floating。minaosi マークの丸ボタン） ---- */
 .fab {
-  position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 2147483646;
-  width: 36px; height: 64px; border-radius: var(--radius-md) 0 0 var(--radius-md);
+  position: fixed; right: 24px; bottom: 24px; z-index: 2147483646;
+  width: 44px; height: 44px; border-radius: 50%;
   background: var(--color-primary); color: var(--color-on-primary); border: 0;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-fab);
   transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
-.fab:hover:not(:disabled) { transform: translateY(-50%) translateX(-3px); box-shadow: var(--shadow-fab-hover); }
-.fab:active:not(:disabled) { transform: translateY(-50%); }
+.fab:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-fab-hover); }
+.fab:active:not(:disabled) { transform: translateY(1px); }
 .fab:disabled { opacity: .55; cursor: default; }
 .fab svg { width: 20px; height: 20px; display: block; }
 
