@@ -1,5 +1,5 @@
 import { chat, toolDefinition } from '@tanstack/ai';
-import { anthropicAdapter } from './anthropic';
+import { anthropicAdapter, INVALID_TOOL_INPUT } from './anthropic';
 import { webSearchTool as anthropicSearch } from '@tanstack/ai-anthropic/tools';
 import { createOpenaiChat } from '@tanstack/ai-openai';
 import { webSearchTool as openaiSearch } from '@tanstack/ai-openai/tools';
@@ -73,7 +73,7 @@ export async function reviewThroughGateway(
       stream = chat({ ...common, adapter, tools: [openaiSearch({ type: 'web_search' }), report], modelOptions: { store: false, max_output_tokens: 8192 } });
     }
     for await (const event of stream) {
-      if (event.type === 'RUN_ERROR') throw new Error('校閲 API が処理を完了できませんでした');
+      if (event.type === 'RUN_ERROR') throw new Error(event.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲 API が処理を完了できませんでした');
     }
     if (abortController.signal.aborted) throw new Error('校閲がタイムアウトしました');
     if (findings === undefined) throw new Error(reportError ?? '校閲結果が返りませんでした');

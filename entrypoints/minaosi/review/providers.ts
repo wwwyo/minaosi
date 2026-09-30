@@ -4,6 +4,10 @@ export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promis
 
 export type ReviewProvider = 'anthropic' | 'openai';
 
+export function isReviewProvider(value: unknown): value is ReviewProvider {
+  return value === 'anthropic' || value === 'openai';
+}
+
 export interface ReviewRequest {
   type: 'minaosi:review';
   provider: ReviewProvider;

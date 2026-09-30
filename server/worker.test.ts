@@ -76,3 +76,9 @@ describe('anonymous BYOK API', () => {
     expect(text).not.toContain('原稿');
   });
 });
+
+test('不正なツール入力の安全な診断だけを利用者へ返す', async () => {
+  const result = await handleRequest(request(), env, async () => { throw new Error('校閲 API が不正なツール入力を返しました'); });
+  expect(result.status).toBe(502);
+  expect(await result.json()).toEqual({ error: '校閲 API が不正なツール入力を返しました' });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { review, type HttpFetch, type ReviewRequest } from './providers';
+import { isReviewProvider, review, type HttpFetch, type ReviewRequest } from './providers';
 
 const finding = { kind: 'typo' as const, block: 0, title: '誤字', reason: '理由', matches: [{ from: '誤字', to: '修正' }] };
 const request: ReviewRequest = { type: 'minaosi:review', provider: 'anthropic', model: 'fixture-model', blocks: [{ index: 0, text: '原稿' }] };
@@ -39,4 +39,13 @@ describe('review relay', () => {
     expect(await review(request, 'fixture-key', endpoint, fetcher)).toEqual([]);
     await expect(review(request, 'fixture-key', endpoint, (async () => Response.json({})) as HttpFetch)).rejects.toThrow('形式が不正');
   });
+});
+
+
+test('providerは対応する2値だけを受け付け、継承プロパティを拒否する', () => {
+  expect(isReviewProvider('anthropic')).toBe(true);
+  expect(isReviewProvider('openai')).toBe(true);
+  for (const value of ['__proto__', 'constructor', 'toString', null, undefined, {}]) {
+    expect(isReviewProvider(value)).toBe(false);
+  }
 });

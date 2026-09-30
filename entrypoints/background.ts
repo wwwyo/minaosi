@@ -1,5 +1,5 @@
 import { browser } from '#imports';
-import { review, type ReviewRequest } from './minaosi/review/providers';
+import { isReviewProvider, review, type ReviewRequest } from './minaosi/review/providers';
 import { PROVIDER_SETTINGS } from './minaosi/store';
 
 /**
@@ -32,7 +32,7 @@ export default defineBackground(() => {
         void browser.runtime.getPlatformInfo();
       }, 20_000);
       try {
-        if (!(request.provider in PROVIDER_SETTINGS)) throw new Error('未対応の接続先です');
+        if (!isReviewProvider(request.provider)) throw new Error('未対応の接続先です');
         const apiKey = await PROVIDER_SETTINGS[request.provider].key.getValue();
         const endpoint = import.meta.env.WXT_REVIEW_API_URL;
         if (!endpoint) throw new Error('校閲サーバーの接続先が設定されていません');

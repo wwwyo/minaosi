@@ -109,3 +109,16 @@ test('reportがない完了応答は空の成功として返さない', async ()
   ])]);
   await expect(reviewThroughGateway(request, 'fixture-key', env, fetcher)).rejects.toThrow('校閲結果が返りませんでした');
 });
+
+test('壊れたツール入力は秘密を含まない診断で失敗し、検索を継続しない', async () => {
+  const { fetcher, calls } = fetchFixture([sse([
+    { type: 'message_start', message: { id: 'invalid-input-fixture', type: 'message', role: 'assistant', content: [], model: request.model, usage: { input_tokens: 1, output_tokens: 0 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'invalid-call-fixture', name: 'report_findings', input: {} } },
+    { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"fixture-private-key":' } },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: 'pause_turn' }, usage: { output_tokens: 1 } },
+    { type: 'message_stop' },
+  ])]);
+  await expect(reviewThroughGateway(request, 'fixture-key', env, fetcher)).rejects.toThrow('校閲 API が不正なツール入力を返しました');
+  expect(calls).toHaveLength(1);
+});

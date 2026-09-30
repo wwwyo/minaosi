@@ -1,5 +1,7 @@
 import { createAnthropicChat } from '@tanstack/ai-anthropic';
 
+export const INVALID_TOOL_INPUT = '校閲 API が不正なツール入力を返しました';
+
 /** 固定した TanStack adapter 版で失われる pause_turn の継続を補う。 */
 export function anthropicAdapter(
   model: string,
@@ -39,7 +41,10 @@ export function anthropicAdapter(
               if (delta.type === 'thinking_delta') block.thinking = String(block.thinking ?? '') + delta.thinking;
               if (delta.type === 'signature_delta') block.signature = String(block.signature ?? '') + delta.signature;
             }
-            if (event.type === 'content_block_stop' && inputs.has(event.index)) block.input = JSON.parse(inputs.get(event.index)!);
+            if (event.type === 'content_block_stop' && inputs.has(event.index)) {
+              try { block.input = JSON.parse(inputs.get(event.index)!); }
+              catch { throw new Error(INVALID_TOOL_INPUT); }
+            }
           }
           controller.enqueue(chunk);
         },

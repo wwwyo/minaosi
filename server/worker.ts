@@ -1,4 +1,5 @@
 import { reviewThroughGateway, type GatewayEnv } from './review';
+import { INVALID_TOOL_INPUT } from './anthropic';
 import type { ReviewRequest } from '../entrypoints/minaosi/review/providers';
 
 export interface Env extends GatewayEnv {
@@ -85,9 +86,9 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
   try {
     const findings = await reviewer({ provider: input.provider, model: input.model, blocks: input.blocks }, apiKey, env);
     return json({ findings });
-  } catch {
+  } catch (error) {
     // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
-    return json({ error: '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
+    return json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
   }
 }
 

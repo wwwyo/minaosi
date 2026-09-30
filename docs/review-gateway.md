@@ -29,9 +29,9 @@ mise exec -- bun run dev
 | `CLOUDFLARE_ACCOUNT_ID` | Gatewayを所有するアカウント |
 | `CLOUDFLARE_AI_GATEWAY_ID` | 使用するGateway |
 | `CF_AIG_TOKEN` | AI Gateway Run権限の接続用トークン |
-| `ALLOWED_ORIGINS` | 必要に応じて拡張のOriginをカンマ区切りで指定 |
+| `ALLOWED_ORIGINS` | 拡張で利用する場合は必須。許可する拡張のOriginをカンマ区切りで指定 |
 
-拡張のOriginは `chrome-extension://<拡張ID>` など。Originを持つリクエストは明示的に許可したものだけ受け付け、通常のWebサイトからのCORSを許可しない。OriginのないリクエストもBYOKキーが必要になる。ローカルサーバーはループバックにだけbindする。
+拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。OriginのないリクエストもBYOKキーが必要になる。ローカルサーバーはループバックにだけbindする。
 
 開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。現時点のこの校閲経路にはOpenCode Go用のcustom provider / 外部検索ツールをまだ追加していないため、開発の検証は模擬応答で行う。Anthropic / OpenAIの実キーを開発QAに使わない。
 
