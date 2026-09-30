@@ -24,6 +24,8 @@ export interface PanelState {
 }
 
 export interface PanelHandlers {
+  /** FAB: 未レビューなら校閲実行、レビュー済みならパネルを開く */
+  onFab(): void;
   onRun(): void;
   onTogglePanel(): void;
   onFilter(f: FindingState): void;
@@ -141,8 +143,9 @@ function consentBody(): string {
 }
 
 export function renderPanel(s: PanelState): { panel: string; fab: string } {
-  const fabLabel = s.findings.length ? '指摘パネルを開く' : '校閲を実行';
-  const fab = `<button class="mn fab" data-act="toggle" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
+  const reviewed = s.phase === 'done' || s.phase === 'error';
+  const fabLabel = reviewed ? '指摘パネルを開く' : '校閲を実行';
+  const fab = `<button class="mn fab" data-act="fab" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
     title="${fabLabel}" aria-label="${fabLabel}">${ICON_FAB}</button>`;
   if (!s.panelOpen) return { panel: '', fab };
 
@@ -189,7 +192,7 @@ export function wirePanel(
 
     if (actEl) {
       switch (actEl.dataset.act) {
-        case 'toggle': h.onTogglePanel(); return;
+        case 'fab': h.onFab(); return;
         case 'close': h.onTogglePanel(); return;
         case 'run': h.onRun(); return;
         case 'retry': h.onRetry(); return;

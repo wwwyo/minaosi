@@ -67,6 +67,11 @@ export class Controller {
     });
 
     wirePanel(this.shadow as unknown as HTMLElement, {
+      onFab: () => {
+        // FAB は「校閲を実行」か「パネルを開く」かを状態で切り替える
+        if (this.s.phase === 'done' || this.s.phase === 'error') this.togglePanel();
+        else void this.run();
+      },
       onRun: () => void this.run(),
       onTogglePanel: () => this.togglePanel(),
       onFilter: (f) => { this.s.filter = f; this.render(); },
