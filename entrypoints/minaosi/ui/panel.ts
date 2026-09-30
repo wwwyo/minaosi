@@ -100,12 +100,12 @@ function settingsBody(s: PanelState): string {
         <option value="anthropic"${s.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
         <option value="openai"${s.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
       </select>
-      <div class="provider">${PROVIDER_LABELS[s.provider]} に原稿全文と校閲ルールを送信します。通信料・API 料金は API key の持ち主（あなた）の負担です。</div>
+      <div class="provider">minaosi の校閲サーバーと Cloudflare AI Gateway を経由して、${PROVIDER_LABELS[s.provider]} に原稿全文と校閲ルールを送信します。API 料金はあなたの負担です。ログインは不要です。</div>
     </div>
     <div class="fld">
       <label>API key</label>
       <input type="password" data-set="apiKey" value="${esc(s.apiKey)}" autocomplete="off"${s.connectionLoading ? ' disabled' : ''}>
-      <div class="help">この拡張のローカル領域にのみ保存します</div>
+      <div class="help">この拡張に保存し、校閲時にサーバーへ送信します。サーバーと Gateway には保存しません。</div>
     </div>
     <div class="fld">
       <label>モデル</label>
@@ -131,7 +131,7 @@ function settingsBody(s: PanelState): string {
 function consentBody(s: PanelState): string {
   return `<div class="subview">
     <h4>原稿の外部送信について</h4>
-    <p class="desc">「見直す」を実行すると、エディタの原稿全文と校閲ルールが ${PROVIDER_LABELS[s.provider]} の API に送信されます。送信にはあなた自身の API key を使い、費用はあなたの負担です。</p>
+    <p class="desc">「見直す」を実行すると、原稿全文・校閲ルール・あなたの API key を minaosi の校閲サーバーへ送信し、Cloudflare AI Gateway を経由して ${PROVIDER_LABELS[s.provider]} の API を呼び出します。費用はあなたの負担です。サーバーに原稿とキーを保存せず、Gateway のログとキャッシュも無効にします。</p>
     <div class="set-actions">
       <button class="run-btn" data-act="consent">同意して実行</button>
       <button class="btn-ghost" data-act="back">戻る</button>

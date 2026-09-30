@@ -1,10 +1,11 @@
 import { browser } from '#imports';
 import { review, type ReviewRequest } from './minaosi/review/providers';
+import { PROVIDER_SETTINGS } from './minaosi/store';
 
 /**
  * 原稿の外部送信は background で行う（content script からの fetch は
- * ページの CSP connect-src に従うため）。BYOK: key は設定 pane で
- * 登録した値を content 側から渡され、ここには保存しない。
+ * ページの CSP connect-src に従うため）。Gateway の認証情報は
+ * 校閲サーバーに置き、拡張には配布しない。
  */
 
 export default defineBackground(() => {
@@ -31,7 +32,12 @@ export default defineBackground(() => {
         void browser.runtime.getPlatformInfo();
       }, 20_000);
       try {
-        const findings = await review(request);
+        if (!(request.provider in PROVIDER_SETTINGS)) throw new Error('未対応の接続先です');
+        const apiKey = await PROVIDER_SETTINGS[request.provider].key.getValue();
+        const endpoint = import.meta.env.WXT_REVIEW_API_URL;
+        if (!endpoint) throw new Error('校閲サーバーの接続先が設定されていません');
+        if (!apiKey) throw new Error('API key を設定してください');
+        const findings = await review(request, apiKey, endpoint);
         sendResponse({ ok: true, findings });
       } catch (e) {
         sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });

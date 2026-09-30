@@ -216,7 +216,7 @@ export class Controller {
     try {
       const blocks = this.adapter.extractBlocks(this.editor);
       const msg: ReviewRequest = {
-        type: 'minaosi:review', provider: this.s.provider, apiKey: this.s.apiKey, model: this.s.model,
+        type: 'minaosi:review', provider: this.s.provider, model: this.s.model,
         blocks: blocks.map(({ index, text }) => ({ index, text })),
       };
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;

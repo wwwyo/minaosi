@@ -12,4 +12,6 @@ bun run dev
 
 拡張アイコンまたはnote編集画面の右下のボタンから、ブラウザのサイドpaneを開く。pane内の「見直す」で校閲し、指摘を選ぶと原稿の対象箇所を確認できる。
 
-設定ではAnthropicまたはOpenAIへの直接接続を選べる。API key・モデル・送信への同意は接続先ごとに保持する。OpenAIではResponses APIのweb searchに対応するモデルを指定する。日本語ルールは常時適用し、文体規範ファイルの設定は不要。
+設定で自分のAnthropicまたはOpenAIのAPI keyとモデルを登録する。ログインは不要。原稿はminaosiの校閲サーバーでTanStack AIが処理し、Cloudflare AI Gatewayを経由して選んだプロバイダーへ送る。日本語ルールは常時適用する。
+
+校閲サーバーも起動する必要がある。接続設定・秘密の管理・Workerのビルド手順は[校閲Gatewayの設定](docs/review-gateway.md)を参照。

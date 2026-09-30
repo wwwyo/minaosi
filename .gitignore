@@ -11,3 +11,6 @@ web-ext-artifacts/
 .codex/langfuse.json
 
 mise.local.toml
+
+.wrangler/
+.dev.vars*
