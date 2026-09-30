@@ -1,12 +1,12 @@
 import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
-import { blockText, captureSite, contextOf, indexOfRange, occurrences, applyReplacement, resolveSite } from './surfaces/resolve';
-import { buildRequest, parseReport, type RawFinding } from './review/prompt';
+import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
+import { buildRequest, parseReport, type ReviewedFinding } from './review/prompt';
 import { LANGUAGE_RULES } from './rubric';
 import { apiKeyItem, modelItem, consentedItem, ruleTogglesItem, styleGuideItem } from './store';
 import { Decorations } from './ui/decorations';
-import { renderPanel, wirePanel, type PanelState, type Filter } from './ui/panel';
+import { renderPanel, wirePanel, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 
 interface ReviewMessage {
@@ -50,7 +50,8 @@ export class Controller {
   ) {
     this.host = document.createElement('div');
     this.host.id = 'minaosi-root';
-    this.shadow = this.host.attachShadow({ mode: 'open' });
+    // closed: ページ側 JS から API key 入力値などを読まれないよう host.shadowRoot を閉じる
+    this.shadow = this.host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = PANEL_CSS;
     this.panelRoot = document.createElement('div');
@@ -62,9 +63,10 @@ export class Controller {
       onSelect: (fid) => this.select(fid),
       onApplyMatch: (fid, idx) => this.applyMatch(fid, idx),
       onUnresolvable: (fid, idx, stale) => this.markStale(fid, idx, stale),
+      onUnapplied: (fid, idx) => this.markUnapplied(fid, idx),
     });
 
-    wirePanel(this.shadow as unknown as HTMLElement, () => this.s, {
+    wirePanel(this.shadow as unknown as HTMLElement, {
       onRun: () => void this.run(),
       onTogglePanel: () => this.togglePanel(),
       onFilter: (f) => { this.s.filter = f; this.render(); },
@@ -141,20 +143,32 @@ export class Controller {
     }
   }
 
+  /** decorations の再計算中に来る状態変化は rAF で1回にまとめて render する（直列化してループを防ぐ） */
+  private queueRender() {
+    if (this.staleRaf) return;
+    this.staleRaf = requestAnimationFrame(() => {
+      this.staleRaf = 0;
+      this.render();
+    });
+  }
+
   /** 再描画中に decorations が解決不能を報告してきたときに stale を立てる */
   private markStale(fid: string, idx: number, stale: boolean) {
     const m = this.byId(fid)?.matches[idx];
     if (!m || m.stale === stale) return;
     m.stale = stale;
-    // render() → deco.render() → recompute は rAF 経由なので、ここで再 render するとループする。
-    // パネル側の stale 表示だけ遅延で更新する。
-    if (!this.staleRaf) {
-      this.staleRaf = requestAnimationFrame(() => {
-        this.staleRaf = 0;
-        const { panel } = renderPanel(this.s);
-        this.panelRoot.innerHTML = panel;
-      });
-    }
+    this.queueRender();
+  }
+
+  /** エディタ側の undo 等で適用済み箇所が原文に戻ったとき、適用状態を解除する */
+  private markUnapplied(fid: string, idx: number) {
+    const f = this.byId(fid);
+    const m = f?.matches[idx];
+    if (!f || !m?.applied) return;
+    m.applied = false;
+    m.undoBefore = m.undoAfter = undefined;
+    this.syncResolved(f);
+    this.queueRender();
   }
 
   /* ---- 見直す ---- */
@@ -206,15 +220,19 @@ export class Controller {
     this.render();
   }
 
-  /** RawFinding → Finding。matches[].from を本文に照らし、出現位置と前後文脈を確定する */
-  private normalize(raw: RawFinding[], blocks: DraftBlock[]): Finding[] {
+  /**
+   * RawFinding → Finding。matches[].from を本文に照らし、出現位置と前後文脈を確定する。
+   * 文脈は送信時のスナップショット（block.text）から採る — 応答を待つ間にユーザーが
+   * 本文を編集していても、現在の本文との再解決は resolveSite の文脈一致が担う
+   */
+  private normalize(raw: ReviewedFinding[], blocks: DraftBlock[]): Finding[] {
     const byIndex = new Map(blocks.map((b) => [b.index, b]));
     const out: Finding[] = [];
     for (const [i, rf] of raw.entries()) {
       const block = typeof rf.block === 'number' ? byIndex.get(rf.block) : undefined;
       const matches: MatchSite[] = [];
       if (block) {
-        const text = blockText(block.element);
+        const text = block.text;
         // from ごとの提供数がブロック内の出現数と一致するかで曖昧さを弾く
         const rawMatches = (rf.matches ?? []).filter((m): m is { from: string; to?: string } =>
           typeof m.from === 'string' && m.from.length > 0);
@@ -227,8 +245,8 @@ export class Controller {
           const nth = seen.get(m.from) ?? 0;
           seen.set(m.from, nth + 1);
           // 出現数と提供数が一致しない限り、どの出現を指すか一意に決められない
-          if (occ.length !== provided && !(occ.length === 1 && provided === 1)) continue;
-          const cap = captureSite(block.element, m.from, nth);
+          if (occ.length !== provided) continue;
+          const cap = captureInText(text, m.from, nth);
           if (!cap) continue;
           matches.push({
             occurrence: nth, start: cap.start, from: m.from, to: m.to,
@@ -238,7 +256,7 @@ export class Controller {
       }
       out.push({
         id: `f${i}`,
-        kind: rf.kind as Finding['kind'],
+        kind: rf.kind,
         block: block ? block.index : -1,
         blockEl: block?.element,
         title: rf.title ?? '',
@@ -256,45 +274,41 @@ export class Controller {
   /* ---- 適用 / 元に戻す ---- */
 
   private applyMatch(fid: string, idx: number) {
+    this.applyMatchCore(fid, idx);
+    this.render();
+  }
+
+  private applyMatchCore(fid: string, idx: number) {
     const f = this.byId(fid);
     const m = f?.matches[idx];
-    if (!f || !m || !f.blockEl || m.applied || !m.to) return;
+    if (!f || !m || !f.blockEl || m.applied || m.to === undefined) return;
     const res = resolveSite(f.blockEl, m);
     if (res.status !== 'ok') {
       m.stale = true;
-      this.render();
       return;
     }
     const startIdx = indexOfRange(f.blockEl, res.range);
     if (!applyReplacement(res.range, m.to)) {
       m.stale = true;
-      this.render();
       return;
     }
-    // undo 用に、適用後の to の前後文脈を採取する
+    // undo 用に、適用後の to の前後文脈を採取する。挿入位置の直読みが合わない場合は
+    // from→to で置き換わった箇所を後方文脈で探す
     const text = blockText(f.blockEl);
-    if (startIdx !== null && text.slice(startIdx, startIdx + m.to.length) === m.to) {
-      const c = contextOf(text, startIdx, m.to.length);
+    const to = m.to;
+    const at = startIdx !== null && text.slice(startIdx, startIdx + to.length) === to
+      ? startIdx
+      : occurrences(text, to).find((i) => contextOf(text, i, to.length).after === m.after);
+    if (at !== undefined) {
+      const c = contextOf(text, at, to.length);
       m.undoBefore = c.before;
       m.undoAfter = c.after;
-    } else {
-      // 挿入位置の直読みが合わない場合は from→to で置き換わった箇所を文脈で探す
-      const hit = occurrences(text, m.to).find((i) => {
-        const c = contextOf(text, i, (m.to as string).length);
-        return c.after === m.after;
-      });
-      if (hit !== undefined) {
-        const c = contextOf(text, hit, m.to.length);
-        m.undoBefore = c.before;
-        m.undoAfter = c.after;
-      }
     }
     m.applied = true;
     m.stale = false;
     if (startIdx !== null) this.refreshAfterEdit(f.blockEl, startIdx, m.to.length - m.from.length, m);
     this.syncResolved(f);
     this.s.selectedId = null;
-    this.render();
   }
 
   /**
@@ -307,20 +321,40 @@ export class Controller {
     for (const f of this.s.findings) {
       if (f.blockEl !== blockEl) continue;
       for (const m of f.matches) {
-        if (m === justApplied || m.applied) continue;
-        if (resolveSite(blockEl, m).status === 'ok') continue;
+        if (m === justApplied) continue;
+        if (m.applied) {
+          // 適用済み箇所の undo アンカーもずれるので採り直す（取れなければ revert 時に stale 判定される）
+          const at = m.to === ''
+            ? seamIndex(text, m.undoBefore ?? '', m.undoAfter ?? '')
+            : (() => {
+                const res = resolveSite(blockEl, undoSite(m), text);
+                return res.status === 'ok' ? indexOfRange(blockEl, res.range) : null;
+              })();
+          if (at !== null) {
+            const c = contextOf(text, at, m.to?.length ?? 0);
+            m.undoBefore = c.before;
+            m.undoAfter = c.after;
+          }
+          continue;
+        }
+        if (resolveSite(blockEl, m, text).status === 'ok') continue;
         const shifted = m.start > editStart ? m.start + delta : m.start;
         if (text.slice(shifted, shifted + m.from.length) !== m.from) {
           m.stale = true;
           continue;
         }
-        m.start = shifted;
-        const c = contextOf(text, shifted, m.from.length);
-        m.before = c.before;
-        m.after = c.after;
-        m.occurrence = occurrences(text, m.from).indexOf(shifted);
+        this.recapture(m, text, shifted);
       }
     }
+  }
+
+  /** 位置がずれた箇所の start・前後文脈・出現番号を現在の本文から採り直す */
+  private recapture(m: MatchSite, text: string, start: number) {
+    m.start = start;
+    const c = contextOf(text, start, m.from.length);
+    m.before = c.before;
+    m.after = c.after;
+    m.occurrence = occurrences(text, m.from).indexOf(start);
   }
 
   /** カードの「適用」はその指摘の未適用の全箇所を適用する */
@@ -328,8 +362,9 @@ export class Controller {
     const f = this.byId(fid);
     if (!f) return;
     for (const [i, m] of f.matches.entries()) {
-      if (!m.applied && m.to !== undefined && !m.stale) this.applyMatch(fid, i);
+      if (!m.applied && m.to !== undefined && !m.stale) this.applyMatchCore(fid, i);
     }
+    this.render();
   }
 
   private syncResolved(f: Finding) {
@@ -348,12 +383,15 @@ export class Controller {
       return;
     }
     for (const m of f.matches) {
-      if (!m.applied || !m.to || !f.blockEl) continue;
-      const res = resolveSite(f.blockEl, {
-        from: m.to,
-        before: m.undoBefore ?? '',
-        after: m.undoAfter ?? '',
-      });
+      if (!m.applied || m.to === undefined || !f.blockEl) continue;
+      // 削除提案（to=''）は挿入点を縫い目で解決する
+      const res = m.to === ''
+        ? (() => {
+            const at = seamIndex(blockText(f.blockEl), m.undoBefore ?? '', m.undoAfter ?? '');
+            const range = at !== null ? rangeAt(f.blockEl, at, 0) : null;
+            return range ? { status: 'ok' as const, range } : { status: 'stale' as const };
+          })()
+        : resolveSite(f.blockEl, undoSite(m));
       const at = res.status === 'ok' ? indexOfRange(f.blockEl, res.range) : null;
       if (res.status !== 'ok' || !applyReplacement(res.range, m.from)) {
         m.stale = true;
@@ -365,13 +403,7 @@ export class Controller {
       if (at !== null) {
         // revert で to→from に戻した分も同ブロック内の他箇所の位置に反映する
         const text = blockText(f.blockEl);
-        if (text.slice(at, at + m.from.length) === m.from) {
-          m.start = at;
-          const c = contextOf(text, at, m.from.length);
-          m.before = c.before;
-          m.after = c.after;
-          m.occurrence = occurrences(text, m.from).indexOf(at);
-        }
+        if (text.slice(at, at + m.from.length) === m.from) this.recapture(m, text, at);
         this.refreshAfterEdit(f.blockEl, at, m.from.length - m.to.length, m);
       }
     }

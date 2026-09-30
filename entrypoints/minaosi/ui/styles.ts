@@ -58,8 +58,6 @@ export const PANEL_CSS = `
   position: fixed; top: 0; right: 0; bottom: 0; width: 340px; z-index: 2147483646;
   background: var(--color-bg-panel); border-left: 1px solid var(--color-line-strong);
   display: flex; flex-direction: column;
-  font-family: var(--font-ui); color: var(--color-ink);
-  font-size: var(--font-size-body); line-height: var(--line-height-ui);
 }
 .panel header { padding: 14px 16px 12px; border-bottom: 1px solid var(--color-line); }
 .head-row { display: flex; align-items: center; gap: 8px; }
@@ -250,15 +248,21 @@ export const PANEL_CSS = `
 }
 `;
 
+/** ::highlight 側の値。ページ側の style からは shadow の var() が見えないため、
+ *  PANEL_CSS と共有する定数として置く（値の正本は design.md） */
+const HL_INK_MUTE = 'oklch(52% 0.02 264)';
+const HL_STRIKE = 'oklch(52% 0.07 20)';
+const HL_TINT = 'oklch(94.5% 0.03 155)';
+
 /** 本文の装飾（::highlight）はページ側の <style> に入れる必要がある */
 export const PAGE_HIGHLIGHT_CSS = `
 ::highlight(minaosi-del) {
-  color: oklch(52% 0.02 264);
+  color: ${HL_INK_MUTE};
   text-decoration: line-through;
-  text-decoration-color: oklch(52% 0.07 20);
+  text-decoration-color: ${HL_STRIKE};
   text-decoration-thickness: 1.5px;
 }
 ::highlight(minaosi-sel) {
-  background-color: oklch(94.5% 0.03 155);
+  background-color: ${HL_TINT};
 }
 `;

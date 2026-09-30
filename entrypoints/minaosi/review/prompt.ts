@@ -1,4 +1,4 @@
-import type { DraftBlock, FindingKind } from '../types';
+import { KIND_LABEL, type DraftBlock, type FindingKind } from '../types';
 import type { LanguageRule } from '../rubric';
 
 /** LLM が返す wire 形式。content 側の Finding への正規化は controller が行う。 */
@@ -7,6 +7,7 @@ export interface RawMatch {
   to?: string;
 }
 
+/** kind は wire では任意文字列。parseReport が FindingKind に絞る */
 export interface RawFinding {
   kind?: string;
   block?: number;
@@ -16,7 +17,10 @@ export interface RawFinding {
   source?: { url?: string; label?: string; excerpt?: string };
 }
 
-const FINDING_KINDS: FindingKind[] = ['typo', 'fact', 'rule', 'style'];
+/** kind の妥当性を検証済みの RawFinding */
+export type ReviewedFinding = RawFinding & { kind: FindingKind };
+
+const FINDING_KINDS = Object.keys(KIND_LABEL) as FindingKind[];
 
 const REPORT_TOOL = {
   name: 'report_findings',
@@ -64,7 +68,7 @@ const REPORT_TOOL = {
   },
 };
 
-function systemPrompt(enabledRules: LanguageRule[], styleGuide: string | null): string {
+function systemPrompt(enabledRules: LanguageRule[]): string {
   const rules = enabledRules.map((r) => `- ${r.label}: ${r.hint}`).join('\n');
   return `あなたは日本語の原稿を校閲する編集者です。文章の書き換えはせず、指摘だけを行います。結果は必ず report_findings ツール呼び出しで返してください。
 
@@ -104,7 +108,7 @@ export function buildRequest(opts: {
   return {
     model: opts.model,
     max_tokens: 8192,
-    system: systemPrompt(opts.enabledRules, opts.styleGuide),
+    system: systemPrompt(opts.enabledRules),
     tools: [
       { type: 'web_search_20250305', name: 'web_search', max_uses: 8 },
       REPORT_TOOL,
@@ -118,7 +122,7 @@ export function buildRequest(opts: {
  * kind・block・source などの最低限の妥当性でフィルタする。
  * matches の from が本文と一致するかの判定は block 要素が要るため controller 側で行う。
  */
-export function parseReport(data: unknown): RawFinding[] | { error: string } {
+export function parseReport(data: unknown): ReviewedFinding[] | { error: string } {
   if (!data || typeof data !== 'object') return { error: 'API レスポンスを解釈できません' };
   const content = (data as { content?: unknown }).content;
   if (!Array.isArray(content)) {
@@ -138,7 +142,7 @@ export function parseReport(data: unknown): RawFinding[] | { error: string } {
   const raw = (call.input as { findings?: RawFinding[] }).findings;
   if (!Array.isArray(raw)) return { error: '校閲結果の形式が不正です' };
   return raw.filter(
-    (f): f is RawFinding =>
+    (f): f is ReviewedFinding =>
       !!f &&
       typeof f === 'object' &&
       FINDING_KINDS.includes(f.kind as FindingKind) &&

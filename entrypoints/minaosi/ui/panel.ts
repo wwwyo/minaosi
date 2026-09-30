@@ -1,5 +1,4 @@
-import type { Finding, FindingState } from '../types';
-import { KIND_LABEL } from '../types';
+import { KIND_LABEL, type Finding, type FindingState } from '../types';
 import { LANGUAGE_RULES } from '../rubric';
 import { PROVIDER_LABEL } from '../store';
 import {
@@ -7,7 +6,6 @@ import {
   ICON_SPARKLES, ICON_FAB, ICON_SETTINGS,
 } from './icons';
 
-export type Filter = 'open' | 'resolved' | 'deleted';
 export type View = 'list' | 'settings' | 'consent';
 
 export interface PanelState {
@@ -15,7 +13,7 @@ export interface PanelState {
   error?: string;
   panelOpen: boolean;
   view: View;
-  filter: Filter;
+  filter: FindingState;
   selectedId: string | null;
   findings: Finding[];
   apiKey: string;
@@ -28,7 +26,7 @@ export interface PanelState {
 export interface PanelHandlers {
   onRun(): void;
   onTogglePanel(): void;
-  onFilter(f: Filter): void;
+  onFilter(f: FindingState): void;
   onSelect(fid: string | null): void;
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
@@ -49,16 +47,12 @@ const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-const TABS: [Filter, string][] = [['open', '未対応'], ['resolved', '適用済み'], ['deleted', '削除']];
+const TABS: [FindingState, string][] = [['open', '未対応'], ['resolved', '適用済み'], ['deleted', '削除']];
 
-function counts(findings: Finding[]) {
-  let o = 0, r = 0, d = 0;
-  for (const f of findings) {
-    if (f.state === 'open') o++;
-    else if (f.state === 'resolved') r++;
-    else d++;
-  }
-  return { o, r, d };
+function counts(findings: Finding[]): Record<FindingState, number> {
+  const c: Record<FindingState, number> = { open: 0, resolved: 0, deleted: 0 };
+  for (const f of findings) c[f.state]++;
+  return c;
 }
 
 function actsHTML(f: Finding): string {
@@ -93,9 +87,6 @@ function listBody(s: PanelState): string {
       <button class="btn-ghost" data-act="settings">設定</button></div></div>`;
   }
   const list = s.findings.filter((f) => f.state === s.filter);
-  if (s.findings.length === 0 && s.phase === 'done') {
-    return '<div class="empty">指摘はありません</div>';
-  }
   return list.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>';
 }
 
@@ -150,15 +141,14 @@ function consentBody(): string {
 }
 
 export function renderPanel(s: PanelState): { panel: string; fab: string } {
+  const fabLabel = s.findings.length ? '指摘パネルを開く' : '校閲を実行';
   const fab = `<button class="mn fab" data-act="toggle" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
-    title="${s.findings.length ? '指摘パネルを開く' : '校閲を実行'}"
-    aria-label="${s.findings.length ? '指摘パネルを開く' : '校閲を実行'}">${ICON_FAB}</button>`;
+    title="${fabLabel}" aria-label="${fabLabel}">${ICON_FAB}</button>`;
   if (!s.panelOpen) return { panel: '', fab };
 
   const c = counts(s.findings);
-  const prog = [[`未対応 ${c.o}`, c.o], [`適用済み ${c.r}`, c.r], [`削除 ${c.d}`, c.d]]
-    .filter(([, n]) => (n as number) > 0)
-    .map(([t]) => t)
+  const prog = TABS.filter(([k]) => c[k] > 0)
+    .map(([k, label]) => `${label} ${c[k]}`)
     .join(' · ');
 
   let body: string;
@@ -189,7 +179,6 @@ export function renderPanel(s: PanelState): { panel: string; fab: string } {
 
 export function wirePanel(
   root: HTMLElement,
-  get: () => PanelState,
   h: PanelHandlers,
 ) {
   root.addEventListener('click', (e) => {
@@ -207,7 +196,7 @@ export function wirePanel(
         case 'settings': h.onOpenSettings(); return;
         case 'back': h.onBackToList(); return;
         case 'consent': h.onConsentAndRun(); return;
-        case 'filter': h.onFilter(actEl.dataset.f as Filter); return;
+        case 'filter': h.onFilter(actEl.dataset.f as FindingState); return;
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;
         case 'revert': if (fid) h.onRevert(fid); return;
@@ -215,10 +204,8 @@ export function wirePanel(
       }
     }
     if (t.closest('a')) return;
-    if (card) {
-      const id = card.dataset.fid ?? null;
-      h.onSelect(get().selectedId === id ? null : id);
-    }
+    // 選択トグルは controller 側で行う（decorations の onSelect 経路と同じ）
+    if (card) h.onSelect(card.dataset.fid ?? null);
   });
 
   root.addEventListener('keydown', (e) => {
@@ -226,8 +213,7 @@ export function wirePanel(
     if (!t.classList?.contains('n-item')) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      const id = t.dataset.fid ?? null;
-      h.onSelect(get().selectedId === id ? null : id);
+      h.onSelect(t.dataset.fid ?? null);
     }
   });
 

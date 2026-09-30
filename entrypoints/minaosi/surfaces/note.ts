@@ -11,9 +11,18 @@ export const noteAdapter: SurfaceAdapter = {
   id: 'note',
 
   findEditor(doc) {
-    const cands = [...doc.querySelectorAll<HTMLElement>('[contenteditable="true"], [contenteditable=""]')]
-      .filter((el) => el.getClientRects().length > 0);
-    return cands.sort((a, b) => blockText(b).length - blockText(a).length)[0] ?? null;
+    // 本文は最大の editable。比較は textContent.length のみで十分（正規化は長さを変えない）
+    let best: HTMLElement | null = null;
+    let bestLen = -1;
+    for (const el of doc.querySelectorAll<HTMLElement>('[contenteditable="true"], [contenteditable=""]')) {
+      if (el.getClientRects().length === 0) continue;
+      const len = el.textContent?.length ?? 0;
+      if (len > bestLen) {
+        bestLen = len;
+        best = el;
+      }
+    }
+    return best;
   },
 
   extractBlocks(editor) {

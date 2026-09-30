@@ -1,5 +1,5 @@
 import type { Finding } from '../types';
-import { resolveSite } from '../surfaces/resolve';
+import { resolveSite, undoSite } from '../surfaces/resolve';
 import { PAGE_HIGHLIGHT_CSS } from './styles';
 import { ICON_APPLY } from './icons';
 
@@ -25,6 +25,8 @@ export interface DecorationCallbacks {
   onApplyMatch: (fid: string, matchIndex: number) => void;
   /** 表示時に解決不能になった箇所を報告する（stale 表示に使う） */
   onUnresolvable: (fid: string, matchIndex: number, stale: boolean) => void;
+  /** エディタ側の undo 等で適用済み箇所が原文に戻った */
+  onUnapplied: (fid: string, matchIndex: number) => void;
 }
 
 const HL_SUPPORTED = typeof CSS !== 'undefined' && 'highlights' in CSS;
@@ -41,6 +43,9 @@ export class Decorations {
   private tipTimer = 0;
   private pageStyle: HTMLStyleElement | null = null;
   private mo: MutationObserver | null = null;
+  private sites: Site[] = [];
+  /** 本文 or 指摘集合が変わったか。scroll/resize では解決し直さず位置だけ追従する */
+  private dirty = true;
 
   constructor(
     private shadow: ShadowRoot,
@@ -58,15 +63,18 @@ export class Decorations {
       this.delHl = new Highlight();
       this.selHl = new Highlight();
       this.selHl.priority = 1;
-      (CSS.highlights as HighlightRegistry).set('minaosi-del', this.delHl);
-      (CSS.highlights as HighlightRegistry).set('minaosi-sel', this.selHl);
+      CSS.highlights.set('minaosi-del', this.delHl);
+      CSS.highlights.set('minaosi-sel', this.selHl);
       this.pageStyle = document.createElement('style');
       this.pageStyle.textContent = PAGE_HIGHLIGHT_CSS;
       document.head.appendChild(this.pageStyle);
     }
 
-    this.mo = new MutationObserver(() => this.schedule());
-    this.mo.observe(this.editor, { childList: true, characterData: true, subtree: true });
+    this.mo = new MutationObserver(() => {
+      this.dirty = true;
+      this.schedule();
+    });
+    this.mo.observe(this.editor, MO_OPTS);
     const onScroll = () => this.schedule();
     const onResize = () => this.schedule();
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
@@ -99,19 +107,22 @@ export class Decorations {
     if (editor === this.editor) return;
     this.editor = editor;
     this.mo?.disconnect();
-    this.mo = new MutationObserver(() => this.schedule());
-    this.mo.observe(editor, { childList: true, characterData: true, subtree: true });
+    this.mo?.observe(editor, MO_OPTS);
+    this.dirty = true;
     this.schedule();
   }
 
   render(findings: Finding[], selectedId: string | null) {
     this.findings = findings;
     this.selectedId = selectedId;
+    this.dirty = true;
     this.schedule();
   }
 
   private schedule() {
     if (this.raf) return;
+    // 描画対象が何も無い平常時は scroll/mutation ごとの再計算をしない
+    if (!this.dirty && this.sites.length === 0 && this.ovl.childElementCount === 0) return;
     this.raf = requestAnimationFrame(() => {
       this.raf = 0;
       this.recompute();
@@ -125,18 +136,22 @@ export class Decorations {
       const selected = f.id === this.selectedId;
       const blockEl = f.blockEl;
       if (!blockEl || !blockEl.isConnected) {
-        for (const [i] of f.matches.entries()) this.cbs.onUnresolvable(f.id, i, true);
+        for (const i of f.matches.keys()) this.cbs.onUnresolvable(f.id, i, true);
         continue;
       }
       for (const [i, m] of f.matches.entries()) {
         if (m.applied) {
-          if (!selected || !m.to || m.undoBefore === undefined) continue;
-          const res = resolveSite(blockEl, { from: m.to, before: m.undoBefore, after: m.undoAfter ?? '' });
+          const res = resolveSite(blockEl, undoSite(m));
           if (res.status === 'ok') {
-            sites.push({
-              fid: f.id, matchIndex: i, kind: 'applied',
-              rects: [...res.range.getClientRects()], range: res.range, from: m.from,
-            });
+            if (selected && m.to !== '' && m.undoBefore !== undefined) {
+              sites.push({
+                fid: f.id, matchIndex: i, kind: 'applied',
+                rects: [...res.range.getClientRects()], range: res.range, from: m.from,
+              });
+            }
+          } else if (resolveSite(blockEl, m).status === 'ok') {
+            // 適用後の `to` が見つからず `from` が復活 = エディタ側の undo で戻った
+            this.cbs.onUnapplied(f.id, i);
           }
           continue;
         }
@@ -161,35 +176,48 @@ export class Decorations {
   }
 
   private recompute() {
-    this.delHl?.clear();
-    this.selHl?.clear();
-    this.ovl.textContent = '';
-    const sites = this.buildSites();
+    if (this.dirty) {
+      // 本文・指摘集合の変化時だけテキスト解決をやり直す。
+      // Custom Highlight はレイアウト変化に自動追従するので dirty 時のみ張り直す
+      this.delHl?.clear();
+      this.selHl?.clear();
+      this.sites = this.buildSites();
+      for (const s of this.sites) {
+        if (!s.range) continue;
+        if (s.kind === 'suggest') this.delHl?.add(s.range);
+        if (s.kind === 'applied') this.selHl?.add(s.range);
+        if ((s.kind === 'suggest' || s.kind === 'mark') && s.fid === this.selectedId) {
+          this.selHl?.add(s.range);
+        }
+      }
+      this.dirty = false;
+    }
+    // scroll/resize では解決し直さず、生きている Range から位置だけ取り直す
+    for (const s of this.sites) {
+      s.rects = s.range ? [...s.range.getClientRects()] : s.el ? [s.el.getBoundingClientRect()] : [];
+    }
 
-    for (const s of sites) {
+    this.ovl.textContent = '';
+    const chips: { el: HTMLElement; s: Site; del: boolean }[] = [];
+    for (const s of this.sites) {
       const selected = s.fid === this.selectedId;
       if (s.kind === 'suggest' && s.range) {
-        if (this.delHl) this.delHl.add(s.range);
-        else for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
-        const last = s.rects[s.rects.length - 1];
-        if (last) this.insChip(s, last);
+        if (!this.delHl) {
+          for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
+        }
+        if (s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s), s, del: false });
       }
-      if (s.kind === 'applied' && s.range) {
-        this.selHl?.add(s.range);
-        const first = s.rects[0];
-        if (first && s.from !== undefined) this.delChip(s, first);
+      if (s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
+        chips.push({ el: this.chip('sug-del', s.from, s), s, del: true });
       }
-      if ((s.kind === 'suggest' || s.kind === 'mark') && s.range) {
-        if (selected) this.selHl?.add(s.range);
+      if (s.kind === 'suggest' && s.range) {
         // 打ち消し線が見えている箇所だけポインタを取る。修正案の無い mark は
         // 不可視のままポインタを奪うと文字選択を阻害するため hot-rect を置かない
-        if (s.kind === 'suggest') {
-          for (const r of s.rects) {
-            const hot = this.el('hot', r.left - 1, r.top - 1, r.width + 2, r.height + 2);
-            hot.dataset.fid = s.fid;
-            hot.dataset.idx = String(s.matchIndex);
-            hot.dataset.suggest = '1';
-          }
+        for (const r of s.rects) {
+          const hot = this.el('hot', r.left - 1, r.top - 1, r.width + 2, r.height + 2);
+          hot.dataset.fid = s.fid;
+          hot.dataset.idx = String(s.matchIndex);
+          hot.dataset.suggest = '1';
         }
       }
       if (s.kind === 'block') {
@@ -203,6 +231,9 @@ export class Decorations {
         for (const r of s.rects) this.el('ring', r.left - 2, r.top - 2, r.width + 4, r.height + 4);
       }
     }
+    // chip のサイズ計測をまとめてから位置を書く（強制同期レイアウトを1回に抑える）
+    const sizes = chips.map((c) => ({ w: c.el.offsetWidth, h: c.el.offsetHeight }));
+    chips.forEach((c, i) => this.placeChip(c.el, sizes[i]!, c.s, c.del));
   }
 
   private el(cls: string, l: number, t: number, w: number, h: number): HTMLElement {
@@ -216,36 +247,40 @@ export class Decorations {
     return d;
   }
 
-  /** 修正案の挿入候補チップ。原文の行末に重ね、右にはみ出す場合は行の上に置く */
-  private insChip(s: Site, last: DOMRect) {
+  private chip(cls: 'sug-ins' | 'sug-del', text: string, s: Site): HTMLElement {
     const chip = document.createElement('span');
-    chip.className = 'sug-ins';
+    chip.className = cls;
     chip.dataset.fid = s.fid;
-    chip.dataset.idx = String(s.matchIndex);
-    chip.dataset.suggest = '1';
-    chip.textContent = s.to ?? '';
+    if (cls === 'sug-ins') {
+      chip.dataset.idx = String(s.matchIndex);
+      chip.dataset.suggest = '1';
+    }
+    chip.textContent = text;
     this.ovl.appendChild(chip);
-    const w = chip.offsetWidth;
-    const h = chip.offsetHeight;
-    let left = last.right + 3;
-    let top = last.top + (last.height - h) / 2;
-    if (left + w > window.innerWidth - 344) {
-      left = s.rects[0]?.left ?? last.left;
-      top = (s.rects[0]?.top ?? last.top) - h - 2;
+    return chip;
+  }
+
+  /** 修正案の挿入候補チップは原文の行末に重ね、右にはみ出す場合は行の上に置く。
+   *  適用済みプレビューの del チップは差分を示すため常に行の上に出す */
+  private placeChip(chip: HTMLElement, size: { w: number; h: number }, s: Site, del: boolean) {
+    const first = s.rects[0];
+    const last = s.rects[s.rects.length - 1];
+    if (!first || !last) return;
+    let left: number;
+    let top: number;
+    if (del) {
+      left = first.left;
+      top = first.top - size.h - 2;
+    } else {
+      left = last.right + 3;
+      top = last.top + (last.height - size.h) / 2;
+      if (left + size.w > window.innerWidth - 344) {
+        left = first.left;
+        top = first.top - size.h - 2;
+      }
     }
     chip.style.left = `${Math.max(4, left)}px`;
     chip.style.top = `${top}px`;
-  }
-
-  /** 適用済みプレビュー：現在の本文は to。差分を示すため from を打ち消しチップで行の上に出す */
-  private delChip(s: Site, first: DOMRect) {
-    const chip = document.createElement('span');
-    chip.className = 'sug-del';
-    chip.dataset.fid = s.fid;
-    chip.textContent = s.from ?? '';
-    this.ovl.appendChild(chip);
-    chip.style.left = `${Math.max(4, first.left)}px`;
-    chip.style.top = `${first.top - chip.offsetHeight - 2}px`;
   }
 
   /* ---- tooltip / hit-test ---- */
@@ -338,12 +373,15 @@ export class Decorations {
   }
 
   dispose() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    clearTimeout(this.tipTimer);
     this.disposers.forEach((d) => d());
     this.delHl?.clear();
     this.selHl?.clear();
     if (HL_SUPPORTED) {
-      (CSS.highlights as HighlightRegistry).delete('minaosi-del');
-      (CSS.highlights as HighlightRegistry).delete('minaosi-sel');
+      CSS.highlights.delete('minaosi-del');
+      CSS.highlights.delete('minaosi-sel');
     }
     this.pageStyle?.remove();
     this.ovl.remove();
@@ -351,4 +389,4 @@ export class Decorations {
   }
 }
 
-type HighlightRegistry = Map<string, Highlight>;
+const MO_OPTS: MutationObserverInit = { childList: true, characterData: true, subtree: true };

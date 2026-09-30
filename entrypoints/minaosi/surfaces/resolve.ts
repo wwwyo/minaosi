@@ -1,3 +1,5 @@
+import type { MatchSite } from '../types';
+
 /** ブロック本文中の文字列を Range に解決する。編集でずれた箇所は前後文脈で stale を判定する。 */
 
 export type ResolveResult =
@@ -34,10 +36,26 @@ export function captureSite(
   from: string,
   occurrence: number,
 ): { before: string; after: string; start: number } | null {
-  const text = blockText(block);
+  return captureInText(blockText(block), from, occurrence);
+}
+
+/** テキスト（送信時のスナップショット）から文脈を採取する */
+export function captureInText(
+  text: string,
+  from: string,
+  occurrence: number,
+): { before: string; after: string; start: number } | null {
   const start = occurrences(text, from)[occurrence];
   if (start === undefined) return null;
   return { ...contextOf(text, start, from.length), start };
+}
+
+/** before+after が縫い目で一致する位置（削除提案を元に戻す際の挿入点） */
+export function seamIndex(text: string, before: string, after: string): number | null {
+  const needle = before + after;
+  if (!needle) return null;
+  const starts = occurrences(text, needle);
+  return starts.length === 1 ? starts[0]! + before.length : null;
 }
 
 export function rangeAt(block: HTMLElement, start: number, length: number): Range | null {
@@ -70,8 +88,8 @@ export function rangeAt(block: HTMLElement, start: number, length: number): Rang
 export function resolveSite(
   block: HTMLElement,
   site: { from: string; before: string; after: string },
+  text = blockText(block),
 ): ResolveResult {
-  const text = blockText(block);
   const starts = occurrences(text, site.from);
   const hits = starts.filter((i) => {
     const c = contextOf(text, i, site.from.length);
@@ -83,6 +101,11 @@ export function resolveSite(
   }
   if (hits.length === 0) return { status: 'stale' };
   return { status: 'ambiguous' };
+}
+
+/** 適用済み箇所を元に戻すための解決引数（現在の本文上の `to` を探す） */
+export function undoSite(m: MatchSite): { from: string; before: string; after: string } {
+  return { from: m.to ?? '', before: m.undoBefore ?? '', after: m.undoAfter ?? '' };
 }
 
 /** Range の開始位置をブロック本文中の文字 index に戻す（適用後の undo 文脈採取用） */

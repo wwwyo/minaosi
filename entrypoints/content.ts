@@ -27,10 +27,9 @@ export default defineContentScript({
 
     check();
     // エディタの遅延描画・SPA 遷移を拾う。見つかってからも軽い querySelectorAll を定期実行するだけ
-    const timer = setInterval(check, 3000);
+    ctx.setInterval(check, 3000);
     ctx.addEventListener(window, 'wxt:locationchange', check);
     ctx.onInvalidated(() => {
-      clearInterval(timer);
       ctrl?.dispose();
       ctrl = null;
     });
