@@ -6,8 +6,9 @@ import { buildRequest, parseReport, type ReviewedFinding } from './review/prompt
 import { LANGUAGE_RULES } from './rubric';
 import { apiKeyItem, modelItem, consentedItem } from './store';
 import { Decorations } from './ui/decorations';
-import { renderPanel, wirePanel, type PanelState } from './ui/panel';
+import { renderFab, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
+import type { PanelCommand } from './panel-messages';
 
 interface ReviewMessage {
   type: 'minaosi:review';
@@ -25,14 +26,12 @@ interface ReviewReply {
 export class Controller {
   private host: HTMLElement;
   private shadow: ShadowRoot;
-  private panelRoot: HTMLElement;
   private fabRoot: HTMLElement;
   private deco: Decorations;
   private staleRaf = 0;
 
-  private s: PanelState = {
+  private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
-    panelOpen: false,
     view: 'list',
     filter: 'open',
     selectedId: null,
@@ -45,16 +44,16 @@ export class Controller {
   constructor(
     private adapter: SurfaceAdapter,
     private editor: HTMLElement,
+    private publish: (state: PanelState) => void,
   ) {
     this.host = document.createElement('div');
     this.host.id = 'minaosi-root';
-    // closed: ページ側 JS から API key 入力値などを読まれないよう host.shadowRoot を閉じる
+    // ページ側の script に本文マークの内部 DOM を公開しない
     this.shadow = this.host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = PANEL_CSS;
-    this.panelRoot = document.createElement('div');
     this.fabRoot = document.createElement('div');
-    this.shadow.append(style, this.panelRoot, this.fabRoot);
+    this.shadow.append(style, this.fabRoot);
     document.body.appendChild(this.host);
 
     this.deco = new Decorations(this.shadow, this.editor, {
@@ -64,34 +63,44 @@ export class Controller {
       onUnapplied: (fid, idx) => this.markUnapplied(fid, idx),
     });
 
-    wirePanel(this.shadow as unknown as HTMLElement, {
-      onFab: () => this.toggle(),
-      onRun: () => void this.run(),
-      onTogglePanel: () => this.togglePanel(),
-      onFilter: (f) => { this.s.filter = f; this.render(); },
-      onSelect: (fid) => this.select(fid),
-      onApplyFinding: (fid) => this.applyFinding(fid),
-      onDelete: (fid) => {
-        const f = this.byId(fid);
+    this.fabRoot.innerHTML = renderFab();
+    this.fabRoot.querySelector('button')?.addEventListener('click', () => {
+      // ユーザー操作の直後に送る。await を挟むと sidePanel.open の user gesture が失われる。
+      void browser.runtime.sendMessage({ type: 'minaosi:open-panel' });
+    });
+  }
+
+  handleCommand(command: PanelCommand) {
+    switch (command.action) {
+      case 'run': void this.run(); return;
+      case 'filter': this.s.filter = command.filter; break;
+      case 'select': this.select(command.id); return;
+      case 'apply': this.applyFinding(command.id); return;
+      case 'delete': {
+        const f = this.byId(command.id);
         if (!f) return;
         f.state = 'deleted';
         this.s.selectedId = null;
-        this.render();
-      },
-      onRevert: (fid) => this.revert(fid),
-      onOpenSettings: () => { this.s.view = 'settings'; this.render(); },
-      onBackToList: () => { this.s.view = 'list'; this.render(); },
-      onSaveKey: (k) => { this.s.apiKey = k; void apiKeyItem.setValue(k); },
-      onClearKey: () => { this.s.apiKey = ''; void apiKeyItem.setValue(''); },
-      onSaveModel: (m) => { this.s.model = m; void modelItem.setValue(m); },
-      onConsentAndRun: () => {
+        break;
+      }
+      case 'revert': this.revert(command.id); return;
+      case 'settings': this.s.view = 'settings'; break;
+      case 'back': this.s.view = 'list'; break;
+      case 'saveKey': this.s.apiKey = command.value; void apiKeyItem.setValue(command.value); break;
+      case 'clearKey': this.s.apiKey = ''; void apiKeyItem.setValue(''); break;
+      case 'saveModel': this.s.model = command.value; void modelItem.setValue(command.value); break;
+      case 'consent':
         this.s.consented = true;
         void consentedItem.setValue(true);
         this.s.view = 'list';
         void this.run();
-      },
-      onRetry: () => void this.run(),
-    });
+        return;
+    }
+    this.render();
+  }
+
+  snapshot(): PanelState {
+    return { ...this.s, findings: this.s.findings.map(({ blockEl, ...finding }) => finding) };
   }
 
   async init() {
@@ -123,52 +132,9 @@ export class Controller {
     return this.s.findings.find((f) => f.id === fid);
   }
 
-  /** 開閉アニメの方向（in は mount 時のみ付与、out は退出中のみ付与） */
-  private anim: 'in' | 'out' | null = null;
-
   private render() {
-    const { panel, fab } = renderPanel(this.s, this.anim ?? undefined);
-    this.panelRoot.innerHTML = panel;
-    this.fabRoot.innerHTML = fab;
-    this.deco.render(this.s.findings, this.s.selectedId, this.s.panelOpen);
-    // パネルは本文の上に被せるのではなく右に置く — 本文の幅をパネル分だけ縮める
-    // （prototype の .with-panel と同じ位置付け。position:fixed のホスト側 chrome は
-    //  viewport 基準なので動かず、パネルの下に隠れる点は v1 では許容する）
-    document.body.style.marginRight = this.s.panelOpen ? '340px' : '';
-  }
-
-  /** FAB・ツールバーアイコン共通のエントリ: 未レビューなら校閲実行、済みならパネル開閉 */
-  toggle() {
-    if (this.s.phase === 'done' || this.s.phase === 'error') this.togglePanel();
-    else void this.run();
-  }
-
-  /** パネルを開く（右下からの入場アニメ付き）。すでに開いていれば何もしない */
-  private openPanel() {
-    if (this.s.panelOpen) return;
-    this.s.panelOpen = true;
-    this.anim = 'in';
-    // in アニメは mount 時の1回だけ。class が残ると再描画ごとに再生されるので外す
-    setTimeout(() => { this.anim = null; }, 240);
-  }
-
-  private togglePanel() {
-    const opening = !this.s.panelOpen;
-    if (opening) {
-      this.openPanel();
-      this.render();
-      return;
-    }
-    this.s.view = 'list';
-    // 退出アニメが終わるまでは panelOpen のまま描画し、終了後に取り外す
-    this.anim = 'out';
-    this.render();
-    setTimeout(() => {
-      if (this.anim !== 'out') return;
-      this.anim = null;
-      this.s.panelOpen = false;
-      this.render();
-    }, 230);
+    this.publish(this.snapshot());
+    this.deco.render(this.s.findings, this.s.selectedId);
   }
 
   private select(fid: string | null) {
@@ -177,9 +143,6 @@ export class Controller {
     this.render();
     if (!was && fid) {
       this.deco.flash(fid);
-      this.panelRoot
-        .querySelector('.n-item[data-sel]')
-        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }
 
@@ -216,19 +179,16 @@ export class Controller {
   async run() {
     if (this.s.phase === 'running') return;
     if (!this.s.apiKey) {
-      this.openPanel();
       this.s.view = 'settings';
       this.render();
       return;
     }
     if (!this.s.consented) {
-      this.openPanel();
       this.s.view = 'consent';
       this.render();
       return;
     }
     this.s.phase = 'running';
-    this.openPanel();
     this.s.view = 'list';
     this.s.error = undefined;
     this.render();
@@ -454,7 +414,6 @@ export class Controller {
   }
 
   dispose() {
-    document.body.style.marginRight = '';
     this.deco.dispose();
     this.host.remove();
   }

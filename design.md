@@ -116,7 +116,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 ```
 
 - Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`、`--letter-spacing-brand`（0.04em）。mark との間は gap 6px
-- 配置: パネル左上、mark + wordmark + collapse chevron を1つの clickable button として組む
+- 配置: ブラウザの独立したサイドpane左上に mark + wordmark を置く。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
 

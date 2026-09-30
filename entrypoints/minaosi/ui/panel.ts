@@ -2,30 +2,28 @@ import { KIND_LABEL, type Finding, type FindingState } from '../types';
 import { LANGUAGE_RULES } from '../rubric';
 import { PROVIDER_LABEL } from '../store';
 import {
-  LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO, ICON_CHEVRONS,
+  LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
   ICON_SPARKLES, ICON_SETTINGS,
 } from './icons';
 
 export type View = 'list' | 'settings' | 'consent';
 
+export type PanelFinding = Omit<Finding, 'blockEl'>;
+
 export interface PanelState {
   phase: 'idle' | 'running' | 'done' | 'error';
   error?: string;
-  panelOpen: boolean;
   view: View;
   filter: FindingState;
   selectedId: string | null;
-  findings: Finding[];
+  findings: PanelFinding[];
   apiKey: string;
   model: string;
   consented: boolean;
 }
 
 export interface PanelHandlers {
-  /** FAB: 未レビューなら校閲実行、レビュー済みならパネルを開く */
-  onFab(): void;
   onRun(): void;
-  onTogglePanel(): void;
   onFilter(f: FindingState): void;
   onSelect(fid: string | null): void;
   onApplyFinding(fid: string): void;
@@ -46,13 +44,13 @@ const esc = (s: string) =>
 
 const TABS: [FindingState, string][] = [['open', '未対応'], ['resolved', '適用済み'], ['deleted', '削除']];
 
-function counts(findings: Finding[]): Record<FindingState, number> {
+function counts(findings: PanelFinding[]): Record<FindingState, number> {
   const c: Record<FindingState, number> = { open: 0, resolved: 0, deleted: 0 };
   for (const f of findings) c[f.state]++;
   return c;
 }
 
-function actsHTML(f: Finding): string {
+function actsHTML(f: PanelFinding): string {
   if (f.state === 'resolved' || f.state === 'deleted') {
     const label = f.state === 'resolved' ? '適用を元に戻す' : '復元';
     return `<div class="acts"><button data-act="revert" title="${label}" aria-label="${label}">${ICON_UNDO}</button></div>`;
@@ -63,7 +61,7 @@ function actsHTML(f: Finding): string {
   return `<div class="acts">${apply}<button class="trash" data-act="delete" title="削除" aria-label="削除">${ICON_TRASH}</button></div>`;
 }
 
-function cardHTML(f: Finding, selectedId: string | null): string {
+function cardHTML(f: PanelFinding, selectedId: string | null): string {
   const stale = f.state === 'open' && f.matches.length > 0 && f.matches.every((m) => m.stale || m.applied);
   return `<div class="n-item is-${f.state}" data-fid="${f.id}" tabindex="0" role="button"${f.id === selectedId ? ' data-sel' : ''}>
     <div class="meta"><span class="kind">${KIND_LABEL[f.kind]}</span></div>
@@ -94,7 +92,7 @@ function settingsBody(s: PanelState): string {
   return `<div class="subview">
     <div class="fld">
       <label>送信先</label>
-      <div class="provider">${PROVIDER_LABEL} に原稿全文と有効な規範を送信します。通信料・API 料金は API key の持ち主（あなた）の負担です。</div>
+      <div class="provider">${PROVIDER_LABEL} に原稿全文と校閲ルールを送信します。通信料・API 料金は API key の持ち主（あなた）の負担です。</div>
     </div>
     <div class="fld">
       <label>API key</label>
@@ -124,7 +122,7 @@ function settingsBody(s: PanelState): string {
 function consentBody(): string {
   return `<div class="subview">
     <h4>原稿の外部送信について</h4>
-    <p class="desc">「見直す」を実行すると、エディタの原稿全文と有効な校閲ルール・文体規範（設定済みの場合）が ${PROVIDER_LABEL} の API に送信されます。送信にはあなた自身の API key を使い、費用はあなたの負担です。</p>
+    <p class="desc">「見直す」を実行すると、エディタの原稿全文と校閲ルールが ${PROVIDER_LABEL} の API に送信されます。送信にはあなた自身の API key を使い、費用はあなたの負担です。</p>
     <div class="set-actions">
       <button class="run-btn" data-act="consent">同意して実行</button>
       <button class="btn-ghost" data-act="back">戻る</button>
@@ -132,13 +130,11 @@ function consentBody(): string {
   </div>`;
 }
 
-export function renderPanel(s: PanelState, anim?: 'in' | 'out'): { panel: string; fab: string } {
-  const reviewed = s.phase === 'done' || s.phase === 'error';
-  const fabLabel = reviewed ? '指摘パネルを開く' : '校閲を実行';
-  const fab = `<button class="mn fab" data-act="fab" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
-    title="${fabLabel}" aria-label="${fabLabel}">${LOGO_MARK}</button>`;
-  if (!s.panelOpen) return { panel: '', fab };
+export function renderFab(): string {
+  return `<button class="mn fab" title="指摘paneを開く" aria-label="指摘paneを開く">${LOGO_MARK}</button>`;
+}
 
+export function renderPanel(s: PanelState): string {
   const c = counts(s.findings);
   const prog = TABS.filter(([k]) => c[k] > 0)
     .map(([k, label]) => `${label} ${c[k]}`)
@@ -156,9 +152,9 @@ export function renderPanel(s: PanelState, anim?: 'in' | 'out'): { panel: string
         ).join('')}</div>`
       : '';
 
-  const panel = `<aside class="mn panel"${anim ? ` data-anim="${anim}"` : ''} aria-label="minaosi 指摘一覧">
+  return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
     <header><div class="head-row">
-      <button class="brand" data-act="close" title="パネルを閉じる" aria-label="パネルを閉じる">${LOGO_MARK}<span class="brand-name">minaosi</span><span class="chev">${ICON_CHEVRONS}</span></button>
+      <div class="brand">${LOGO_MARK}<span class="brand-name">minaosi</span></div>
       <span class="sp">
         <button class="icon-btn" data-act="settings" title="設定" aria-label="設定">${ICON_SETTINGS}</button>
         <button class="run-btn sm" data-act="run" ${s.phase === 'running' ? 'disabled' : ''}>${s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>
@@ -167,7 +163,6 @@ export function renderPanel(s: PanelState, anim?: 'in' | 'out'): { panel: string
     ${s.view === 'list' ? `<div class="prog">${prog}</div>` : ''}${tabs}</header>
     ${body}
   </aside>`;
-  return { panel, fab: '' };
 }
 
 export function wirePanel(
@@ -182,8 +177,6 @@ export function wirePanel(
 
     if (actEl) {
       switch (actEl.dataset.act) {
-        case 'fab': h.onFab(); return;
-        case 'close': h.onTogglePanel(); return;
         case 'run': h.onRun(); return;
         case 'retry': h.onRetry(); return;
         case 'settings': h.onOpenSettings(); return;

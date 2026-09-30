@@ -1,5 +1,6 @@
 import { noteAdapter } from './minaosi/surfaces/note';
 import { Controller } from './minaosi/controller';
+import { PANEL_PORT, type PanelCommand, type PanelUpdate } from './minaosi/panel-messages';
 
 export default defineContentScript({
   matches: ['*://editor.note.com/*'],
@@ -7,12 +8,16 @@ export default defineContentScript({
   main(ctx) {
     let ctrl: Controller | null = null;
     let editor: HTMLElement | null = null;
+    const ports = new Set<Browser.runtime.Port>();
+    const publish = (state: PanelUpdate['state']) => {
+      for (const port of ports) port.postMessage({ type: 'state', state } satisfies PanelUpdate);
+    };
 
     const check = () => {
       const found = noteAdapter.findEditor(document);
       if (found && !ctrl) {
         editor = found;
-        ctrl = new Controller(noteAdapter, found);
+        ctrl = new Controller(noteAdapter, found, publish);
         void ctrl.init();
       } else if (found && found !== editor) {
         // SPA 遷移やエディタの再描画で root が入れ替わった場合は監視対象だけ差し替える
@@ -22,13 +27,18 @@ export default defineContentScript({
         ctrl.dispose();
         ctrl = null;
         editor = null;
+        publish(null);
       }
     };
 
-    // ツールバーの拡張アイコンクリック（background 中継）でパネルを開閉
-    browser.runtime.onMessage.addListener((msg) => {
-      if (msg?.type === 'minaosi:toggle') ctrl?.toggle();
-    });
+    const onConnect = (port: Browser.runtime.Port) => {
+      if (port.name !== PANEL_PORT || port.sender?.id !== browser.runtime.id) return;
+      ports.add(port);
+      port.onMessage.addListener((command: PanelCommand) => ctrl?.handleCommand(command));
+      port.onDisconnect.addListener(() => ports.delete(port));
+      port.postMessage({ type: 'state', state: ctrl?.snapshot() ?? null } satisfies PanelUpdate);
+    };
+    browser.runtime.onConnect.addListener(onConnect);
 
     check();
     // エディタの遅延描画・SPA 遷移を拾う。見つかってからも軽い querySelectorAll を定期実行するだけ
@@ -37,6 +47,9 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       ctrl?.dispose();
       ctrl = null;
+      browser.runtime.onConnect.removeListener(onConnect);
+      for (const port of ports) port.disconnect();
+      ports.clear();
     });
   },
 });

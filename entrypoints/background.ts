@@ -2,8 +2,8 @@ import { browser } from '#imports';
 
 /**
  * 原稿の外部送信は background で行う（content script からの fetch は
- * ページの CSP connect-src に従うため）。BYOK: key は content 側の
- * ユーザー設定から渡され、ここには保存しない。
+ * ページの CSP connect-src に従うため）。BYOK: key は設定 pane で
+ * 登録した値を content 側から渡され、ここには保存しない。
  */
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
@@ -32,7 +32,21 @@ async function post(apiKey: string, body: Record<string, unknown>): Promise<{ st
 }
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  const sidebar = (browser as typeof browser & { sidebarAction: { open(): Promise<void> } }).sidebarAction;
+  if (import.meta.env.BROWSER !== 'firefox') {
+    void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  } else {
+    browser.action.onClicked.addListener(() => { void sidebar.open(); });
+  }
+
+  browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.type === 'minaosi:open-panel' && sender.tab?.windowId !== undefined) {
+      const opening = import.meta.env.BROWSER === 'firefox'
+        ? sidebar.open()
+        : browser.sidePanel.open({ windowId: sender.tab.windowId });
+      void opening.then(() => sendResponse({ ok: true }), (error: Error) => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
     if (!msg || msg.type !== 'minaosi:review') return undefined;
     const { apiKey, body } = msg as { apiKey: string; body: Record<string, unknown> };
     void (async () => {
@@ -61,12 +75,5 @@ export default defineBackground(() => {
       }
     })();
     return true;
-  });
-
-  // ツールバーの拡張アイコン → 開いているタブの minaosi パネルを開閉する
-  browser.action.onClicked.addListener((tab) => {
-    if (tab.id !== undefined) {
-      void browser.tabs.sendMessage(tab.id, { type: 'minaosi:toggle' }).catch(() => {});
-    }
   });
 });
