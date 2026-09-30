@@ -36,13 +36,6 @@ wirePanel(root, {
   onApplyFinding: (id) => send({ action: 'apply', id }),
   onDelete: (id) => send({ action: 'delete', id }),
   onRevert: (id) => send({ action: 'revert', id }),
-  onOpenSettings: () => send({ action: 'settings' }),
-  onBackToList: () => send({ action: 'back' }),
-  onSaveKey: (value) => send({ action: 'saveKey', value }),
-  onClearKey: () => send({ action: 'clearKey' }),
-  onSaveModel: (value) => send({ action: 'saveModel', value }),
-  onSaveProvider: (provider) => send({ action: 'saveProvider', provider }),
-  onConsentAndRun: () => send({ action: 'consent' }),
   onRetry: () => send({ action: 'run' }),
 });
 

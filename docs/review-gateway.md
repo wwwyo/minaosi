@@ -2,11 +2,13 @@
 
 拡張の background → minaosi の校閲サーバー → Cloudflare AI Gateway → 選んだ AI プロバイダーの順で通信する。校閲サーバーは TanStack AI で検索・tool calling を実行し、指摘を共通形式へ検証して返す。拡張側の UI と本文への適用は従来どおり。
 
-## ログイン不要の BYOK
+## 標準モードとBYOK
 
-利用者は自分の Anthropic / OpenAI のキーを拡張に登録する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。プロバイダーへの直接接続へのフォールバックはない。
+既定はminaosiの標準モード。利用者に接続先・キー・モデルを選ばせず、サーバーの `DEFAULT_REVIEW_PROVIDER` / `DEFAULT_REVIEW_MODEL` / `DEFAULT_REVIEW_API_KEY` を使う。運営設定がない場合は503（準備中）を返す。標準モードのAI料金は運営者に発生する。
 
-Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、利用者のキーがないリクエストは必ず拒否する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化し、Worker の observability も無効にする。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
+自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系）から判定する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。プロバイダーへの直接接続へのフォールバックはない。
+
+Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、BYOKモードで利用者のキーがないリクエストは必ず拒否する。標準モードへの自動切り替えはしない。標準モードのキーはサーバーのsecretとして保持する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化し、Worker の observability も無効にする。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
 
 この方式はGatewayにキーを保存する方式とは異なる。複数端末への同期や、保存キーを匿名端末トークンで利用する仕組みはまだ実装しない。拡張のローカル保存は秘密専用の保管庫ではなく、端末や拡張が侵害された場合のキー流出は防げない。
 
@@ -29,9 +31,12 @@ mise exec -- bun run dev
 | `CLOUDFLARE_ACCOUNT_ID` | Gatewayを所有するアカウント |
 | `CLOUDFLARE_AI_GATEWAY_ID` | 使用するGateway |
 | `CF_AIG_TOKEN` | AI Gateway Run権限の接続用トークン |
+| `DEFAULT_REVIEW_PROVIDER` | 標準モードの運営指定（anthropic / openai） |
+| `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID |
+| `DEFAULT_REVIEW_API_KEY` | 標準モードの運営用キー。サーバーだけに置く |
 | `ALLOWED_ORIGINS` | 拡張で利用する場合は必須。許可する拡張のOriginをカンマ区切りで指定 |
 
-拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。OriginのないリクエストもBYOKキーが必要になる。ローカルサーバーはループバックにだけbindする。
+拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
 開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。現時点のこの校閲経路にはOpenCode Go用のcustom provider / 外部検索ツールをまだ追加していないため、開発の検証は模擬応答で行う。Anthropic / OpenAIの実キーを開発QAに使わない。
 
@@ -45,7 +50,7 @@ mise exec -- bun run api:deploy
 mise exec -- bun run api:configure
 ```
 
-`api:configure` はmiseの環境変数を `cf workers secrets bulk` にstdinで渡し、Workerへ設定する。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。設定情報がない場合、校閲APIは503を返して外部送信しない。
+`api:configure` はGatewayとOriginの必須設定、および3項目が揃った標準モード設定をmiseの環境変数から `cf workers secrets bulk` にstdinで渡し、Workerへ設定する。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。設定情報がない場合、校閲APIは503を返して外部送信しない。
 
 公開したサーバーの `https://…/review` を `WXT_REVIEW_API_URL` に設定して拡張をビルドする。これは公開URLだけで、トークンやキーを含めない。拡張のhost permissionはこのURLのOriginだけに限定する。設定がない本番ビルドでは外部接続を許可せず、校閲実行時に未設定と表示する。
 
@@ -55,6 +60,6 @@ mise exec -- bun run check
 mise exec -- bun test
 ```
 
-Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・リクエストサイズ制限を持つ。制限は匿名サービスの負荷抑制であり、アカウント別の請求・利用上限管理ではない。
+Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・リクエストサイズ制限を持つ。制限は匿名サービスの負荷抑制であり、アカウント別の請求・利用上限管理ではない。標準モードを一般公開する際は運営側で費用上限を設ける。
 
 参照: [TanStack Cloudflare adapter](https://tanstack.com/ai/latest/docs/adapters/cloudflare)、[Cloudflare BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)。

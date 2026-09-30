@@ -32,11 +32,12 @@ export default defineBackground(() => {
         void browser.runtime.getPlatformInfo();
       }, 20_000);
       try {
-        if (!isReviewProvider(request.provider)) throw new Error('未対応の接続先です');
-        const apiKey = await PROVIDER_SETTINGS[request.provider].key.getValue();
+        if (request.mode !== undefined && request.mode !== 'default' && request.mode !== 'byok') throw new Error('校閲モードが不正です');
+        if (request.mode !== 'default' && !isReviewProvider(request.provider)) throw new Error('未対応の接続先です');
+        const apiKey = request.mode === 'default' ? '' : await PROVIDER_SETTINGS[request.provider].key.getValue();
         const endpoint = import.meta.env.WXT_REVIEW_API_URL;
         if (!endpoint) throw new Error('校閲サーバーの接続先が設定されていません');
-        if (!apiKey) throw new Error('API key を設定してください');
+        if (request.mode !== 'default' && !apiKey) throw new Error('拡張機能のオプションでAPIキーを登録してください');
         const findings = await review(request, apiKey, endpoint);
         sendResponse({ ok: true, findings });
       } catch (e) {

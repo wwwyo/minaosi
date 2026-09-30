@@ -6,7 +6,7 @@ import { webSearchTool as openaiSearch } from '@tanstack/ai-openai/tools';
 import { cloudflareGateway } from '@tanstack/ai-cloudflare';
 import { LANGUAGE_RULES } from '../entrypoints/minaosi/rubric';
 import { REPORT_TOOL, systemPrompt, userPrompt, validateReport, type ReviewedFinding } from '../entrypoints/minaosi/review/prompt';
-import type { HttpFetch, ReviewRequest } from '../entrypoints/minaosi/review/providers';
+import type { HttpFetch, ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
 
 export interface GatewayEnv {
   CLOUDFLARE_ACCOUNT_ID: string;
@@ -16,7 +16,7 @@ export interface GatewayEnv {
 
 /** TanStack AI の校閲を、利用者のキーで Gateway の provider-native 経路へ送る。 */
 export async function reviewThroughGateway(
-  request: Omit<ReviewRequest, 'type'>,
+  request: ProviderReviewInput,
   apiKey: string,
   env: GatewayEnv,
   fetcher: HttpFetch = fetch,

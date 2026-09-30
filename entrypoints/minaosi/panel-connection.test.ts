@@ -36,8 +36,7 @@ function fixture() {
 
 const readyState: NonNullable<PanelUpdate['state']> = {
   phase: 'idle', view: 'list', filter: 'open', selectedId: null,
-  findings: [], apiKey: '', model: '', consented: false,
-  provider: 'anthropic', connectionLoading: false,
+  findings: [], connectionLoading: false,
 };
 
 describe('PanelConnection', () => {
@@ -49,8 +48,8 @@ describe('PanelConnection', () => {
     ports[1]!.onMessage.emit({ type: 'state', state: readyState });
     expect(opened).toEqual([{ tabId: 7, name: PANEL_PORT }, { tabId: 7, name: PANEL_PORT }]);
     expect(states.at(-1)).toEqual(readyState);
-    connection.send({ action: 'settings' });
-    expect(ports[1]!.sent).toEqual([{ action: 'settings' }]);
+    connection.send({ action: 'run' });
+    expect(ports[1]!.sent).toEqual([{ action: 'run' }]);
   });
 
   test('エディタの遅延描画による null state からの更新は接続を維持して受け取る', () => {

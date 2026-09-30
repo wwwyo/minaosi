@@ -3,8 +3,8 @@ import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
 import type { ReviewedFinding } from './review/prompt';
-import type { ReviewRequest } from './review/providers';
-import { providerItem, PROVIDER_SETTINGS } from './store';
+import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
+import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
 import { renderFab, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
@@ -23,6 +23,8 @@ export class Controller {
   private deco: Decorations;
   private staleRaf = 0;
   private providerLoad = 0;
+  private unwatch: (() => void)[] = [];
+  private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
 
   private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
@@ -30,11 +32,7 @@ export class Controller {
     filter: 'open',
     selectedId: null,
     findings: [],
-    provider: 'anthropic',
     connectionLoading: true,
-    apiKey: '',
-    model: '',
-    consented: false,
   };
 
   constructor(
@@ -67,7 +65,6 @@ export class Controller {
   }
 
   handleCommand(command: PanelCommand) {
-    if (this.s.connectionLoading && ['saveKey', 'clearKey', 'saveModel', 'consent', 'saveProvider'].includes(command.action)) return;
     switch (command.action) {
       case 'run': void this.run(); return;
       case 'filter': this.s.filter = command.filter; break;
@@ -81,18 +78,6 @@ export class Controller {
         break;
       }
       case 'revert': this.revert(command.id); return;
-      case 'settings': this.s.view = 'settings'; break;
-      case 'back': this.s.view = 'list'; break;
-      case 'saveKey': this.s.apiKey = command.value; void PROVIDER_SETTINGS[this.s.provider].key.setValue(command.value); break;
-      case 'clearKey': this.s.apiKey = ''; void PROVIDER_SETTINGS[this.s.provider].key.setValue(''); break;
-      case 'saveModel': this.s.model = command.value; void PROVIDER_SETTINGS[this.s.provider].model.setValue(command.value); break;
-      case 'saveProvider': void this.changeProvider(command.provider); return;
-      case 'consent':
-        this.s.consented = true;
-        void PROVIDER_SETTINGS[this.s.provider].consented.setValue(true);
-        this.s.view = 'list';
-        void this.run();
-        return;
     }
     this.render();
   }
@@ -102,36 +87,25 @@ export class Controller {
   }
 
   async init() {
-    this.s.provider = await providerItem.getValue();
+    const reload = () => { void this.loadProvider(); };
+    this.unwatch = [reviewModeItem.watch(reload), providerItem.watch(reload),
+      ...Object.values(PROVIDER_SETTINGS).flatMap((settings) => [settings.key.watch(reload), settings.model.watch(reload)]),
+    ];
     await this.loadProvider();
   }
 
   private async loadProvider() {
     const generation = ++this.providerLoad;
-    const provider = this.s.provider;
+    this.s.connectionLoading = true;
+    this.render();
+    const [mode, storedProvider] = await Promise.all([reviewModeItem.getValue(), providerItem.getValue()]);
+    const provider = isReviewProvider(storedProvider) ? storedProvider : 'anthropic';
     const settings = PROVIDER_SETTINGS[provider];
-    const [apiKey, model, consented] = await Promise.all([
-      settings.key.getValue(), settings.model.getValue(), settings.consented.getValue(),
-    ]);
-    if (this.s.provider !== provider || generation !== this.providerLoad) return;
-    this.s.apiKey = apiKey;
-    this.s.model = model;
-    this.s.consented = consented;
+    const [apiKey, model] = await Promise.all([settings.key.getValue(), settings.model.getValue()]);
+    if (generation !== this.providerLoad) return;
+    this.config = { mode: mode === 'byok' ? 'byok' : 'default', provider, apiKey, model };
     this.s.connectionLoading = false;
     this.render();
-  }
-
-  private async changeProvider(provider: ReviewRequest['provider']) {
-    if (this.s.provider === provider || this.s.phase === 'running') return;
-    this.s.provider = provider;
-    this.s.connectionLoading = true;
-    // 認証情報は接続先ごとに保持し、読み込み前に別社のkeyで実行できないようにする。
-    this.s.apiKey = '';
-    this.s.model = '';
-    this.s.consented = false;
-    this.render();
-    await providerItem.setValue(provider);
-    await this.loadProvider();
   }
 
   setEditor(editor: HTMLElement) {
@@ -199,13 +173,9 @@ export class Controller {
 
   async run() {
     if (this.s.phase === 'running' || this.s.connectionLoading) return;
-    if (!this.s.apiKey || !this.s.model) {
-      this.s.view = 'settings';
-      this.render();
-      return;
-    }
-    if (!this.s.consented) {
-      this.s.view = 'consent';
+    if (this.config.mode === 'byok' && (!this.config.apiKey || !this.config.model)) {
+      this.s.phase = 'error';
+      this.s.error = '拡張機能のオプションでAPIキーとモデルを登録してください';
       this.render();
       return;
     }
@@ -215,10 +185,10 @@ export class Controller {
     this.render();
     try {
       const blocks = this.adapter.extractBlocks(this.editor);
-      const msg: ReviewRequest = {
-        type: 'minaosi:review', provider: this.s.provider, model: this.s.model,
-        blocks: blocks.map(({ index, text }) => ({ index, text })),
-      };
+      const draft = blocks.map(({ index, text }) => ({ index, text }));
+      const msg: ReviewRequest = this.config.mode === 'default'
+        ? { type: 'minaosi:review', mode: 'default', blocks: draft }
+        : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
@@ -430,6 +400,8 @@ export class Controller {
   }
 
   dispose() {
+    ++this.providerLoad;
+    for (const unwatch of this.unwatch) unwatch();
     this.deco.dispose();
     this.host.remove();
   }

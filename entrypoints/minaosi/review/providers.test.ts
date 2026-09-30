@@ -49,3 +49,12 @@ test('providerは対応する2値だけを受け付け、継承プロパティ�
     expect(isReviewProvider(value)).toBe(false);
   }
 });
+
+test('標準モードは利用者のキーとモデルを送信しない', async () => {
+  const standard: ReviewRequest = { type: 'minaosi:review', mode: 'default', blocks: request.blocks };
+  await review(standard, 'unused-fixture-key', endpoint, async (_url, options) => {
+    expect(options?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(JSON.parse(options?.body as string)).toEqual({ mode: 'default', blocks: request.blocks });
+    return Response.json({ findings: [] });
+  });
+});

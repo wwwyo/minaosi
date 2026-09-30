@@ -1,13 +1,10 @@
 import { KIND_LABEL, type Finding, type FindingState } from '../types';
-import { LANGUAGE_RULES } from '../rubric';
-import { PROVIDER_LABELS } from '../store';
-import type { ReviewProvider } from '../review/providers';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
-  ICON_SPARKLES, ICON_SETTINGS,
+  ICON_SPARKLES,
 } from './icons';
 
-export type View = 'list' | 'settings' | 'consent';
+export type View = 'list';
 
 export type PanelFinding = Omit<Finding, 'blockEl'>;
 
@@ -18,11 +15,7 @@ export interface PanelState {
   filter: FindingState;
   selectedId: string | null;
   findings: PanelFinding[];
-  provider: ReviewProvider;
   connectionLoading: boolean;
-  apiKey: string;
-  model: string;
-  consented: boolean;
 }
 
 export interface PanelHandlers {
@@ -32,13 +25,6 @@ export interface PanelHandlers {
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
   onRevert(fid: string): void;
-  onOpenSettings(): void;
-  onBackToList(): void;
-  onSaveKey(key: string): void;
-  onClearKey(): void;
-  onSaveModel(model: string): void;
-  onSaveProvider(provider: ReviewProvider): void;
-  onConsentAndRun(): void;
   onRetry(): void;
 }
 
@@ -79,64 +65,21 @@ function cardHTML(f: PanelFinding, selectedId: string | null): string {
   </div>`;
 }
 
+function isEmptyState(s: PanelState): boolean {
+  return (s.phase === 'idle' || s.phase === 'done') && s.findings.length === 0;
+}
+
 function listBody(s: PanelState): string {
   if (s.phase === 'error') {
     return `<div class="notice">見直しが完了しませんでした。<br>${esc(s.error ?? '不明なエラー')}
-      <div class="actions"><button class="run-btn sm" data-act="retry">再試行</button>
-      <button class="btn-ghost" data-act="settings">設定</button></div></div>`;
+      <div class="actions"><button class="run-btn sm" data-act="retry">再試行</button></div></div>`;
   }
-  if (s.phase === 'idle' && s.findings.length === 0) {
-    return '<div class="empty">「見直す」で AI の校閲を開始します</div>';
+  if (isEmptyState(s)) {
+    return `<div class="empty-start">${s.phase === 'done' ? '<span>指摘はありません</span>' : ''}<button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
+  if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
   const list = s.findings.filter((f) => f.state === s.filter);
   return list.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>';
-}
-
-function settingsBody(s: PanelState): string {
-  return `<div class="subview">
-    <div class="fld">
-      <label>送信先</label>
-      <select data-set="provider" aria-label="送信先"${s.phase === 'running' || s.connectionLoading ? ' disabled' : ''}>
-        <option value="anthropic"${s.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-        <option value="openai"${s.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
-      </select>
-      <div class="provider">minaosi の校閲サーバーと Cloudflare AI Gateway を経由して、${PROVIDER_LABELS[s.provider]} に原稿全文と校閲ルールを送信します。API 料金はあなたの負担です。ログインは不要です。</div>
-    </div>
-    <div class="fld">
-      <label>API key</label>
-      <input type="password" data-set="apiKey" value="${esc(s.apiKey)}" autocomplete="off"${s.connectionLoading ? ' disabled' : ''}>
-      <div class="help">この拡張に保存し、校閲時にサーバーへ送信します。サーバーと Gateway には保存しません。</div>
-    </div>
-    <div class="fld">
-      <label>モデル</label>
-      <input type="text" data-set="model" value="${esc(s.model)}"${s.connectionLoading ? ' disabled' : ''}>
-      ${s.provider === 'openai' ? '<div class="help">Responses APIのweb searchに対応したモデルを指定します</div>' : ''}
-    </div>
-    <div class="fld">
-      <label>日本語ルール（常時適用）</label>
-      ${LANGUAGE_RULES.map(
-        (r) => `<div class="rule"><span><span class="nm">${esc(r.label)}</span> <span class="hint">${esc(r.hint)}</span></span></div>`,
-      ).join('')}
-    </div>
-    <div class="fld">
-      <label>送信への同意</label>
-      <div class="provider">${s.consented ? '同意済み' : '未同意 — 初回の「見直す」前に同意が必要です'}</div>
-    </div>
-    <div class="set-actions">
-      <button class="run-btn sm" data-act="back">戻る</button>
-    </div>
-  </div>`;
-}
-
-function consentBody(s: PanelState): string {
-  return `<div class="subview">
-    <h4>原稿の外部送信について</h4>
-    <p class="desc">「見直す」を実行すると、原稿全文・校閲ルール・あなたの API key を minaosi の校閲サーバーへ送信し、Cloudflare AI Gateway を経由して ${PROVIDER_LABELS[s.provider]} の API を呼び出します。費用はあなたの負担です。サーバーに原稿とキーを保存せず、Gateway のログとキャッシュも無効にします。</p>
-    <div class="set-actions">
-      <button class="run-btn" data-act="consent">同意して実行</button>
-      <button class="btn-ghost" data-act="back">戻る</button>
-    </div>
-  </div>`;
 }
 
 export function renderFab(): string {
@@ -149,28 +92,16 @@ export function renderPanel(s: PanelState): string {
     .map(([k, label]) => `${label} ${c[k]}`)
     .join(' · ');
 
-  let body: string;
-  if (s.view === 'settings') body = settingsBody(s);
-  else if (s.view === 'consent') body = consentBody(s);
-  else body = `<div class="list">${listBody(s)}</div>`;
-
-  const tabs =
-    s.view === 'list'
-      ? `<div class="filters">${TABS.map(
-          ([k, l]) => `<button data-act="filter" data-f="${k}" class="${s.filter === k ? 'on' : ''}" aria-pressed="${s.filter === k}">${l}</button>`,
-        ).join('')}</div>`
-      : '';
+  const empty = isEmptyState(s);
+  const tabs = `<div class="filters">${TABS.map(
+    ([k, l]) => `<button data-act="filter" data-f="${k}" class="${s.filter === k ? 'on' : ''}" aria-pressed="${s.filter === k}">${l}</button>`,
+  ).join('')}</div>`;
 
   return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
-    <header><div class="head-row">
-      <div class="brand">${LOGO_MARK}<span class="brand-name">minaosi</span></div>
-      <span class="sp">
-        <button class="icon-btn" data-act="settings" title="設定" aria-label="設定">${ICON_SETTINGS}</button>
-        <button class="run-btn sm" data-act="run" ${s.phase === 'running' || s.connectionLoading ? 'disabled' : ''}>${s.connectionLoading ? '読込中…' : s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>
-      </span>
-    </div>
-    ${s.view === 'list' ? `<div class="prog">${prog}</div>` : ''}${tabs}</header>
-    ${body}
+    <header><div class="head-row">${tabs}
+      ${empty ? '' : `<button class="run-btn sm" data-act="run" ${s.phase === 'running' || s.connectionLoading ? 'disabled' : ''}>${s.connectionLoading ? '読込中…' : s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>`}
+    </div>${prog ? `<div class="prog">${prog}</div>` : ''}</header>
+    <div class="list">${listBody(s)}</div>
   </aside>`;
 }
 
@@ -188,9 +119,6 @@ export function wirePanel(
       switch (actEl.dataset.act) {
         case 'run': h.onRun(); return;
         case 'retry': h.onRetry(); return;
-        case 'settings': h.onOpenSettings(); return;
-        case 'back': h.onBackToList(); return;
-        case 'consent': h.onConsentAndRun(); return;
         case 'filter': h.onFilter(actEl.dataset.f as FindingState); return;
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;
@@ -211,10 +139,4 @@ export function wirePanel(
     }
   });
 
-  root.addEventListener('change', (e) => {
-    const t = e.target as HTMLInputElement;
-    if (t.dataset.set === 'apiKey') h.onSaveKey(t.value.trim());
-    if (t.dataset.set === 'model') h.onSaveModel(t.value.trim());
-    if (t.dataset.set === 'provider' && (t.value === 'anthropic' || t.value === 'openai')) h.onSaveProvider(t.value);
-  });
 }

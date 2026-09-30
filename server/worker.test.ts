@@ -82,3 +82,24 @@ test('不正なツール入力の安全な診断だけを利用者へ返す', as
   expect(result.status).toBe(502);
   expect(await result.json()).toEqual({ error: '校閲 API が不正なツール入力を返しました' });
 });
+
+const standardEnv: Env = { ...env, DEFAULT_REVIEW_PROVIDER: 'anthropic', DEFAULT_REVIEW_MODEL: 'operator-model', DEFAULT_REVIEW_API_KEY: 'operator-key' };
+test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
+  const response = await handleRequest(request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }), standardEnv, async (input, key) => {
+    expect(input).toEqual({ provider: 'anthropic', model: 'operator-model', blocks: body.blocks });
+    expect(key).toBe('operator-key');
+    return [];
+  });
+  expect(response.status).toBe(200);
+  expect(await response.text()).not.toContain('operator-key');
+});
+
+test('標準モードの運営設定が未完了なら実行しない', async () => {
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }), env, neverReview)).status).toBe(503);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: '__proto__' }, neverReview)).status).toBe(503);
+});
+
+test('BYOKのキー未設定・モード指定の誤りを標準課金へフォールバックしない', async () => {
+  expect((await handleRequest(request(body, { 'x-minaosi-api-key': '' }), standardEnv, neverReview)).status).toBe(401);
+  expect((await handleRequest(request({ ...body, mode: 'other' }), standardEnv, neverReview)).status).toBe(400);
+});

@@ -60,23 +60,8 @@ export const PANEL_CSS = `
   background: transparent;
 }
 .panel header { padding: 14px 16px 12px; border-bottom: 1px solid var(--color-line); }
-.head-row { display: flex; align-items: center; gap: 8px; }
-.brand {
-  display: flex; align-items: center; gap: 6px; border: 0; background: transparent;
-  padding: 3px 6px 3px 4px; border-radius: var(--radius-sm); color: var(--color-ink);
-}
-.brand svg { width: 17px; height: 17px; display: block; color: var(--color-ink); }
-.brand-name { font-size: var(--font-size-brand); font-weight: 800; letter-spacing: 0.04em; }
-.head-row .sp { margin-left: auto; display: flex; gap: 4px; align-items: center; }
-
-.icon-btn {
-  width: 24px; height: 24px; padding: 0; border: 0; background: transparent;
-  color: var(--color-ink-mute); cursor: pointer; border-radius: var(--radius-sm);
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
-}
-.icon-btn:hover { color: var(--color-ink); background: var(--color-bg-hover); }
-.icon-btn svg { width: 13px; height: 13px; display: block; }
+.head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.head-row .filters { margin-top: 0; }
 
 .prog { color: var(--color-ink-mute); font-size: var(--font-size-caption); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .filters { display: flex; gap: 2px; margin-top: 10px; }
@@ -90,7 +75,8 @@ export const PANEL_CSS = `
 .filters button:active { transform: translateY(1px); }
 .filters button.on { color: var(--color-ink); background: var(--color-bg-surface); border-color: var(--color-line-strong); }
 
-.list { overflow-y: auto; flex: 1; }
+.list { overflow-y: auto; flex: 1; min-height: 0; }
+.empty-start { height: 100%; display: flex; flex-direction: column; gap: var(--space-3); align-items: center; justify-content: center; }
 .mn .empty { padding: 24px 16px; color: var(--color-ink-mute); font-size: var(--font-size-small); text-align: center; }
 .list .notice { padding: 24px 16px; color: var(--color-ink-sub); font-size: var(--font-size-small); }
 .list .notice .actions { margin-top: var(--space-3); display: flex; gap: var(--space-2); }
@@ -138,6 +124,7 @@ export const PANEL_CSS = `
 
 /* ---- buttons ---- */
 .run-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
   font-family: inherit; font-size: 12px; font-weight: 700;
   background: var(--color-primary); color: var(--color-on-primary);
   border: 1px solid var(--color-primary); border-radius: var(--radius-md);
@@ -218,10 +205,7 @@ export const PANEL_CSS = `
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 
-/* ---- settings / consent views ---- */
-.subview { flex: 1; overflow-y: auto; padding: 16px; font-size: var(--font-size-body); }
-.subview h4 { margin: 0 0 4px; font-size: var(--font-size-body); font-weight: 700; }
-.subview .desc { color: var(--color-ink-sub); font-size: var(--font-size-small); margin: 0 0 12px; }
+/* ---- options fields ---- */
 .fld { margin-bottom: 16px; }
 .fld label { display: block; font-size: var(--font-size-caption); font-weight: 600; color: var(--color-ink-sub); margin-bottom: 4px; }
 .fld input[type="text"], .fld input[type="password"], .fld input[type="url"], .fld select {
@@ -230,13 +214,6 @@ export const PANEL_CSS = `
   background: var(--color-bg-surface); color: var(--color-ink);
 }
 .fld .help { font-size: var(--font-size-micro); color: var(--color-ink-mute); margin-top: 4px; }
-.rule { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: var(--font-size-small); }
-.rule .nm { font-weight: 600; }
-.rule .hint { color: var(--color-ink-mute); font-size: var(--font-size-caption); }
-
-.set-actions { display: flex; gap: 8px; margin-top: 8px; }
-.provider { font-size: var(--font-size-small); color: var(--color-ink-sub); }
-
 @media (prefers-reduced-motion: reduce) {
   .mn *, .mn *::before, .mn *::after { animation: none !important; transition: none !important; }
 }

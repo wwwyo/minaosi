@@ -115,8 +115,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 </svg>
 ```
 
-- Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`、`--letter-spacing-brand`（0.04em）。mark との間は gap 6px
-- 配置: ブラウザの独立したサイドpane左上に mark + wordmark を置く。開閉はブラウザの操作に委ね、paneの背景は透明にする
+- Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`。オプション画面ではmarkの透明余白を除き、文字と見た目の中央を揃える（マークを1px下げる）。間隔は `--space-1`、ワードマークの字間は0、行高は1
+- 配置: サイドpaneの名前とアイコンはブラウザの標準ヘッダーに委ね、pane内では重複させない。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
 

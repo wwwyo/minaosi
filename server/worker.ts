@@ -1,21 +1,24 @@
 import { reviewThroughGateway, type GatewayEnv } from './review';
 import { INVALID_TOOL_INPUT } from './anthropic';
-import type { ReviewRequest } from '../entrypoints/minaosi/review/providers';
+import { isReviewProvider, type ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
 
 export interface Env extends GatewayEnv {
   ALLOWED_ORIGINS?: string;
+  DEFAULT_REVIEW_PROVIDER?: string;
+  DEFAULT_REVIEW_MODEL?: string;
+  DEFAULT_REVIEW_API_KEY?: string;
   REVIEW_RATE_LIMIT?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
-type ReviewInput = Omit<ReviewRequest, 'type'>;
+type ReviewInput = (ProviderReviewInput & { mode?: 'byok' }) | { mode: 'default'; blocks: ProviderReviewInput['blocks'] };
 type Reviewer = typeof reviewThroughGateway;
 const MAX_BODY_BYTES = 262_144;
 
 function validInput(value: unknown): value is ReviewInput {
   if (!value || typeof value !== 'object') return false;
-  const input = value as Partial<ReviewInput>;
-  if (input.provider !== 'anthropic' && input.provider !== 'openai') return false;
-  if (typeof input.model !== 'string' || !/^[a-zA-Z0-9._:-]{1,120}$/.test(input.model)) return false;
+  const input = value as Partial<ProviderReviewInput> & { mode?: unknown };
+  if (input.mode !== undefined && input.mode !== 'byok' && input.mode !== 'default') return false;
+  if (input.mode !== 'default' && (!isReviewProvider(input.provider) || !validModel(input.model))) return false;
   if (!Array.isArray(input.blocks) || !input.blocks.length || input.blocks.length > 2000) return false;
   const indices = new Set<number>();
   let characters = 0;
@@ -25,6 +28,10 @@ function validInput(value: unknown): value is ReviewInput {
     characters += block.text.length;
   }
   return characters <= 80_000;
+}
+
+function validModel(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9._:-]{1,120}$/.test(value);
 }
 
 async function readBody(request: Request): Promise<unknown> {
@@ -50,7 +57,7 @@ async function readBody(request: Request): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-/** アカウントなしの BYOK リクエストを受け付け、原稿・キーを永続化せず校閲する。 */
+/** 標準・BYOKの校閲を受け付け、原稿・キーを永続化しない。 */
 export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get('origin');
@@ -70,9 +77,6 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
   }
   if (request.method !== 'POST') return json({ error: 'POST を使ってください' }, 405);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return json({ error: 'JSON 形式で送信してください' }, 415);
-  const apiKey = request.headers.get('x-minaosi-api-key')?.trim();
-  // キーが無い呼び出しを Gateway の default キーや Unified Billing に流さない。
-  if (!apiKey || apiKey.length > 4096) return json({ error: 'あなたの API key が必要です' }, 401);
   if (env.REVIEW_RATE_LIMIT && !(await env.REVIEW_RATE_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'local' })).success) {
     return json({ error: '校閲の実行間隔を空けてください' }, 429);
   }
@@ -80,11 +84,26 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
   try { input = await readBody(request); }
   catch (error) { return json({ error: error instanceof RangeError ? '原稿が大きすぎます' : 'JSON 形式が不正です' }, error instanceof RangeError ? 413 : 400); }
   if (!validInput(input)) return json({ error: '校閲リクエストの形式が不正です' }, 400);
+  let selected: ProviderReviewInput;
+  let apiKey: string;
+  if (input.mode === 'default') {
+    if (!isReviewProvider(env.DEFAULT_REVIEW_PROVIDER) || !validModel(env.DEFAULT_REVIEW_MODEL) || !env.DEFAULT_REVIEW_API_KEY?.trim()) {
+      return json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
+    }
+    selected = { provider: env.DEFAULT_REVIEW_PROVIDER, model: env.DEFAULT_REVIEW_MODEL, blocks: input.blocks };
+    apiKey = env.DEFAULT_REVIEW_API_KEY.trim();
+  } else {
+    apiKey = request.headers.get('x-minaosi-api-key')?.trim() ?? '';
+    // BYOKでキーを忘れても、運営者の課金へ切り替えない。
+    if (!apiKey || apiKey.length > 4096) return json({ error: 'あなたの API key が必要です' }, 401);
+    selected = { provider: input.provider, model: input.model, blocks: input.blocks };
+  }
+
   if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN) {
     return json({ error: 'Cloudflare AI Gateway の接続設定がまだ完了していません' }, 503);
   }
   try {
-    const findings = await reviewer({ provider: input.provider, model: input.model, blocks: input.blocks }, apiKey, env);
+    const findings = await reviewer(selected, apiKey, env);
     return json({ findings });
   } catch (error) {
     // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
