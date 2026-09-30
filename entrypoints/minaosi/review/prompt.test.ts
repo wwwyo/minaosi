@@ -17,6 +17,7 @@ describe('parseReport', () => {
     expect(parseReport(null)).toEqual({ error: 'API レスポンスを解釈できません' });
     expect(parseReport({ content: [] })).toEqual({ error: '校閲結果が返りませんでした' });
     expect(parseReport(report('x'))).toEqual({ error: '校閲結果の形式が不正です' });
+    expect(parseReport({ content: [{ type: 'tool_use', name: 'report_findings', input: null }] })).toEqual({ error: '校閲結果の形式が不正です' });
   });
 
   test('妥当な指摘は kind 検証済みで返る', () => {

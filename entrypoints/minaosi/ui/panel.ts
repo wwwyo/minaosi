@@ -1,6 +1,7 @@
 import { KIND_LABEL, type Finding, type FindingState } from '../types';
 import { LANGUAGE_RULES } from '../rubric';
-import { PROVIDER_LABEL } from '../store';
+import { PROVIDER_LABELS } from '../store';
+import type { ReviewProvider } from '../review/providers';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
   ICON_SPARKLES, ICON_SETTINGS,
@@ -17,6 +18,8 @@ export interface PanelState {
   filter: FindingState;
   selectedId: string | null;
   findings: PanelFinding[];
+  provider: ReviewProvider;
+  connectionLoading: boolean;
   apiKey: string;
   model: string;
   consented: boolean;
@@ -34,6 +37,7 @@ export interface PanelHandlers {
   onSaveKey(key: string): void;
   onClearKey(): void;
   onSaveModel(model: string): void;
+  onSaveProvider(provider: ReviewProvider): void;
   onConsentAndRun(): void;
   onRetry(): void;
 }
@@ -92,16 +96,21 @@ function settingsBody(s: PanelState): string {
   return `<div class="subview">
     <div class="fld">
       <label>送信先</label>
-      <div class="provider">${PROVIDER_LABEL} に原稿全文と校閲ルールを送信します。通信料・API 料金は API key の持ち主（あなた）の負担です。</div>
+      <select data-set="provider" aria-label="送信先"${s.phase === 'running' || s.connectionLoading ? ' disabled' : ''}>
+        <option value="anthropic"${s.provider === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+        <option value="openai"${s.provider === 'openai' ? ' selected' : ''}>OpenAI</option>
+      </select>
+      <div class="provider">${PROVIDER_LABELS[s.provider]} に原稿全文と校閲ルールを送信します。通信料・API 料金は API key の持ち主（あなた）の負担です。</div>
     </div>
     <div class="fld">
       <label>API key</label>
-      <input type="password" data-set="apiKey" value="${esc(s.apiKey)}" placeholder="sk-ant-..." autocomplete="off">
+      <input type="password" data-set="apiKey" value="${esc(s.apiKey)}" autocomplete="off"${s.connectionLoading ? ' disabled' : ''}>
       <div class="help">この拡張のローカル領域にのみ保存します</div>
     </div>
     <div class="fld">
       <label>モデル</label>
-      <input type="text" data-set="model" value="${esc(s.model)}">
+      <input type="text" data-set="model" value="${esc(s.model)}"${s.connectionLoading ? ' disabled' : ''}>
+      ${s.provider === 'openai' ? '<div class="help">Responses APIのweb searchに対応したモデルを指定します</div>' : ''}
     </div>
     <div class="fld">
       <label>日本語ルール（常時適用）</label>
@@ -119,10 +128,10 @@ function settingsBody(s: PanelState): string {
   </div>`;
 }
 
-function consentBody(): string {
+function consentBody(s: PanelState): string {
   return `<div class="subview">
     <h4>原稿の外部送信について</h4>
-    <p class="desc">「見直す」を実行すると、エディタの原稿全文と校閲ルールが ${PROVIDER_LABEL} の API に送信されます。送信にはあなた自身の API key を使い、費用はあなたの負担です。</p>
+    <p class="desc">「見直す」を実行すると、エディタの原稿全文と校閲ルールが ${PROVIDER_LABELS[s.provider]} の API に送信されます。送信にはあなた自身の API key を使い、費用はあなたの負担です。</p>
     <div class="set-actions">
       <button class="run-btn" data-act="consent">同意して実行</button>
       <button class="btn-ghost" data-act="back">戻る</button>
@@ -142,7 +151,7 @@ export function renderPanel(s: PanelState): string {
 
   let body: string;
   if (s.view === 'settings') body = settingsBody(s);
-  else if (s.view === 'consent') body = consentBody();
+  else if (s.view === 'consent') body = consentBody(s);
   else body = `<div class="list">${listBody(s)}</div>`;
 
   const tabs =
@@ -157,7 +166,7 @@ export function renderPanel(s: PanelState): string {
       <div class="brand">${LOGO_MARK}<span class="brand-name">minaosi</span></div>
       <span class="sp">
         <button class="icon-btn" data-act="settings" title="設定" aria-label="設定">${ICON_SETTINGS}</button>
-        <button class="run-btn sm" data-act="run" ${s.phase === 'running' ? 'disabled' : ''}>${s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>
+        <button class="run-btn sm" data-act="run" ${s.phase === 'running' || s.connectionLoading ? 'disabled' : ''}>${s.connectionLoading ? '読込中…' : s.phase === 'running' ? '見直し中…' : `<span class="pre">${ICON_SPARKLES}</span>見直す`}</button>
       </span>
     </div>
     ${s.view === 'list' ? `<div class="prog">${prog}</div>` : ''}${tabs}</header>
@@ -206,5 +215,6 @@ export function wirePanel(
     const t = e.target as HTMLInputElement;
     if (t.dataset.set === 'apiKey') h.onSaveKey(t.value.trim());
     if (t.dataset.set === 'model') h.onSaveModel(t.value.trim());
+    if (t.dataset.set === 'provider' && (t.value === 'anthropic' || t.value === 'openai')) h.onSaveProvider(t.value);
   });
 }

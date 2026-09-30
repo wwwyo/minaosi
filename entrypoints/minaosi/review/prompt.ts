@@ -22,7 +22,7 @@ export type ReviewedFinding = RawFinding & { kind: FindingKind };
 
 const FINDING_KINDS = Object.keys(KIND_LABEL) as FindingKind[];
 
-const REPORT_TOOL = {
+export const REPORT_TOOL = {
   name: 'report_findings',
   description: '校閲で見つかった指摘の一覧を返す。指摘がなければ findings: [] で呼ぶ。',
   input_schema: {
@@ -68,7 +68,7 @@ const REPORT_TOOL = {
   },
 };
 
-function systemPrompt(enabledRules: LanguageRule[]): string {
+export function systemPrompt(enabledRules: LanguageRule[]): string {
   const rules = enabledRules.map((r) => `- ${r.label}: ${r.hint}`).join('\n');
   return `あなたは日本語の原稿を校閲する編集者です。文章の書き換えはせず、指摘だけを行います。結果は必ず report_findings ツール呼び出しで返してください。
 
@@ -88,7 +88,9 @@ function systemPrompt(enabledRules: LanguageRule[]): string {
 ${rules}`;
 }
 
-function userPrompt(blocks: DraftBlock[]): string {
+export type ReviewBlock = Pick<DraftBlock, 'index' | 'text'>;
+
+export function userPrompt(blocks: ReviewBlock[]): string {
   const body = blocks
     .map((b) => `[${b.index}] ${b.text || '(本文なし)'}`)
     .join('\n');
@@ -98,7 +100,7 @@ function userPrompt(blocks: DraftBlock[]): string {
 /** Anthropic Messages API のリクエスト body を組み立てる */
 export function buildRequest(opts: {
   model: string;
-  blocks: DraftBlock[];
+  blocks: ReviewBlock[];
   enabledRules: LanguageRule[];
 }): unknown {
   return {
@@ -135,7 +137,12 @@ export function parseReport(data: unknown): ReviewedFinding[] | { error: string 
         (b as { name?: string }).name === 'report_findings',
     );
   if (!call) return { error: '校閲結果が返りませんでした' };
-  const raw = (call.input as { findings?: RawFinding[] }).findings;
+  return validateReport(call.input);
+}
+
+/** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
+export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
+  const raw = input && typeof input === 'object' ? (input as { findings?: unknown }).findings : undefined;
   if (!Array.isArray(raw)) return { error: '校閲結果の形式が不正です' };
   return raw.filter(
     (f): f is ReviewedFinding =>

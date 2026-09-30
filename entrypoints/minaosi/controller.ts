@@ -2,25 +2,18 @@ import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
-import { buildRequest, parseReport, type ReviewedFinding } from './review/prompt';
-import { LANGUAGE_RULES } from './rubric';
-import { apiKeyItem, modelItem, consentedItem } from './store';
+import type { ReviewedFinding } from './review/prompt';
+import type { ReviewRequest } from './review/providers';
+import { providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
 import { renderFab, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand } from './panel-messages';
 
-interface ReviewMessage {
-  type: 'minaosi:review';
-  apiKey: string;
-  body: unknown;
-}
-
 interface ReviewReply {
   ok: boolean;
-  status?: number;
   error?: string;
-  data?: unknown;
+  findings?: ReviewedFinding[];
 }
 
 export class Controller {
@@ -29,6 +22,7 @@ export class Controller {
   private fabRoot: HTMLElement;
   private deco: Decorations;
   private staleRaf = 0;
+  private providerLoad = 0;
 
   private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
@@ -36,6 +30,8 @@ export class Controller {
     filter: 'open',
     selectedId: null,
     findings: [],
+    provider: 'anthropic',
+    connectionLoading: true,
     apiKey: '',
     model: '',
     consented: false,
@@ -71,6 +67,7 @@ export class Controller {
   }
 
   handleCommand(command: PanelCommand) {
+    if (this.s.connectionLoading && ['saveKey', 'clearKey', 'saveModel', 'consent', 'saveProvider'].includes(command.action)) return;
     switch (command.action) {
       case 'run': void this.run(); return;
       case 'filter': this.s.filter = command.filter; break;
@@ -86,12 +83,13 @@ export class Controller {
       case 'revert': this.revert(command.id); return;
       case 'settings': this.s.view = 'settings'; break;
       case 'back': this.s.view = 'list'; break;
-      case 'saveKey': this.s.apiKey = command.value; void apiKeyItem.setValue(command.value); break;
-      case 'clearKey': this.s.apiKey = ''; void apiKeyItem.setValue(''); break;
-      case 'saveModel': this.s.model = command.value; void modelItem.setValue(command.value); break;
+      case 'saveKey': this.s.apiKey = command.value; void PROVIDER_SETTINGS[this.s.provider].key.setValue(command.value); break;
+      case 'clearKey': this.s.apiKey = ''; void PROVIDER_SETTINGS[this.s.provider].key.setValue(''); break;
+      case 'saveModel': this.s.model = command.value; void PROVIDER_SETTINGS[this.s.provider].model.setValue(command.value); break;
+      case 'saveProvider': void this.changeProvider(command.provider); return;
       case 'consent':
         this.s.consented = true;
-        void consentedItem.setValue(true);
+        void PROVIDER_SETTINGS[this.s.provider].consented.setValue(true);
         this.s.view = 'list';
         void this.run();
         return;
@@ -104,13 +102,36 @@ export class Controller {
   }
 
   async init() {
+    this.s.provider = await providerItem.getValue();
+    await this.loadProvider();
+  }
+
+  private async loadProvider() {
+    const generation = ++this.providerLoad;
+    const provider = this.s.provider;
+    const settings = PROVIDER_SETTINGS[provider];
     const [apiKey, model, consented] = await Promise.all([
-      apiKeyItem.getValue(), modelItem.getValue(), consentedItem.getValue(),
+      settings.key.getValue(), settings.model.getValue(), settings.consented.getValue(),
     ]);
+    if (this.s.provider !== provider || generation !== this.providerLoad) return;
     this.s.apiKey = apiKey;
     this.s.model = model;
     this.s.consented = consented;
+    this.s.connectionLoading = false;
     this.render();
+  }
+
+  private async changeProvider(provider: ReviewRequest['provider']) {
+    if (this.s.provider === provider || this.s.phase === 'running') return;
+    this.s.provider = provider;
+    this.s.connectionLoading = true;
+    // 認証情報は接続先ごとに保持し、読み込み前に別社のkeyで実行できないようにする。
+    this.s.apiKey = '';
+    this.s.model = '';
+    this.s.consented = false;
+    this.render();
+    await providerItem.setValue(provider);
+    await this.loadProvider();
   }
 
   setEditor(editor: HTMLElement) {
@@ -177,8 +198,8 @@ export class Controller {
   /* ---- 見直す ---- */
 
   async run() {
-    if (this.s.phase === 'running') return;
-    if (!this.s.apiKey) {
+    if (this.s.phase === 'running' || this.s.connectionLoading) return;
+    if (!this.s.apiKey || !this.s.model) {
       this.s.view = 'settings';
       this.render();
       return;
@@ -194,20 +215,15 @@ export class Controller {
     this.render();
     try {
       const blocks = this.adapter.extractBlocks(this.editor);
-      const body = buildRequest({
-        model: this.s.model,
-        blocks,
-        enabledRules: LANGUAGE_RULES,
-      });
-      const msg: ReviewMessage = { type: 'minaosi:review', apiKey: this.s.apiKey, body };
+      const msg: ReviewRequest = {
+        type: 'minaosi:review', provider: this.s.provider, apiKey: this.s.apiKey, model: this.s.model,
+        blocks: blocks.map(({ index, text }) => ({ index, text })),
+      };
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
-      if (!reply?.ok) {
-        const detail = (reply?.data as { error?: { message?: string } } | undefined)?.error?.message;
-        throw new Error(reply?.error ?? detail ?? `API エラー（status ${reply?.status ?? '?'}）`);
+      if (!reply?.ok || !Array.isArray(reply.findings)) {
+        throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
-      const parsed = parseReport(reply.data);
-      if (!Array.isArray(parsed)) throw new Error(parsed.error);
-      this.s.findings = this.normalize(parsed, blocks);
+      this.s.findings = this.normalize(reply.findings, blocks);
       this.s.phase = 'done';
       this.s.filter = 'open';
       this.s.selectedId = null;

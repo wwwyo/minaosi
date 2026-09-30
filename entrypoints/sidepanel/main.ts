@@ -35,6 +35,7 @@ wirePanel(root, {
   onSaveKey: (value) => send({ action: 'saveKey', value }),
   onClearKey: () => send({ action: 'clearKey' }),
   onSaveModel: (value) => send({ action: 'saveModel', value }),
+  onSaveProvider: (provider) => send({ action: 'saveProvider', provider }),
   onConsentAndRun: () => send({ action: 'consent' }),
   onRetry: () => send({ action: 'run' }),
 });

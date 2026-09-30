@@ -224,7 +224,7 @@ export const PANEL_CSS = `
 .subview .desc { color: var(--color-ink-sub); font-size: var(--font-size-small); margin: 0 0 12px; }
 .fld { margin-bottom: 16px; }
 .fld label { display: block; font-size: var(--font-size-caption); font-weight: 600; color: var(--color-ink-sub); margin-bottom: 4px; }
-.fld input[type="text"], .fld input[type="password"], .fld input[type="url"] {
+.fld input[type="text"], .fld input[type="password"], .fld input[type="url"], .fld select {
   width: 100%; font-family: inherit; font-size: var(--font-size-body);
   padding: 6px 8px; border: 1px solid var(--color-line-strong); border-radius: var(--radius-md);
   background: var(--color-bg-surface); color: var(--color-ink);
