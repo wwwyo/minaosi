@@ -121,7 +121,8 @@ function settingsBody(s: PanelState): string {
       <label>文体規範（任意）</label>
       ${sg
         ? `<div class="filecur"><span class="nm">${esc(sg.name)}</span><button class="btn-ghost" data-act="clear-style">解除</button></div>`
-        : `<label class="filepick btn-ghost">ファイルを選択<input type="file" data-set="styleFile" accept=".md,.txt,text/plain,text/markdown" hidden></label>
+        : `<button type="button" class="btn-ghost" data-act="pick-style">ファイルを選択</button>
+           <input type="file" data-set="styleFile" accept=".md,.txt,text/plain,text/markdown" hidden>
            <div class="help">書き手本人の文体規範ファイル（.md / .txt）を読み込みます</div>`}
     </div>
     <div class="fld">
@@ -207,6 +208,9 @@ export function wirePanel(
         case 'delete': if (fid) h.onDelete(fid); return;
         case 'revert': if (fid) h.onRevert(fid); return;
         case 'clear-style': h.onClearStyleGuide(); return;
+        case 'pick-style':
+          (root.querySelector('[data-set="styleFile"]') as HTMLInputElement | null)?.click();
+          return;
       }
     }
     if (t.closest('a')) return;

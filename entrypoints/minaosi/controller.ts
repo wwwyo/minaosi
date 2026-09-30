@@ -144,15 +144,15 @@ export class Controller {
     this.panelRoot.innerHTML = panel;
     this.fabRoot.innerHTML = fab;
     this.deco.render(this.s.findings, this.s.selectedId, this.s.panelOpen);
+    // パネルは本文の上に被せるのではなく右に置く — 本文の幅をパネル分だけ縮める
+    // （prototype の .with-panel と同じ位置付け。position:fixed のホスト側 chrome は
+    //  viewport 基準なので動かず、パネルの下に隠れる点は v1 では許容する）
+    document.body.style.marginRight = this.s.panelOpen ? '340px' : '';
   }
 
   private togglePanel() {
     this.s.panelOpen = !this.s.panelOpen;
     if (!this.s.panelOpen) this.s.view = 'list';
-    // パネルは本文の上に被せるのではなく右に置く — 本文の幅をパネル分だけ縮める
-    // （prototype の .with-panel と同じ位置付け。position:fixed のホスト側 chrome は
-    //  viewport 基準なので動かず、パネルの下に隠れる点は v1 では許容する）
-    document.body.style.marginRight = this.s.panelOpen ? '340px' : '';
     this.render();
   }
 
