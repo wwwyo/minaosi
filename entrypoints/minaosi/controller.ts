@@ -325,20 +325,10 @@ export class Controller {
       const c = contextOf(text, at, to.length);
       m.undoBefore = c.before;
       m.undoAfter = c.after;
-    } else if (!document.execCommand('undo')) {
-      // undo 用の文脈を採れない適用は「元に戻せない適用済み」を生む。
-      // エディタ側の undo で巻き戻せなければ適用済みのまま stale にする
-      m.applied = true;
-      m.stale = true;
-      this.syncResolved(f);
-      this.s.selectedId = null;
-      return;
-    } else {
-      m.stale = true;
-      return;
     }
     m.applied = true;
-    m.stale = false;
+    // undo 用文脈を採れなかった適用は「元に戻す」が効かないため stale として表面化する
+    m.stale = at === undefined;
     if (startIdx !== null) this.refreshAfterEdit(f.blockEl, startIdx, m.to.length - m.from.length, m);
     this.syncResolved(f);
     this.s.selectedId = null;
