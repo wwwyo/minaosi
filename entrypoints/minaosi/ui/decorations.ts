@@ -30,6 +30,8 @@ export interface DecorationCallbacks {
 }
 
 const HL_SUPPORTED = typeof CSS !== 'undefined' && 'highlights' in CSS;
+/** 右パネル（340px）+ 余白。chip をパネルと重ねないためのセーフマージン */
+const PANEL_SAFE_MARGIN = 344;
 
 export class Decorations {
   private ovl: HTMLElement;
@@ -278,7 +280,8 @@ export class Decorations {
     } else {
       left = last.right + 3;
       top = last.top + (last.height - size.h) / 2;
-      if (left + size.w > window.innerWidth - 344) {
+      // パネル（340px）と重ならないよう右端を避ける
+      if (left + size.w > window.innerWidth - PANEL_SAFE_MARGIN) {
         left = first.left;
         top = first.top - size.h - 2;
       }

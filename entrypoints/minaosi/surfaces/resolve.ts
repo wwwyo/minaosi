@@ -134,6 +134,8 @@ export function applyReplacement(range: Range, to: string): boolean {
   sel.removeAllRanges();
   sel.addRange(range);
   try {
+    // execCommand は deprecated だが、contenteditable の編集履歴（Cmd+Z）に乗せる唯一の手段。
+    // 失敗時は呼び出し側が stale にして再見直しを促す
     return document.execCommand('insertText', false, to);
   } catch {
     return false;

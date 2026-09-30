@@ -148,7 +148,12 @@ export function parseReport(data: unknown): ReviewedFinding[] | { error: string 
       FINDING_KINDS.includes(f.kind as FindingKind) &&
       typeof f.title === 'string' &&
       typeof f.reason === 'string' &&
-      // 一次出典の URL が無い事実の指摘は出さない（PRD の絶対条件）
-      (f.kind !== 'fact' || (typeof f.source?.url === 'string' && /^https?:\/\//.test(f.source.url))),
+      Array.isArray(f.matches) &&
+      // 一次出典の URL と根拠の該当箇所が無い事実の指摘は出さない（PRD の絶対条件）
+      (f.kind !== 'fact' ||
+        (typeof f.source?.url === 'string' &&
+          /^https?:\/\//.test(f.source.url) &&
+          typeof f.source.excerpt === 'string' &&
+          f.source.excerpt.length > 0)),
   );
 }

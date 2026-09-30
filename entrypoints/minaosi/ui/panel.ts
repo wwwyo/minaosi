@@ -88,6 +88,9 @@ function listBody(s: PanelState): string {
       <div class="actions"><button class="run-btn sm" data-act="retry">再試行</button>
       <button class="btn-ghost" data-act="settings">設定</button></div></div>`;
   }
+  if (s.phase === 'idle' && s.findings.length === 0) {
+    return '<div class="empty">「見直す」で AI の校閲を開始します</div>';
+  }
   const list = s.findings.filter((f) => f.state === s.filter);
   return list.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>';
 }

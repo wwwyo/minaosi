@@ -77,7 +77,13 @@ export class Controller {
       onFilter: (f) => { this.s.filter = f; this.render(); },
       onSelect: (fid) => this.select(fid),
       onApplyFinding: (fid) => this.applyFinding(fid),
-      onDelete: (fid) => { this.byId(fid)!.state = 'deleted'; this.s.selectedId = null; this.render(); },
+      onDelete: (fid) => {
+        const f = this.byId(fid);
+        if (!f) return;
+        f.state = 'deleted';
+        this.s.selectedId = null;
+        this.render();
+      },
       onRevert: (fid) => this.revert(fid),
       onOpenSettings: () => { this.s.view = 'settings'; this.render(); },
       onBackToList: () => { this.s.view = 'list'; this.render(); },
@@ -115,8 +121,18 @@ export class Controller {
   }
 
   setEditor(editor: HTMLElement) {
+    if (editor === this.editor) return;
     this.editor = editor;
     this.deco.setEditor(editor);
+    if (this.s.findings.length) {
+      // SPA 遷移等でエディタ DOM が差し替わった場合、ブロック index で再アンカーを試みる
+      const blocks = this.adapter.extractBlocks(editor);
+      for (const f of this.s.findings) {
+        const b = f.block >= 0 ? blocks[f.block] : undefined;
+        f.blockEl = b?.index === f.block ? b.element : undefined;
+      }
+      this.render();
+    }
   }
 
   private byId(fid: string) {
@@ -220,7 +236,7 @@ export class Controller {
     } catch (e) {
       this.s.phase = 'error';
       this.s.error = e instanceof Error ? e.message : String(e);
-      this.s.findings = [];
+      // 既存の指摘・適用状態は残す（通信失敗の再実行で消えない）
     }
     this.render();
   }
@@ -309,6 +325,17 @@ export class Controller {
       const c = contextOf(text, at, to.length);
       m.undoBefore = c.before;
       m.undoAfter = c.after;
+    } else if (!document.execCommand('undo')) {
+      // undo 用の文脈を採れない適用は「元に戻せない適用済み」を生む。
+      // エディタ側の undo で巻き戻せなければ適用済みのまま stale にする
+      m.applied = true;
+      m.stale = true;
+      this.syncResolved(f);
+      this.s.selectedId = null;
+      return;
+    } else {
+      m.stale = true;
+      return;
     }
     m.applied = true;
     m.stale = false;
