@@ -58,6 +58,17 @@ export const PANEL_CSS = `
   position: fixed; top: 0; right: 0; bottom: 0; width: 340px; z-index: 2147483646;
   background: var(--color-bg-panel); border-left: 1px solid var(--color-line-strong);
   display: flex; flex-direction: column;
+  transform-origin: 100% 100%;
+}
+.panel[data-anim="in"] { animation: mn-panel-in var(--dur-med) var(--ease-out) both; }
+.panel[data-anim="out"] { animation: mn-panel-out var(--dur-med) var(--ease-out) both; }
+@keyframes mn-panel-in {
+  from { opacity: 0; transform: translate(28px, 32px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes mn-panel-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate(28px, 32px) scale(.96); }
 }
 .panel header { padding: 14px 16px 12px; border-bottom: 1px solid var(--color-line); }
 .head-row { display: flex; align-items: center; gap: 8px; }

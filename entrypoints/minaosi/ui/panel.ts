@@ -146,7 +146,7 @@ function consentBody(): string {
   </div>`;
 }
 
-export function renderPanel(s: PanelState): { panel: string; fab: string } {
+export function renderPanel(s: PanelState, anim?: 'in' | 'out'): { panel: string; fab: string } {
   const reviewed = s.phase === 'done' || s.phase === 'error';
   const fabLabel = reviewed ? '指摘パネルを開く' : '校閲を実行';
   const fab = `<button class="mn fab" data-act="fab" ${s.phase === 'running' ? 'disabled aria-busy="true"' : ''}
@@ -170,7 +170,7 @@ export function renderPanel(s: PanelState): { panel: string; fab: string } {
         ).join('')}</div>`
       : '';
 
-  const panel = `<aside class="mn panel" aria-label="minaosi 指摘一覧">
+  const panel = `<aside class="mn panel"${anim ? ` data-anim="${anim}"` : ''} aria-label="minaosi 指摘一覧">
     <header><div class="head-row">
       <button class="brand" data-act="close" title="パネルを閉じる" aria-label="パネルを閉じる">${LOGO_MARK}<span class="brand-name">minaosi</span><span class="chev">${ICON_CHEVRONS}</span></button>
       <span class="sp">

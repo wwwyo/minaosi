@@ -135,8 +135,11 @@ export class Controller {
     return this.s.findings.find((f) => f.id === fid);
   }
 
+  /** 開閉アニメの方向（in は mount 時のみ付与、out は退出中のみ付与） */
+  private anim: 'in' | 'out' | null = null;
+
   private render() {
-    const { panel, fab } = renderPanel(this.s);
+    const { panel, fab } = renderPanel(this.s, this.anim ?? undefined);
     this.panelRoot.innerHTML = panel;
     this.fabRoot.innerHTML = fab;
     this.deco.render(this.s.findings, this.s.selectedId, this.s.panelOpen);
@@ -152,10 +155,32 @@ export class Controller {
     else void this.run();
   }
 
+  /** パネルを開く（右下からの入場アニメ付き）。すでに開いていれば何もしない */
+  private openPanel() {
+    if (this.s.panelOpen) return;
+    this.s.panelOpen = true;
+    this.anim = 'in';
+    // in アニメは mount 時の1回だけ。class が残ると再描画ごとに再生されるので外す
+    setTimeout(() => { this.anim = null; }, 240);
+  }
+
   private togglePanel() {
-    this.s.panelOpen = !this.s.panelOpen;
-    if (!this.s.panelOpen) this.s.view = 'list';
+    const opening = !this.s.panelOpen;
+    if (opening) {
+      this.openPanel();
+      this.render();
+      return;
+    }
+    this.s.view = 'list';
+    // 退出アニメが終わるまでは panelOpen のまま描画し、終了後に取り外す
+    this.anim = 'out';
     this.render();
+    setTimeout(() => {
+      if (this.anim !== 'out') return;
+      this.anim = null;
+      this.s.panelOpen = false;
+      this.render();
+    }, 230);
   }
 
   private select(fid: string | null) {
@@ -203,19 +228,19 @@ export class Controller {
   async run() {
     if (this.s.phase === 'running') return;
     if (!this.s.apiKey) {
-      this.s.panelOpen = true;
+      this.openPanel();
       this.s.view = 'settings';
       this.render();
       return;
     }
     if (!this.s.consented) {
-      this.s.panelOpen = true;
+      this.openPanel();
       this.s.view = 'consent';
       this.render();
       return;
     }
     this.s.phase = 'running';
-    this.s.panelOpen = true;
+    this.openPanel();
     this.s.view = 'list';
     this.s.error = undefined;
     this.render();
