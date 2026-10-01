@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => ({
       REVIEW_GATEWAY_ID: bindings.text<string>(''),
       ALLOWED_ORIGINS: bindings.secret(),
       // Turnstile widget の sitekey。秘密ではなくクライアントへ配る値。開発時は always-pass のテストキー（invisible）。
-      TURNSTILE_SITE_KEY: bindings.text<string>(mode === 'development' ? '1x00000000000000000000BB' : ''),
+      TURNSTILE_SITE_KEY: bindings.text<string>(mode === 'development' ? '1x00000000000000000000BB' : '0x4AAAAAAFLTQAfNx0YoHv9S'),
       TURNSTILE_SECRET_KEY: bindings.secret(),
       LOCAL_OPENCODE_BYOK: bindings.text<string>(mode === 'development' ? 'true' : 'false'),
       REVIEW_POLICY: bindings.json<{ concurrencyLimit: number; leaseTtlMs: number }>({
