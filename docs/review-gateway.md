@@ -87,6 +87,10 @@ Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処�
 
 ## 実行結果のログ
 
+`skipCache: true` は、Gatewayに校閲結果をキャッシュさせず、同じ原稿でも事実確認を含めて毎回実行するための設定。同一リクエストの再利用による費用・待ち時間の削減は得られない。キャッシュは本文の完全一致が前提なので、原稿が変わる通常の校閲では利用できる場面が限られる。[Cloudflareのキャッシュ仕様](https://developers.cloudflare.com/ai-gateway/features/caching/)。
+
+Gatewayへのリクエストには `cf-aig-collect-log: true` と `cf-aig-collect-log-payload: false` を付ける。モデル・プロバイダー・トークン数・費用・ステータス・処理時間などのメタデータを記録し、原稿を含むリクエスト本文とAIの応答本文は保存しない。Gateway自体の設定でログを無効にしていても、リクエスト単位でこの方針を適用する。[Cloudflareのログ仕様](https://developers.cloudflare.com/ai-gateway/observability/logging/)。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
+
 `POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
 
 ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `apps/api/cloudflare.config.ts` の `observability.logs` にあり、サンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。

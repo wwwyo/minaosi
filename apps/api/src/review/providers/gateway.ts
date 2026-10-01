@@ -29,7 +29,7 @@ export async function reviewThroughGateway(
     gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,
     cfApiKey: env.CF_AIG_TOKEN,
     skipCache: true,
-    collectLog: false,
+    collectLog: true,
   });
   let findings: ReviewedFinding[] | undefined;
   let reportError: string | undefined;
@@ -51,7 +51,14 @@ export async function reviewThroughGateway(
     if (++requests > 5) throw new Error('校閲の実行回数上限に達しました');
     return fetchWithoutRedirects(fetcher, input, init);
   };
-  const config = { baseURL: gateway.baseURL, defaultHeaders: gateway.headers, fetch: safeFetch, maxRetries: 0, timeout: 210_000 };
+  const config = {
+    baseURL: gateway.baseURL,
+    // collectLog=false では使用量も消えるため、本文の保存だけを抑制する。
+    defaultHeaders: { ...gateway.headers, 'cf-aig-collect-log-payload': 'false' },
+    fetch: safeFetch,
+    maxRetries: 0,
+    timeout: 210_000,
+  };
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), 210_000);
   const common = {

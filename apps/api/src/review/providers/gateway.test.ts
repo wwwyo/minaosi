@@ -32,7 +32,7 @@ function fetchFixture(responses: Response[]) {
 }
 
 describe('TanStack AI via Cloudflare', () => {
-  test('Anthropicの検索とreportをGateway経由で実行し、ログ・キャッシュを無効にする', async () => {
+  test('Anthropicの検索とreportをGateway経由で実行し、本文保存・キャッシュを無効にして使用量ログを残す', async () => {
     const { fetcher, calls } = fetchFixture([anthropicReport()]);
     expect(await reviewThroughGateway(request, 'fixture-user-key', env, fetcher)).toEqual([finding]);
     expect(calls).toHaveLength(1);
@@ -41,7 +41,8 @@ describe('TanStack AI via Cloudflare', () => {
     expect(call.headers.get('x-api-key')).toBe('fixture-user-key');
     expect(call.headers.get('cf-aig-authorization')).toBe('Bearer fixture-cf-token');
     expect(call.headers.get('cf-aig-skip-cache')).toBe('true');
-    expect(call.headers.get('cf-aig-collect-log')).toBe('false');
+    expect(call.headers.get('cf-aig-collect-log')).toBe('true');
+    expect(call.headers.get('cf-aig-collect-log-payload')).toBe('false');
     expect((call.body.tools as { name: string }[]).map((tool) => tool.name)).toEqual(['web_search', 'report_findings']);
   });
 
@@ -61,6 +62,9 @@ describe('TanStack AI via Cloudflare', () => {
     expect(calls[0]!.url).toBe('https://gateway.ai.cloudflare.com/v1/fixture-account/fixture-gateway/openai/responses');
     expect(calls[0]!.headers.get('authorization')).toBe('Bearer fixture-openai-key');
     expect(calls[0]!.headers.get('x-api-key')).toBeNull();
+    expect(calls[0]!.headers.get('cf-aig-skip-cache')).toBe('true');
+    expect(calls[0]!.headers.get('cf-aig-collect-log')).toBe('true');
+    expect(calls[0]!.headers.get('cf-aig-collect-log-payload')).toBe('false');
     expect(calls[0]!.body.store).toBe(false);
     expect((calls[0]!.body.tools as { type: string }[]).map((tool) => tool.type)).toEqual(['web_search', 'function']);
   });
