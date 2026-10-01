@@ -95,6 +95,7 @@ export const PANEL_CSS = `
 .n-item[data-sel] .detail { display: block; }
 .n-item .meta { display: flex; align-items: baseline; gap: 6px; padding-right: 54px; }
 .n-item .kind { font-size: var(--font-size-micro); letter-spacing: 0.08em; color: var(--color-ink-sub); font-weight: 700; }
+.n-item .status { font-size: var(--font-size-micro); color: var(--color-ink-mute); }
 .n-item .ttl { font-weight: 600; font-size: var(--font-size-body); margin-top: 2px; padding-right: 54px; }
 .n-item .rsn { color: var(--color-ink-sub); font-size: var(--font-size-small); margin-top: 4px; }
 .n-item.is-resolved .ttl, .n-item.is-resolved .rsn { color: var(--color-ink-mute); }

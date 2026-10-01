@@ -1,10 +1,11 @@
-import { KIND_LABEL, type Finding, type FindingState } from '../types';
+import { KIND_LABEL, type Finding } from '../types';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
   ICON_SPARKLES,
 } from './icons';
 
 export type View = 'list';
+export type PanelFilter = 'open' | 'handled';
 
 export type PanelFinding = Omit<Finding, 'blockEl'>;
 
@@ -12,7 +13,7 @@ export interface PanelState {
   phase: 'idle' | 'running' | 'done' | 'error';
   error?: string;
   view: View;
-  filter: FindingState;
+  filter: PanelFilter;
   selectedId: string | null;
   findings: PanelFinding[];
   connectionLoading: boolean;
@@ -20,7 +21,7 @@ export interface PanelState {
 
 export interface PanelHandlers {
   onRun(): void;
-  onFilter(f: FindingState): void;
+  onFilter(f: PanelFilter): void;
   onSelect(fid: string | null): void;
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
@@ -31,11 +32,11 @@ const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-const TABS: [FindingState, string][] = [['open', '未対応'], ['resolved', '適用済み'], ['deleted', '削除']];
+const TABS: [PanelFilter, string][] = [['open', '未対応'], ['handled', '対応済み']];
 
-function counts(findings: PanelFinding[]): Record<FindingState, number> {
-  const c: Record<FindingState, number> = { open: 0, resolved: 0, deleted: 0 };
-  for (const f of findings) c[f.state]++;
+function counts(findings: PanelFinding[]): Record<PanelFilter, number> {
+  const c: Record<PanelFilter, number> = { open: 0, handled: 0 };
+  for (const f of findings) c[f.state === 'open' ? 'open' : 'handled']++;
   return c;
 }
 
@@ -52,8 +53,9 @@ function actsHTML(f: PanelFinding): string {
 
 function cardHTML(f: PanelFinding, selectedId: string | null): string {
   const stale = f.state === 'open' && f.matches.length > 0 && f.matches.every((m) => m.stale || m.applied);
+  const status = f.state === 'open' ? '' : `<span class="status">${f.state === 'resolved' ? '適用済み' : '削除'}</span>`;
   return `<div class="n-item is-${f.state}" data-fid="${f.id}" tabindex="0" role="button"${f.id === selectedId ? ' data-sel' : ''}>
-    <div class="meta"><span class="kind">${KIND_LABEL[f.kind]}</span></div>
+    <div class="meta"><span class="kind">${KIND_LABEL[f.kind]}</span>${status}</div>
     <div class="ttl">${esc(f.title)}</div>
     <div class="detail">
       <div class="rsn">${esc(f.reason)}</div>
@@ -76,7 +78,7 @@ function listBody(s: PanelState): string {
     return `<div class="empty-start"><button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
   if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
-  const list = s.findings.filter((f) => f.state === s.filter);
+  const list = s.findings.filter((f) => s.filter === 'open' ? f.state === 'open' : f.state !== 'open');
   return list.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>';
 }
 
@@ -113,7 +115,11 @@ export function wirePanel(
     if (actEl) {
       switch (actEl.dataset.act) {
         case 'run': h.onRun(); return;
-        case 'filter': h.onFilter(actEl.dataset.f as FindingState); return;
+        case 'filter': {
+          const filter = actEl.dataset.f;
+          if (filter === 'open' || filter === 'handled') h.onFilter(filter);
+          return;
+        }
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;
         case 'revert': if (fid) h.onRevert(fid); return;

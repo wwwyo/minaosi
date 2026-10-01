@@ -96,7 +96,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 /* .suggest-del（前）= --color-strike の取り消し線 / .suggest-ins（後）=
    --color-accent-ink 文字＋--color-accent-tint 背景。ボタン化しない */
 /* .brand = logo mark + wordmark + 畳みシェブロンの単一クリックボタン */
-/* .filter-tab = 未対応/適用済み/削除 の3タブ。「すべて」は置かない */
+/* .filter-tab = 未対応/対応済み の2タブ。対応済みには適用済み・削除をまとめる */
 /* .progress = 非ゼロの状態件数のみ列挙 */
 /* 適用 tooltip は白背景・墨色・1px の --color-line-strong。
    ホバーした候補の表示行の中央・直上に出し、影は付けない */

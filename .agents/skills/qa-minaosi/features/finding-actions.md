@@ -23,8 +23,8 @@ Preconditions:
 - 対象指摘の元文字列=`before`、修正案=`after`、本文全文、初期件数を保存する。指摘が出なければ実施できない手順として記録する。
 
 - **指摘を選ぶ (`finding-actions.1`, カード)。** 最新AXで該当するカード=`card`を取り`await ui.click(card); await ui.getAXState();`。理由が展開し、対象箇所が本文で強調されることを確認。本文マーク=`mark`がAXにあれば`await ui.click(mark); await ui.getAXState();`からの選択も記録する。AXにないマークは最新Screenshotで位置を確認してから操作する。カードにfocusを置き`await ui.pressKey('Return'); await ui.getAXState();`、`await ui.pressKey('space'); await ui.getAXState();`で選択が切り替わるか観察する。
-- **適用と取消 (`finding-actions.2`, カードボタン)。** 最新「適用」=`apply`で`await ui.click(apply); await ui.getAXState();`。本文の対象がbeforeからafterへ変わり、他の本文が変わっていないことを確認。「適用済み」=`resolvedFilter`をクリックし、件数と指摘を確認。最新「適用を元に戻す」=`undo`で`await ui.click(undo); await ui.getAXState();`。本文がbeforeに戻り、「未対応」へ移ることを確認する。
-- **削除と復元 (`finding-actions.3`, カードボタン)。** 未対応の該当カードで最新「削除」=`remove`へ`await ui.click(remove); await ui.getAXState();`。本文の文字はそのままで、削除件数が増えることを確認。「削除」filterへ移り、最新「復元」=`restore`で`await ui.click(restore); await ui.getAXState();`。未対応と本文マークが戻ることを確認する。filterとカードボタンの同名「削除」を取り違えない。
+- **適用と取消 (`finding-actions.2`, カードボタン)。** 最新「適用」=`apply`で`await ui.click(apply); await ui.getAXState();`。本文の対象がbeforeからafterへ変わり、他の本文が変わっていないことを確認。「対応済み」=`handledFilter`をクリックし、件数とカードの「適用済み」表示を確認。最新「適用を元に戻す」=`undo`で`await ui.click(undo); await ui.getAXState();`。本文がbeforeに戻り、「未対応」へ移ることを確認する。
+- **削除と復元 (`finding-actions.3`, カードボタン)。** 未対応の該当カードで最新「削除」=`remove`へ`await ui.click(remove); await ui.getAXState();`。本文の文字はそのままで、対応済み件数が増えることを確認。「対応済み」filterへ移り、カードの「削除」表示を確認。最新「復元」=`restore`で`await ui.click(restore); await ui.getAXState();`。未対応と本文マークが戻ることを確認する。
 - **手動編集後の保護 (`finding-actions.4`, note本文)。** 最新bodyで`await ui.selectText(body, before); await ui.getAXState();`。選択範囲を確認してから`await ui.paste('QAで手動変更した文言', {format:'text'}); await ui.getAXState();`。対象が一致しなくなった旨の表示と「適用」の状態を確認し、手動変更が古いafterで上書きされないことを記録する。本文の変更が起きなかった操作はcoverageに数えない。
 
 ## Gotchas
