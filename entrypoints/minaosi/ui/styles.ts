@@ -116,7 +116,7 @@ export const PANEL_CSS = `
 .acts button svg { width: 13px; height: 13px; display: block; }
 .acts button:hover { border-color: var(--color-ink); color: var(--color-ink); }
 .acts button:active { transform: translateY(1px); }
-.acts button.primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.acts button.primary { color: var(--color-ink); }
 .acts button.primary:hover { opacity: .85; }
 .acts button.trash { width: 20px; height: 20px; padding: 0; border: 0; background: transparent; color: var(--color-ink-mute); }
 .acts button.trash svg { width: 12px; height: 12px; }

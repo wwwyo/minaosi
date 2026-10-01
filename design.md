@@ -83,7 +83,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 ```css
 /* 基盤 component の規約。実装は content script 側と prototype を見る */
 
-/* .btn-primary（墨塗り）= 適用・見直すの主操作。副操作は .btn-ghost。
+/* .btn-primary（墨塗り）= 見直すの主操作。適用は白背景と境界線。
+   副操作は .btn-ghost。
    icon-only は .icon-btn */
 /* .fab = 白い --color-bg-surface に --color-ink のマーク。
    1px の --color-line-strong で境界を示し、影は付けない */
