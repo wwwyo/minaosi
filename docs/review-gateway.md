@@ -91,7 +91,7 @@ Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処�
 
 BYOKのGatewayへのリクエストには `cf-aig-collect-log: true` と `cf-aig-collect-log-payload: false` を付ける。モデル・プロバイダー・トークン数・費用・ステータス・処理時間などのメタデータを記録し、原稿を含むリクエスト本文とAIの応答本文は保存しない。Gateway自体の設定でログを無効にしていても、リクエスト単位でこの方針を適用する。[Cloudflareのログ仕様](https://developers.cloudflare.com/ai-gateway/observability/logging/)。
 
-標準モードでGatewayを設定した場合は、binding経路の `gateway` オプションに `collectLog: true` と `skipCache: true` を渡す。binding経路ではリクエスト単位のpayload抑制ヘッダー（`cf-aig-collect-log-payload`）を送れないため、原稿本文を保存しない設定はGateway側で担保する。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
+標準モードでGatewayを設定した場合は、binding経路の `gateway` オプションに `collectLog: true` と `skipCache: true` を渡す。binding経路ではリクエスト単位のpayload抑制ヘッダー（`cf-aig-collect-log-payload`）を送れないため、BYOKと同じ「原稿本文を保存しない」を担保するには、利用するGatewayの設定でログのpayload保存を無効にしておく必要がある。Gatewayを標準モードへ設定する場合はこの設定を先に確認する。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
 
 `POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
 

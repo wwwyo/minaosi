@@ -69,7 +69,7 @@ export const app = new Hono<RpcEnv>()
   })
   .get('/health', c => {
     const env = c.env.bindings;
-    return c.json({ ok: true, configured: !!env.AI }, 200);
+    return c.json({ ok: true, configured: !!env.AI, byokConfigured: !!(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_AI_GATEWAY_ID && env.CF_AIG_TOKEN) }, 200);
   })
   .options('/review', c => {
     c.header('access-control-allow-methods', 'POST');
@@ -119,7 +119,10 @@ export const app = new Hono<RpcEnv>()
       return c.json({ findings }, 200);
     } catch (error) {
       // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
-      return c.json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
+      const failure = input.mode === 'default'
+        ? '標準校閲に失敗しました。時間を置いて再試行し、続く場合は運営者へ連絡してください'
+        : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください';
+      return c.json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : failure }, 502);
     } finally {
       if (concurrency && lease) {
         try { await concurrency.release(lease); }
