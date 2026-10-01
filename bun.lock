@@ -4,22 +4,42 @@
   "workspaces": {
     "": {
       "name": "minaosi",
+      "devDependencies": {
+        "@types/bun": "1.4.2",
+        "typescript": "7.0.2"
+      }
+    },
+    "apps/api": {
+      "name": "@minaosi/api",
+      "version": "0.1.0",
       "dependencies": {
         "@tanstack/ai": "0.58.0",
         "@tanstack/ai-anthropic": "0.18.11",
         "@tanstack/ai-cloudflare": "0.1.5",
         "@tanstack/ai-openai": "0.23.1",
+        "hono": "4.13.9"
       },
       "devDependencies": {
-        "@types/bun": "1.4.2",
         "cf": "1.0.0-beta.6",
-        "typescript": "7.0.2",
-        "wrangler": "4.136.3",
-        "wxt": "0.21.4",
-      },
+        "wrangler": "4.136.3"
+      }
     },
+    "apps/extension": {
+      "name": "@minaosi/extension",
+      "version": "0.1.0",
+      "dependencies": {
+        "@minaosi/api": "workspace:*",
+        "hono": "4.13.9"
+      },
+      "devDependencies": {
+        "wxt": "0.21.4"
+      }
+    }
   },
   "packages": {
+    "@minaosi/api": ["@minaosi/api@workspace:apps/api"],
+    "@minaosi/extension": ["@minaosi/extension@workspace:apps/extension"],
+    "hono": ["hono@4.13.9","",{},"sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg=="],
     "@1natsu/wait-element": ["@1natsu/wait-element@4.2.0", "", { "dependencies": { "defu": "^6.1.4", "many-keys-map": "^3.0.0" } }, "sha512-Om0Q+WE9mNrpY4AwMTvkFiYHv8VM7TML3PvOqXy+w6kAjLjKhGYHYX+305+a6J8RVpds9s7IF2Z5aOPYwULFNw=="],
 
     "@ag-ui/core": ["@ag-ui/core@0.1.1-canary.beta.0", "", { "peerDependencies": { "zod": "^3.25.18 || ^4.0.0" }, "optionalPeers": ["zod"] }, "sha512-zcP3RH5p3HJTZ0kyQxNOL1blnVFTDpaShitR7UMS/thwFdl48V6CAG+WQBcYEu/dfa8mKonRez88N0Ok+nEI+w=="],

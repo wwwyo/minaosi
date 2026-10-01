@@ -11,7 +11,7 @@ describe('review relay', () => {
     const fetcher = (async (url, options) => {
       called = true;
       expect(String(url)).toBe(endpoint);
-      expect(options?.headers).toEqual({ 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key' });
+      expect(Object.fromEntries(new Headers(options?.headers))).toEqual({ 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key' });
       expect(JSON.parse(options?.body as string)).toEqual({ provider: request.provider, model: request.model, blocks: request.blocks });
       expect(options?.redirect).toBe('error');
       expect(options?.credentials).toBe('omit');
@@ -54,7 +54,7 @@ test('providerは対応する3値だけを受け付け、継承プロパティ�
 test('標準モードは利用者のキーとモデルを送信しない', async () => {
   const standard: ReviewRequest = { type: 'minaosi:review', mode: 'default', blocks: request.blocks };
   await review(standard, 'unused-fixture-key', endpoint, async (_url, options) => {
-    expect(options?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(Object.fromEntries(new Headers(options?.headers))).toEqual({ 'content-type': 'application/json' });
     expect(JSON.parse(options?.body as string)).toEqual({ mode: 'default', blocks: request.blocks });
     return Response.json({ findings: [] });
   });

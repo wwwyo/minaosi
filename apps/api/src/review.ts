@@ -1,3 +1,4 @@
+import { validateReport, type ReviewedFinding } from './schema';
 import { chat, toolDefinition } from '@tanstack/ai';
 import { fetchWithoutRedirects } from './fetch';
 import { anthropicAdapter, INVALID_TOOL_INPUT } from './anthropic';
@@ -5,9 +6,9 @@ import { webSearchTool as anthropicSearch } from '@tanstack/ai-anthropic/tools';
 import { createOpenaiChat } from '@tanstack/ai-openai';
 import { webSearchTool as openaiSearch } from '@tanstack/ai-openai/tools';
 import { cloudflareGateway } from '@tanstack/ai-cloudflare';
-import { LANGUAGE_RULES } from '../entrypoints/minaosi/rubric';
-import { REPORT_TOOL, systemPrompt, userPrompt, validateReport, type ReviewedFinding } from '../entrypoints/minaosi/review/prompt';
-import type { HttpFetch, ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
+import { LANGUAGE_RULES } from './rubric';
+import { REPORT_TOOL, systemPrompt, userPrompt } from './prompt';
+import type { HttpFetch, ProviderReviewInput } from './schema';
 
 export interface GatewayEnv {
   CLOUDFLARE_ACCOUNT_ID: string;

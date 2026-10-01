@@ -1,6 +1,8 @@
-/** 指摘・修正案・状態の型。LLM との wire 形式は review/prompt.ts 側の Raw* 型。 */
+import type { ReviewedFinding } from '@minaosi/api/rpc';
 
-export type FindingKind = 'typo' | 'fact' | 'rule';
+/** ブラウザ上の指摘・修正案・状態。通信形式の型はAPIルートを参照する。 */
+
+export type FindingKind = ReviewedFinding['kind'];
 export type FindingState = 'open' | 'resolved' | 'deleted';
 
 export const KIND_LABEL: Record<FindingKind, string> = {

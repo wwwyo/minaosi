@@ -2,7 +2,7 @@ import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
-import type { ReviewedFinding } from './review/prompt';
+import type { ReviewedFinding } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';

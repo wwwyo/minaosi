@@ -1,9 +1,10 @@
+import { validateReport, type ReviewedFinding } from './schema';
 import { chat, toolDefinition } from '@tanstack/ai';
 import { fetchWithoutRedirects } from './fetch';
 import { OpenAIChatCompletionsTextAdapter, type createOpenaiChatCompletions } from '@tanstack/ai-openai';
-import { LANGUAGE_RULES } from '../entrypoints/minaosi/rubric';
-import { REPORT_TOOL, systemPrompt, userPrompt, validateReport, type ReviewedFinding } from '../entrypoints/minaosi/review/prompt';
-import type { HttpFetch, ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
+import { LANGUAGE_RULES } from './rubric';
+import { REPORT_TOOL, systemPrompt, userPrompt } from './prompt';
+import type { HttpFetch, ProviderReviewInput } from './schema';
 
 /** ローカルBYOKでOpenCode GoのChat Completions APIを呼ぶ。 */
 export async function reviewWithOpenCode(request: ProviderReviewInput, apiKey: string, fetcher: HttpFetch = fetch): Promise<ReviewedFinding[]> {

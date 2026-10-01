@@ -23,7 +23,9 @@ Core actions:
 
 ```
 minaosi/
-├── entrypoints/   # WXT entrypoints（content script / background）
+├── apps/
+│   ├── extension/ # WXT拡張。entrypoints/ がブラウザの入口
+│   └── api/       # Hono / Cloudflare Worker。src/ がBE実装
 ├── docs/          # プロジェクト固有のドキュメントを収集する dir（共有・tracked）
 └── .agent/        # 同上（個人メモ。gitignore される）
 ```
@@ -37,8 +39,8 @@ mise install   # mise.toml に従ってツールをインストール
 bun install
 bun run dev    # WXT dev server（拡張をロードしたブラウザが起動）
 bun run check  # typecheck
-bun run build  # 拡張を .output/ へ build
-bun run zip    # 配布用 zip を .output/ へ生成
+bun run build  # 拡張を apps/extension/.output/ へ build
+bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 ```
 
 ## 技術スタック

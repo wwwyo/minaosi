@@ -3,7 +3,7 @@ import { bindings, defineConfig, exports } from 'cf/config';
 export default defineConfig(({ mode }) => ({
   worker: {
     name: 'minaosi-review',
-    entrypoint: 'server/index.ts',
+    entrypoint: 'src/index.ts',
     compatibilityDate: '2026-09-22',
     compatibilityFlags: ['nodejs_compat'],
     exports: { ReviewConcurrency: exports.durableObject({ storage: 'sqlite' }) },

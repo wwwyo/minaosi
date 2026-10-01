@@ -32,7 +32,7 @@ UI検証では、同じrunのAPIを起動した後に次も起動する。
 orca terminal create --worktree current --title 'minaosi QA WXT' --command 'mise exec -- bun .agents/skills/qa-minaosi/scripts/runtime.ts web qa-20261001-01' --json
 ```
 
-`web-terminal.json`にhandleを記録する。WXT標準の開発サーバーAPIを使い、ブラウザの自動起動だけを無効にする。build完了と`runtime.path`配下の`.output/chrome-mv3-dev/manifest.json`を確認する。
+`web-terminal.json`にhandleを記録する。WXT標準の開発サーバーAPIを使い、ブラウザの自動起動だけを無効にする。build完了と`runtime.path`配下の`apps/extension/.output/chrome-mv3-dev/manifest.json`を確認する。
 
 拡張をロードできる、公式配布のChrome for Testingが既にインストールされている場合のみ、`MINAOSI_QA_CHROME`にその実行ファイルの絶対パスを指定して次をOrca terminalで起動する。パスは秘密ではない。未導入ならUI検証はoperational blockerとして残し、個人Chromeで代用しない。
 

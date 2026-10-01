@@ -1,6 +1,7 @@
 import { createAnthropicChat } from '@tanstack/ai-anthropic';
 
-export const INVALID_TOOL_INPUT = '校閲 API が不正なツール入力を返しました';
+import { INVALID_TOOL_INPUT } from './errors';
+export { INVALID_TOOL_INPUT } from './errors';
 
 /** 固定した TanStack adapter 版で失われる pause_turn の継続を補う。 */
 export function anthropicAdapter(

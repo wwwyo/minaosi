@@ -1,26 +1,5 @@
-import { KIND_LABEL, type DraftBlock, type FindingKind } from '../types';
-import type { LanguageRule } from '../rubric';
-
-/** LLM が返す wire 形式。content 側の Finding への正規化は controller が行う。 */
-export interface RawMatch {
-  from?: string;
-  to?: string;
-}
-
-/** kind は wire では任意文字列。parseReport が FindingKind に絞る */
-export interface RawFinding {
-  kind?: string;
-  block?: number;
-  title?: string;
-  reason?: string;
-  matches?: RawMatch[];
-  source?: { url?: string; label?: string; excerpt?: string };
-}
-
-/** kind の妥当性を検証済みの RawFinding */
-export type ReviewedFinding = RawFinding & { kind: FindingKind };
-
-const FINDING_KINDS = Object.keys(KIND_LABEL) as FindingKind[];
+import { FINDING_KINDS, validateReport, type ReviewedFinding, type ReviewBlock } from './schema';
+import type { LanguageRule } from './rubric';
 
 export const REPORT_TOOL = {
   name: 'report_findings',
@@ -34,7 +13,7 @@ export const REPORT_TOOL = {
           type: 'object',
           required: ['kind', 'block', 'title', 'reason', 'matches'],
           properties: {
-            kind: { type: 'string', enum: FINDING_KINDS },
+            kind: { type: 'string', enum: [...FINDING_KINDS] },
             block: { type: 'integer', description: '入力の [n] ブロック番号' },
             title: { type: 'string', description: '指摘の短い表題' },
             reason: { type: 'string', description: '採否を判断するに足る理由' },
@@ -87,8 +66,6 @@ ${factChecking ? '- fact は必ず web_search ツールで一次情報（公的�
 ${rules}`;
 }
 
-export type ReviewBlock = Pick<DraftBlock, 'index' | 'text'>;
-
 export function userPrompt(blocks: ReviewBlock[]): string {
   const body = blocks
     .map((b) => `[${b.index}] ${b.text || '(本文なし)'}`)
@@ -137,25 +114,4 @@ export function parseReport(data: unknown): ReviewedFinding[] | { error: string 
     );
   if (!call) return { error: '校閲結果が返りませんでした' };
   return validateReport(call.input);
-}
-
-/** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
-export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
-  const raw = input && typeof input === 'object' ? (input as { findings?: unknown }).findings : undefined;
-  if (!Array.isArray(raw)) return { error: '校閲結果の形式が不正です' };
-  return raw.filter(
-    (f): f is ReviewedFinding =>
-      !!f &&
-      typeof f === 'object' &&
-      FINDING_KINDS.includes(f.kind as FindingKind) &&
-      typeof f.title === 'string' &&
-      typeof f.reason === 'string' &&
-      Array.isArray(f.matches) &&
-      // 一次出典の URL と根拠の該当箇所が無い事実の指摘は出さない（PRD の絶対条件）
-      (f.kind !== 'fact' ||
-        (typeof f.source?.url === 'string' &&
-          /^https?:\/\//.test(f.source.url) &&
-          typeof f.source.excerpt === 'string' &&
-          f.source.excerpt.length > 0)),
-  );
 }

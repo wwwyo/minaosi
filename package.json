@@ -2,30 +2,24 @@
   "name": "minaosi",
   "private": true,
   "type": "module",
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "wxt",
-    "build": "wxt build",
-    "zip": "wxt zip",
-    "check": "wxt prepare && cf workers types && tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
-    "test": "bun test",
-    "api:dev": "cf dev --mode local",
-    "api:build": "cf build",
-    "api:deploy": "cf deploy",
-    "api:configure": "bun scripts/configure-worker.ts",
-    "api:worker:dev": "cf dev --mode gateway"
+    "dev": "bun run --cwd apps/extension dev",
+    "build": "bun run --cwd apps/extension build",
+    "zip": "bun run --cwd apps/extension zip",
+    "check": "bun run --cwd apps/api check && bun run --cwd apps/extension check",
+    "test": "bun test apps",
+    "api:dev": "bun run --cwd apps/api dev",
+    "api:build": "bun run --cwd apps/api build",
+    "api:deploy": "bun run --cwd apps/api deploy",
+    "api:configure": "bun run --cwd apps/api configure",
+    "api:worker:dev": "bun run --cwd apps/api dev:gateway"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
-    "cf": "1.0.0-beta.6",
-    "typescript": "7.0.2",
-    "wrangler": "4.136.3",
-    "wxt": "0.21.4"
-  },
-  "version": "0.1.0",
-  "dependencies": {
-    "@tanstack/ai": "0.58.0",
-    "@tanstack/ai-anthropic": "0.18.11",
-    "@tanstack/ai-cloudflare": "0.1.5",
-    "@tanstack/ai-openai": "0.23.1"
+    "typescript": "7.0.2"
   }
 }

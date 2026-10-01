@@ -1,4 +1,4 @@
-import type { HttpFetch } from '../entrypoints/minaosi/review/providers';
+import type { HttpFetch } from './schema';
 
 /** 認証付きの上流リクエストをリダイレクト先へ転送しない。 */
 export async function fetchWithoutRedirects(fetcher: HttpFetch, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

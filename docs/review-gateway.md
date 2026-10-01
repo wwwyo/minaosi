@@ -2,7 +2,7 @@
 
 拡張の background → minaosi の校閲サーバー → Cloudflare AI Gateway → 選んだ AI プロバイダーの順で通信する。校閲サーバーは TanStack AI で検索・tool calling を実行し、指摘を共通形式へ検証して返す。拡張側の UI と本文への適用は従来どおり。
 
-AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`server/review.ts` はGateway経由の校閲、`server/opencode.ts` はローカル試用のOpenAI互換経路を担当する。`server/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
+AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`apps/api/src/review.ts` はGateway経由の校閲、`apps/api/src/opencode.ts` はローカル試用のOpenAI互換経路を担当する。`apps/api/src/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
 
 ## 標準モードとBYOK
 
@@ -44,7 +44,7 @@ mise exec -- bun run dev
 
 ## Worker の公開設定
 
-Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。Workerの設定の正本は `cloudflare.config.ts`。開発・ビルド・デプロイの入口はcfに統一する。`wrangler.config.ts` はcfが利用する既存のbundler設定で、Worker名・binding・互換性設定は重複させない。
+Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。Workerの設定の正本は `apps/api/cloudflare.config.ts`。開発・ビルド・デプロイの入口はcfに統一する。`apps/api/wrangler.config.ts` はcfが利用する既存のbundler設定で、Worker名・binding・互換性設定は重複させない。
 
 ```bash
 mise exec -- bun run api:dev
@@ -71,22 +71,26 @@ mise exec -- bun test
 
 Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・リクエストサイズ制限を持つ。レート制限はCloudflare拠点ごとの近似的な制限で、厳密な全世界共通の利用上限ではない。
 
-標準サービスの同時実行は全利用者・モデル合計で10件に制限する。`cloudflare.config.ts` の `REVIEW_POLICY` が上限と実行枠の有効期間（240秒）を指定し、`REVIEW_CONCURRENCY` がSQLite-backed Durable Objectへ接続する。Workerは同じDOインスタンス名 `standard` に枠の取得・解放を依頼する。将来別Workerから共有する場合も、同じnamespaceとインスタンス名を参照する必要がある。
+標準サービスの同時実行は全利用者・モデル合計で10件に制限する。`apps/api/cloudflare.config.ts` の `REVIEW_POLICY` が上限と実行枠の有効期間（240秒）を指定し、`REVIEW_CONCURRENCY` がSQLite-backed Durable Objectへ接続する。Workerは同じDOインスタンス名 `standard` に枠の取得・解放を依頼する。将来別Workerから共有する場合も、同じnamespaceとインスタンス名を参照する必要がある。
 
 DOは有効な枠の数を確認し、新しい枠を保存する処理をトランザクションで実行する。10件実行中なら待ち行列には入れず429を返す。校閲が完了・失敗したら枠を解放し、Workerの異常終了で解放できなかった枠は期限後の次の取得時に削除する。DOの保存内容はランダムな枠IDと期限だけで、原稿・キー・IPを保存しない。DOの再起動でもSQLiteの枠は保持される。bindingが未設定・取得に失敗した場合は制限を迂回してAIを呼ばない。解放の失敗時は校閲結果を返し、本文を含まない `review_lease_release_failed` イベントだけを記録する。
 
 BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用する。1日100件の利用上限は検討値で、日次カウントはまだ実装していない。同時実行上限は累積料金の上限ではないため、標準モードを一般公開する際は別途費用上限を設ける。
 
-Workerの実行入口は `server/index.ts`。通常のリクエスト処理と、Workers固有のDOクラスをここでexportする。DOクラスはWorker用の型チェックで検証し、BunのHTTP処理テストにはWorkersのruntime moduleを読み込ませない。
+Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処理と、Workers固有のDOクラスをここでexportする。DOクラスはWorker用の型チェックで検証し、BunのHTTP処理テストにはWorkersのruntime moduleを読み込ませない。
 
 ## 実行結果のログ
 
 `POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
 
-ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `cloudflare.config.ts` の `observability.logs` にあり、サンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。
+ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `apps/api/cloudflare.config.ts` の `observability.logs` にあり、サンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。
 
-型チェックでは `cf workers types` でbinding・runtimeの型を生成し、Worker用の `server/tsconfig.json` と拡張用の型チェックを分ける。Workersの型をブラウザ側へ混ぜるとDOMの型と衝突するため、生成物は拡張用の対象から除外する。
+型チェックでは `cf workers types` でbinding・runtimeの型を生成し、Worker用の `apps/api/src/tsconfig.json` と拡張用の型チェックを分ける。Workersの型をブラウザ側へ混ぜるとDOMの型と衝突するため、生成物は拡張用の対象から除外する。
 
 参照: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)、[ローカル開発](https://developers.cloudflare.com/workers/local-development/)。
 
 参照: [TanStack Cloudflare adapter](https://tanstack.com/ai/latest/docs/adapters/cloudflare)、[Cloudflare BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)。
+
+## Hono RPC
+
+HTTPルートと入力検証は`apps/api/src/app.ts`に定義する。`apps/api/src/rpc.ts`はその`AppType`などの型だけをexportし、拡張は`hc<AppType>`でPOSTする。プロンプトと校閲ルールはAPIだけが持ち、拡張はサーバーの設定やAI SDKを実行時にimportしない。Hono RPCの型推論に加え、APIの入力・AI応答とブラウザの受信境界には実行時検証を残す。

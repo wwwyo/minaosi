@@ -1,0 +1,31 @@
+{
+  "name": "@minaosi/api",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "exports": {
+    "./rpc": {
+      "types": "./src/rpc.ts"
+    }
+  },
+  "scripts": {
+    "dev": "cf dev --mode local",
+    "dev:gateway": "cf dev --mode gateway",
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "configure": "bun scripts/configure-worker.ts",
+    "check": "cf workers types && tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tanstack/ai": "0.58.0",
+    "@tanstack/ai-anthropic": "0.18.11",
+    "@tanstack/ai-cloudflare": "0.1.5",
+    "@tanstack/ai-openai": "0.23.1",
+    "hono": "4.13.9"
+  },
+  "devDependencies": {
+    "cf": "1.0.0-beta.6",
+    "wrangler": "4.136.3"
+  }
+}

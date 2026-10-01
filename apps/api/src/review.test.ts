@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { reviewThroughGateway } from './review';
-import type { HttpFetch } from '../entrypoints/minaosi/review/providers';
+import type { HttpFetch } from './schema';
 
 const env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token' };
 const finding = { kind: 'typo' as const, block: 0, title: '誤字', reason: '理由', matches: [{ from: '原稿', to: '修正' }] };

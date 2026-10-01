@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const [command, runId] = process.argv.slice(2);
@@ -22,10 +22,20 @@ if (command === 'prepare') {
   save('source-head.txt', shell(['git', 'rev-parse', 'HEAD']).text + '\n');
   save('source-status.txt', shell(['git', 'status', '--short']).text + '\n');
   // Source snapshots keep QA builds and state out of another session's output dirs.
-  for (const name of ['server', 'entrypoints', 'public', 'cloudflare.config.ts', 'wrangler.config.ts', 'wxt.config.ts', 'package.json', 'bun.lock', 'tsconfig.json']) {
-    if (existsSync(join(root, name))) cpSync(join(root, name), join(runtime, name), { recursive: true });
+  for (const name of ['apps', 'package.json', 'bun.lock', 'bunfig.toml', 'tsconfig.json']) {
+    if (existsSync(join(root, name))) cpSync(join(root, name), join(runtime, name), { recursive: true, filter: (source) => !['node_modules', '.output', '.wxt', '.cloudflare', '.wrangler', 'worker-configuration.d.ts'].includes(basename(source)) && !basename(source).startsWith('.env') && !basename(source).startsWith('.dev.vars') });
   }
   symlinkSync(join(root, 'node_modules'), join(runtime, 'node_modules'), 'dir');
+  for (const app of ['api', 'extension']) {
+    const destination = join(runtime, 'apps', app, 'node_modules');
+    mkdirSync(destination, { recursive: true });
+    for (const dependency of readdirSync(join(root, 'apps', app, 'node_modules'))) {
+      if (dependency === '@minaosi') continue;
+      symlinkSync(realpathSync(join(root, 'apps', app, 'node_modules', dependency)), join(destination, dependency), 'dir');
+    }
+  }
+  mkdirSync(join(runtime, 'apps/extension/node_modules/@minaosi'), { recursive: true });
+  symlinkSync(join(runtime, 'apps/api'), join(runtime, 'apps/extension/node_modules/@minaosi/api'), 'dir');
   save('ports.json', JSON.stringify({ api: 18787, web: 13011 }));
   console.log(evidence);
   process.exit(0);
@@ -51,13 +61,13 @@ if (command === 'api' || command === 'web' || command === 'browser') {
   if (command === 'browser') {
     const binary = process.env.MINAOSI_QA_CHROME;
     if (!binary || !existsSync(binary)) throw new Error('Set MINAOSI_QA_CHROME to an installed Chrome for Testing executable; do not use the personal browser.');
-    if (!existsSync(join(runtime, '.output/chrome-mv3-dev/manifest.json'))) throw new Error('Start web and wait for the development extension build first.');
+    if (!existsSync(join(runtime, 'apps/extension/.output/chrome-mv3-dev/manifest.json'))) throw new Error('Start web and wait for the development extension build first.');
     const landing = `data:text/html,${encodeURIComponent(`<title>minaosi QA ${runId}</title><p>Isolated QA browser</p>`)}`;
-    args = [binary, `--user-data-dir=${join(runtime, 'chrome-profile')}`, `--load-extension=${join(runtime, '.output/chrome-mv3-dev')}`, landing];
+    args = [binary, `--user-data-dir=${join(runtime, 'chrome-profile')}`, `--load-extension=${join(runtime, 'apps/extension/.output/chrome-mv3-dev')}`, landing];
   } else {
     args = command === 'api'
       ? ['bun', 'run', 'api:dev', '--', '--port', String(ports.api), '--persist-to', join(runtime, 'worker-state')]
-      : ['node', join(import.meta.dir, 'start-web.mjs'), runtime, String(ports.web)];
+      : ['node', join(import.meta.dir, 'start-web.mjs'), join(runtime, 'apps/extension'), String(ports.web)];
   }
   save(`${command}.pid`, String(process.pid));
   save(`${command}.action.txt`, JSON.stringify({ cwd: runtime, args }, null, 2));
@@ -79,7 +89,7 @@ if (command === 'doctor' || command === 'doctor-ui') {
     const webOwner = Number(readFileSync(file('web.pid'), 'utf8'));
     const webPids = listeners(ports.web);
     if (!webPids.length || !webPids.every((pid) => belongsTo(pid, webOwner))) throw new Error('Web listener not owned by this run.');
-    const manifestPath = join(runtime, '.output/chrome-mv3-dev/manifest.json');
+    const manifestPath = join(runtime, 'apps/extension/.output/chrome-mv3-dev/manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (manifest.name !== 'minaosi' || !manifest.side_panel || !manifest.options_ui) throw new Error('Expected extension entrypoints missing.');
     save('doctor-manifest.json', JSON.stringify(manifest, null, 2));
