@@ -5,5 +5,5 @@
       "bun"
     ]
   },
-  "exclude": ["**/node_modules", ".output", ".cloudflare", "worker-configuration.d.ts"]
+  "exclude": ["**/node_modules", ".output", ".cloudflare", "worker-configuration.d.ts", "server/index.ts", "server/concurrency.ts"]
 }

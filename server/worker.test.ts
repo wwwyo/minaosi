@@ -83,7 +83,10 @@ test('不正なツール入力の安全な診断だけを利用者へ返す', as
   expect(await result.json()).toEqual({ error: '校閲 API が不正なツール入力を返しました' });
 });
 
-const standardEnv: Env = { ...env, DEFAULT_REVIEW_PROVIDER: 'anthropic', DEFAULT_REVIEW_MODEL: 'operator-model', DEFAULT_REVIEW_API_KEY: 'operator-key' };
+const standardEnv: Env = {
+  ...env, DEFAULT_REVIEW_PROVIDER: 'anthropic', DEFAULT_REVIEW_MODEL: 'operator-model', DEFAULT_REVIEW_API_KEY: 'operator-key',
+  REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'fixture-lease', release: async () => {} }) },
+};
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
   const response = await handleRequest(request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }), standardEnv, async (input, key) => {
     expect(input).toEqual({ provider: 'anthropic', model: 'operator-model', blocks: body.blocks });
@@ -155,4 +158,67 @@ test('bindingの例外も安全な500応答とメタデータだけにする', a
   } finally {
     failure.mockRestore();
   }
+});
+
+describe('標準サービスの同時実行枠', () => {
+  const standardRequest = () => request({ mode: 'default', blocks: body.blocks });
+
+  test('上限到達時はAIを呼ばず429を返し、他の実行枠を解放しない', async () => {
+    const response = await handleRequest(standardRequest(), {
+      ...standardEnv,
+      REVIEW_CONCURRENCY: { getByName: (name) => {
+        expect(name).toBe('standard');
+        return { acquire: async () => null, release: async () => { throw new Error('他の枠を解放してはいけない'); } };
+      } },
+    }, neverReview);
+    expect(response.status).toBe(429);
+  });
+
+  test('校閲の成功・失敗とも取得した枠だけを解放する', async () => {
+    for (const fail of [false, true]) {
+      const events: string[] = [];
+      const response = await handleRequest(standardRequest(), {
+        ...standardEnv,
+        REVIEW_CONCURRENCY: { getByName: () => ({
+          acquire: async () => { events.push('acquire'); return 'own-lease'; },
+          release: async (id) => { events.push(`release:${id}`); },
+        }) },
+      }, async () => {
+        events.push('review');
+        if (fail) throw new Error('上流が失敗');
+        return [];
+      });
+      expect(response.status).toBe(fail ? 502 : 200);
+      expect(events).toEqual(['acquire', 'review', 'release:own-lease']);
+    }
+  });
+
+  test('実行枠のbindingが欠ける・取得が失敗する場合にAIを呼ばない', async () => {
+    expect((await handleRequest(standardRequest(), { ...standardEnv, REVIEW_CONCURRENCY: undefined }, neverReview)).status).toBe(503);
+    expect((await handleRequest(standardRequest(), {
+      ...standardEnv,
+      REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => { throw new Error('fixture-key'); }, release: async () => {} }) },
+    }, neverReview)).status).toBe(500);
+  });
+
+  test('BYOKは運営負担の実行枠を使わない', async () => {
+    const response = await handleRequest(request(), {
+      ...standardEnv,
+      REVIEW_CONCURRENCY: { getByName: () => { throw new Error('標準サービスの枠を使ってはいけない'); } },
+    }, async () => []);
+    expect(response.status).toBe(200);
+  });
+
+  test('解放の失敗で校閲結果を失わず、生の例外をログに残さない', async () => {
+    const failure = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = await handleRequest(standardRequest(), {
+        ...standardEnv,
+        REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'own-lease', release: async () => { throw new Error('fixture-key 原稿'); } }) },
+      }, async () => []);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ findings: [] });
+      expect(failure.mock.calls).toEqual([[{ event: 'review_lease_release_failed' }]]);
+    } finally { failure.mockRestore(); }
+  });
 });

@@ -5,7 +5,13 @@ import { isReviewProvider, type ProviderReviewInput } from '../entrypoints/minao
 import type { InferEnv, UnwrapConfig } from 'cf/config';
 import type config from '../cloudflare.config';
 
-export type Env = GatewayEnv & Partial<InferEnv<UnwrapConfig<typeof config>['worker']>> & {
+export interface ConcurrencyService {
+  acquire(): Promise<string | null>;
+  release(id: string): Promise<void>;
+}
+
+export type Env = GatewayEnv & Partial<Omit<InferEnv<UnwrapConfig<typeof config>['worker']>, 'REVIEW_CONCURRENCY'>> & {
+  REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };
   DEFAULT_REVIEW_PROVIDER?: string;
   DEFAULT_REVIEW_MODEL?: string;
   DEFAULT_REVIEW_API_KEY?: string;
@@ -107,12 +113,28 @@ async function reviewRequest(request: Request, env: Env, reviewer: Reviewer, ope
   if (!localOpenCode && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
     return json({ error: 'Cloudflare AI Gateway の接続設定がまだ完了していません' }, 503);
   }
+  let concurrency: ConcurrencyService | undefined;
+  let lease: string | null = null;
+  if (input.mode === 'default') {
+    if (!env.REVIEW_CONCURRENCY) return json({ error: '標準サービスの実行枠がまだ準備できていません' }, 503);
+    concurrency = env.REVIEW_CONCURRENCY.getByName('standard');
+    lease = await concurrency.acquire();
+    if (!lease) return json({ error: '校閲が混み合っています。少し待ってからお試しください' }, 429);
+  }
   try {
     const findings = localOpenCode ? await opencodeReviewer(selected, apiKey) : await reviewer(selected, apiKey, env);
     return json({ findings });
   } catch (error) {
     // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
     return json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
+  } finally {
+    if (concurrency && lease) {
+      try { await concurrency.release(lease); }
+      catch {
+        // 枠の解放に失敗しても校閲結果は失わない。枠は有効期限で回収される。
+        console.error({ event: 'review_lease_release_failed' });
+      }
+    }
   }
 }
 
