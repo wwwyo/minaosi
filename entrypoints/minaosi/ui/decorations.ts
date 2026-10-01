@@ -3,6 +3,7 @@ import { resolveSite, undoSite } from '../surfaces/resolve';
 import { PAGE_HIGHLIGHT_CSS } from './styles';
 import { ICON_APPLY } from './icons';
 import { lineBoxes, suggestionPosition, type Box } from './suggestion-layout';
+import { GeometryCache } from './geometry-cache';
 
 /**
  * 本文上の重ね表示。contenteditable の DOM には一切触れず、
@@ -55,6 +56,9 @@ export class Decorations {
   private tipLine = 0;
   /** 本文 or 指摘集合が変わったか。scroll/resize では解決し直さず位置だけ追従する */
   private dirty = true;
+  private geometry = new GeometryCache<Map<Site, ChipTypography>>();
+  private layoutTimer = 0;
+  private ro: ResizeObserver;
 
   constructor(
     private shadow: ShadowRoot,
@@ -87,10 +91,18 @@ export class Decorations {
       this.schedule();
     });
     this.mo.observe(this.editor, MO_OPTS);
-    const onScroll = () => this.schedule();
-    const onResize = () => this.schedule();
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && this.editor.contains(event.target)) this.deferLayout();
+      else this.schedule();
+    };
+    const onResize = () => this.deferLayout();
+    this.ro = new ResizeObserver(() => {
+      if (this.sites.length) this.deferLayout();
+    });
+    this.ro.observe(this.editor);
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+    document.fonts.addEventListener('loadingdone', onResize);
     const interval = setInterval(() => this.schedule(), 1500);
     const onLeave = (e: Event) => this.handleLeave(e);
     this.ovl.addEventListener('mouseover', (e) => this.handleOver(e));
@@ -110,8 +122,10 @@ export class Decorations {
 
     this.disposers.push(
       () => this.mo?.disconnect(),
+      () => this.ro.disconnect(),
       () => window.removeEventListener('scroll', onScroll, { capture: true }),
       () => window.removeEventListener('resize', onResize),
+      () => document.fonts.removeEventListener('loadingdone', onResize),
       () => clearInterval(interval),
     );
   }
@@ -121,6 +135,8 @@ export class Decorations {
     this.editor = editor;
     this.mo?.disconnect();
     this.mo?.observe(editor, MO_OPTS);
+    this.ro.disconnect();
+    this.ro.observe(editor);
     this.dirty = true;
     this.schedule();
   }
@@ -140,6 +156,18 @@ export class Decorations {
       this.raf = 0;
       this.recompute();
     });
+  }
+
+  private deferLayout() {
+    this.geometry.invalidate();
+    // resize中は古い折り返し座標で本文を覆わず、全文計測は操作が止まってから一度行う。
+    this.ovl.hidden = true;
+    this.hideTip();
+    clearTimeout(this.layoutTimer);
+    this.layoutTimer = window.setTimeout(() => {
+      this.layoutTimer = 0;
+      this.schedule();
+    }, 100);
   }
 
   private buildSites(): Site[] {
@@ -190,6 +218,7 @@ export class Decorations {
 
   private recompute() {
     if (this.dirty) {
+      this.geometry.invalidate();
       // 本文・指摘集合の変化時だけテキスト解決をやり直す。
       // Custom Highlight はレイアウト変化に自動追従するので dirty 時のみ張り直す
       this.delHl?.clear();
@@ -205,26 +234,38 @@ export class Decorations {
       }
       this.dirty = false;
     }
+    const editorBounds = this.editor.getBoundingClientRect();
+    if (this.geometry.sizeChanged(editorBounds)) this.deferLayout();
+    if (this.layoutTimer) return;
+    const { occupied, data: typography } = this.geometry.read(editorBounds, window.innerHeight, () => {
+      const typography = new Map<Site, ChipTypography>();
+      const suggestions = this.sites.filter((s) => s.range && (s.kind === 'suggest' || s.kind === 'applied'));
+      if (!suggestions.length) return { rects: [], data: typography };
+      const rects = this.textRects(this.editor);
+      for (const el of this.editor.querySelectorAll('img, video, iframe, hr')) {
+        const { left, right, top, bottom } = el.getBoundingClientRect();
+        rects.push({ left, right, top, bottom });
+      }
+      for (const s of suggestions) {
+        const node = s.range!.startContainer;
+        const style = getComputedStyle(node instanceof Element ? node : node.parentElement!);
+        const block = s.range!.commonAncestorContainer;
+        const width = (block instanceof Element ? block : block.parentElement!).getBoundingClientRect().width;
+        const properties: [string, string][] = ['font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height']
+          .map((property) => [property, style.getPropertyValue(property)]);
+        typography.set(s, { properties, maxWidth: Math.max(24, Math.min(width, window.innerWidth - 16)) });
+      }
+      return { rects, data: typography };
+    });
     // scroll/resize では解決し直さず、生きている Range から位置だけ取り直す
     for (const s of this.sites) {
       s.rects = s.range ? [...s.range.getClientRects()] : s.el ? [s.el.getBoundingClientRect()] : [];
     }
 
+    this.ovl.hidden = false;
     this.ovl.textContent = '';
     this.candidates.clear();
-    const occupied = this.textRects(this.editor).filter((r) => r.bottom >= 0 && r.top <= window.innerHeight);
-    for (const el of this.editor.querySelectorAll('img, video, iframe, hr')) occupied.push(el.getBoundingClientRect());
     const chips: { el: HTMLElement; s: Site; del: boolean }[] = [];
-    const editorBounds = this.editor.getBoundingClientRect();
-    const typography = new Map(this.sites.filter((s) => s.range).map((s) => {
-      const node = s.range!.startContainer;
-      const style = getComputedStyle(node instanceof Element ? node : node.parentElement!);
-      const block = s.range!.commonAncestorContainer;
-      const width = (block instanceof Element ? block : block.parentElement!).getBoundingClientRect().width;
-      const properties: [string, string][] = ['font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height']
-        .map((property) => [property, style.getPropertyValue(property)]);
-      return [s, { properties, maxWidth: Math.max(24, Math.min(width, window.innerWidth - 16)) }];
-    }));
     for (const s of this.sites) {
       const selected = s.fid === this.selectedId;
       if (s.kind === 'suggest' && s.range) {
@@ -435,6 +476,7 @@ export class Decorations {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
     clearTimeout(this.tipTimer);
+    clearTimeout(this.layoutTimer);
     this.disposers.forEach((d) => d());
     this.delHl?.clear();
     this.selHl?.clear();
@@ -449,4 +491,4 @@ export class Decorations {
   }
 }
 
-const MO_OPTS: MutationObserverInit = { childList: true, characterData: true, subtree: true };
+const MO_OPTS: MutationObserverInit = { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'dir', 'width', 'height'] };
