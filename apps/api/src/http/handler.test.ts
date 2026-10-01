@@ -162,6 +162,22 @@ test('DeepSeekのBYOKは利用者のキーを使い、標準モードはキー�
   expect(standardKeyless).toBe(true);
 });
 
+test('標準とBYOKの502はそれぞれの利用者が対応できる文言を返す', async () => {
+  const standard = await handleRequest(request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }), standardEnv, neverReview, neverReview, async () => { throw new Error('上流が失敗'); });
+  expect(standard.status).toBe(502);
+  expect(await standard.json()).toEqual({ error: '標準校閲に失敗しました。時間を置いて再試行し、続く場合は運営者へ連絡してください' });
+  const byok = await handleRequest(request(), standardEnv, async () => { throw new Error('上流が失敗'); });
+  expect(byok.status).toBe(502);
+  expect((await byok.json() as { error: string }).error).toContain('API key');
+});
+
+test('/health は標準とBYOKの設定状態を分けて返す', async () => {
+  const ready = await handleRequest(new Request('https://review.example.com/health'), standardEnv, neverReview);
+  expect(await ready.json()).toEqual({ ok: true, configured: true, byokConfigured: true });
+  const partial = await handleRequest(new Request('https://review.example.com/health'), { AI: standardEnv.AI }, neverReview);
+  expect(await partial.json()).toEqual({ ok: true, configured: true, byokConfigured: false });
+});
+
 test('BYOKのキー未設定・モード指定の誤りを標準課金へフォールバックしない', async () => {
   expect((await handleRequest(request(body, { 'x-minaosi-api-key': '' }), standardEnv, neverReview)).status).toBe(401);
   expect((await handleRequest(request({ ...body, mode: 'other' }), standardEnv, neverReview)).status).toBe(400);
