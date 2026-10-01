@@ -21,6 +21,9 @@ export default defineConfig(({ mode }) => ({
       // 標準経路をGatewayログへ流す場合だけ設定する。binding経路はpayload抑制ヘッダーを送れないため、本文非保存はGateway側の設定に依存する。
       REVIEW_GATEWAY_ID: bindings.text<string>(''),
       ALLOWED_ORIGINS: bindings.secret(),
+      // Turnstile widget の sitekey。秘密ではなくクライアントへ配る値。開発時は always-pass のテストキー（invisible）。
+      TURNSTILE_SITE_KEY: bindings.text<string>(mode === 'development' ? '1x00000000000000000000BB' : ''),
+      TURNSTILE_SECRET_KEY: bindings.secret(),
       LOCAL_OPENCODE_BYOK: bindings.text<string>(mode === 'development' ? 'true' : 'false'),
       REVIEW_POLICY: bindings.json<{ concurrencyLimit: number; leaseTtlMs: number }>({
         concurrencyLimit: 10,

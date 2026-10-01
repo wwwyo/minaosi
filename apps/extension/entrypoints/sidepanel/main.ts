@@ -1,5 +1,6 @@
 import { browser } from '#imports';
 import { PanelConnection } from '../minaosi/panel-connection';
+import { TurnstileGate } from '../minaosi/turnstile';
 import { wirePanel } from '../minaosi/ui/panel';
 import { updatePanel } from '../minaosi/ui/panel-view';
 import { PANEL_CSS } from '../minaosi/ui/styles';
@@ -24,13 +25,42 @@ const connection = new PanelConnection(
 );
 const send = connection.send.bind(connection);
 
+// 「見直す」の前に人間性の確認トークンを取る。widget は校閲サーバーの /turnstile を
+// iframe で開き、postMessage でトークンを受け取る（詳細は docs/review-gateway.md）。
+const turnstile = TurnstileGate.fromReviewEndpoint(import.meta.env.WXT_REVIEW_API_URL ?? '');
+let runInFlight = false;
+async function runReview() {
+  // トークン取得中の連打を無視する（run コマンド側の running 状態が立つのはトークン到着後）
+  if (runInFlight) return;
+  runInFlight = true;
+  try {
+    if (!turnstile) {
+      send({ action: 'run', turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
+      return;
+    }
+    // 確認の応答待ちに別タブへ切り替わっていると、そのタブの原稿送信・エラー表示に化ける
+    const tabAtStart = connection.activeTabId;
+    const switched = () => connection.activeTabId !== tabAtStart;
+    try {
+      const token = await turnstile.acquire();
+      if (switched()) return;
+      send({ action: 'run', turnstile: { token } });
+    } catch (e) {
+      if (switched()) return;
+      send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
+    }
+  } finally {
+    runInFlight = false;
+  }
+}
+
 function showUnavailable() {
   root.dataset.view = '';
   root.innerHTML = '<div class="mn"><div class="empty">noteの原稿編集画面を開いてください</div></div>';
 }
 
 wirePanel(root, {
-  onRun: () => send({ action: 'run' }),
+  onRun: () => { void runReview(); },
   onFilter: (filter) => send({ action: 'filter', filter }),
   onSelect: (id) => send({ action: 'select', id }),
   onApplyFinding: (id) => send({ action: 'apply', id }),
@@ -59,6 +89,7 @@ browser.tabs.onUpdated.addListener((id, change) => {
 const [active] = await browser.tabs.query({ active: true, windowId: currentWindow.id });
 connection.connectToTab(active?.id);
 window.addEventListener('pagehide', () => {
+  turnstile?.dispose();
   browser.runtime.onMessage.removeListener(onVisibility);
   browser.runtime.onMessage.removeListener(onContentReady);
   connection.dispose();

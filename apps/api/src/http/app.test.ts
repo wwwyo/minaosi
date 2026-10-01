@@ -13,11 +13,11 @@ test('Hono RPCのクライアントが実際のルートへ原稿とBYOKを送�
       expect(key).toBe('fixture-byok');
       reviewed = true;
       return [{ kind: 'typo', block: 0, title: '挨拶の誤字', reason: '正しくはこんにちは', matches: [{ from: 'こんにちわ', to: 'こんにちは' }] }];
-    }),
+    }, undefined, async () => ({ ok: true })),
   });
   const response = await client.review.$post({
     json: { provider: 'opencode-go', model: 'space-bunny-free', blocks: [{ index: 0, text: 'こんにちわ' }] },
-  }, { headers: { 'x-minaosi-api-key': 'fixture-byok' } });
+  }, { headers: { 'x-minaosi-api-key': 'fixture-byok', 'cf-turnstile-response': 'XXXX.DUMMY.TOKEN.XXXX' } });
   expect(response.status).toBe(200);
   if (response.status === 200) expect((await response.json()).findings[0]?.matches?.[0]?.to).toBe('こんにちは');
   expect(reviewed).toBe(true);
