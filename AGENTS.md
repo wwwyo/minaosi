@@ -58,6 +58,12 @@ bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 
 - 学び・ハマりどころ・過去の失敗は `.agents/skills/<topic>/` を参照
 
+### Hono
+
+- Honoのルーティング・middleware・validation・RPC・テストでは、公式の `.agents/skills/hono/SKILL.md` を参照する。
+- skillのWrangler向け手順より、このrepoの `cf`＋Cloudflare Vite plugin構成を優先する。bindingsの型生成は `bun run --cwd apps/api check` 内の `cf workers types` を使い、bindings付きの実通信検証は `bun run api:dev` のworkerdで行う。
+- skill内の `@hono/cli@next` は自動追加しない。CLIを追加するときもrepoのexact指定・cooldown 7日のルールに従う。
+
 ### Cloudflare
 
 - CloudflareのCLI操作は `.agents/skills/cloudflare-cf/SKILL.md` を使う。`cf` を優先し、コマンドは匿名の操作説明で `cf cli search` から探す。
