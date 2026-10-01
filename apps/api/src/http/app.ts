@@ -3,8 +3,8 @@ import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
 import { INVALID_TOOL_INPUT } from '../review/errors';
-import { ModelSchema, ReviewInputSchema, isReviewProvider } from '../review/input';
-import type { ProviderReviewInput, ReviewedFinding } from '../review/schema';
+import { ModelSchema, ReviewInputSchema } from '../review/input';
+import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding } from '../review/schema';
 import { readBoundedBody } from './body';
 
 export interface ConcurrencyService {
@@ -12,13 +12,13 @@ export interface ConcurrencyService {
   release(id: string): Promise<void>;
 }
 interface ReviewBindings {
-  CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_AI_GATEWAY_ID: string;
-  CF_AIG_TOKEN: string;
+  AI?: AiBinding;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_AI_GATEWAY_ID?: string;
+  CF_AIG_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
-  DEFAULT_REVIEW_PROVIDER?: string;
   DEFAULT_REVIEW_MODEL?: string;
-  DEFAULT_REVIEW_API_KEY?: string;
+  REVIEW_GATEWAY_ID?: string;
   LOCAL_OPENCODE_BYOK?: string;
   REVIEW_RATE_LIMIT?: { limit(input: { key: string }): Promise<{ success: boolean }> };
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };
@@ -28,6 +28,7 @@ interface RpcEnv {
     bindings: ReviewBindings;
     reviewer: (input: ProviderReviewInput, key: string, env: ReviewBindings) => Promise<ReviewedFinding[]>;
     opencodeReviewer: (input: ProviderReviewInput, key: string) => Promise<ReviewedFinding[]>;
+    standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewedFinding[]>;
   };
 }
 
@@ -69,7 +70,7 @@ export const app = new Hono<RpcEnv>()
   })
   .get('/health', c => {
     const env = c.env.bindings;
-    return c.json({ ok: true, configured: !!(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_AI_GATEWAY_ID && env.CF_AIG_TOKEN) }, 200);
+    return c.json({ ok: true, configured: !!env.AI, byokConfigured: !!(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_AI_GATEWAY_ID && env.CF_AIG_TOKEN) }, 200);
   })
   .options('/review', c => {
     c.header('access-control-allow-methods', 'POST');
@@ -79,17 +80,16 @@ export const app = new Hono<RpcEnv>()
   .post('/review', reviewBoundary, reviewInput, async c => {
     const request = c.req.raw;
     const url = new URL(request.url);
-    const { bindings: env, reviewer, opencodeReviewer } = c.env;
+    const { bindings: env, reviewer, opencodeReviewer, standardReviewer } = c.env;
     const input = c.req.valid('json');
-    let selected: ProviderReviewInput;
-    let apiKey: string;
+    let standard: { model: string; blocks: ReviewBlock[] } | undefined;
+    let selected: ProviderReviewInput | undefined;
+    let apiKey = '';
     if (input.mode === 'default') {
       const model = ModelSchema.safeParse(env.DEFAULT_REVIEW_MODEL);
-      if (!isReviewProvider(env.DEFAULT_REVIEW_PROVIDER) || !model.success || !env.DEFAULT_REVIEW_API_KEY?.trim()) {
-        return c.json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
-      }
-      selected = { provider: env.DEFAULT_REVIEW_PROVIDER, model: model.data, blocks: input.blocks };
-      apiKey = env.DEFAULT_REVIEW_API_KEY.trim();
+      if (!model.success) return c.json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
+      if (!env.AI) return c.json({ error: '標準校閲のAI接続がまだ準備できていません' }, 503);
+      standard = { model: model.data, blocks: input.blocks };
     } else {
       apiKey = request.headers.get('x-minaosi-api-key')?.trim() ?? '';
       // BYOKでキーを忘れても、運営者の課金へ切り替えない。
@@ -98,11 +98,11 @@ export const app = new Hono<RpcEnv>()
     }
 
     const loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-    const localOpenCode = selected.provider === 'opencode-go' && loopback && env.LOCAL_OPENCODE_BYOK === 'true' && input.mode !== 'default';
-    if (selected.provider === 'opencode-go' && !localOpenCode) {
+    const localOpenCode = selected?.provider === 'opencode-go' && loopback && env.LOCAL_OPENCODE_BYOK === 'true';
+    if (selected?.provider === 'opencode-go' && !localOpenCode) {
       return c.json({ error: 'OpenCode Goの試用経路はローカルBYOKで利用できます' }, 503);
     }
-    if (!localOpenCode && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
+    if (selected && !localOpenCode && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
       return c.json({ error: 'Cloudflare AI Gateway の接続設定がまだ完了していません' }, 503);
     }
     let concurrency: ConcurrencyService | undefined;
@@ -114,11 +114,16 @@ export const app = new Hono<RpcEnv>()
       if (!lease) return c.json({ error: '校閲が混み合っています。少し待ってからお試しください' }, 429);
     }
     try {
-      const findings = localOpenCode ? await opencodeReviewer(selected, apiKey) : await reviewer(selected, apiKey, env);
+      const findings = standard
+        ? await standardReviewer(standard, env)
+        : localOpenCode ? await opencodeReviewer(selected!, apiKey) : await reviewer(selected!, apiKey, env);
       return c.json({ findings }, 200);
     } catch (error) {
       // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
-      return c.json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
+      const failure = input.mode === 'default'
+        ? '標準校閲に失敗しました。時間を置いて再試行し、続く場合は運営者へ連絡してください'
+        : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください';
+      return c.json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : failure }, 502);
     } finally {
       if (concurrency && lease) {
         try { await concurrency.release(lease); }

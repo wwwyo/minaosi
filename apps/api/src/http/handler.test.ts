@@ -117,39 +117,65 @@ test('不正なツール入力の安全な診断だけを利用者へ返す', as
 });
 
 const standardEnv: Env = {
-  ...env, DEFAULT_REVIEW_PROVIDER: 'anthropic', DEFAULT_REVIEW_MODEL: 'operator-model', DEFAULT_REVIEW_API_KEY: 'operator-key',
+  ...env, AI: { run: () => { throw new Error('AIを呼んではいけない'); } } as Env['AI'], DEFAULT_REVIEW_MODEL: '@cf/deepseek-ai/deepseek-v4-flash-0731',
   REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'fixture-lease', release: async () => {} }) },
 };
+const neverStandard = async () => { throw new Error('AI bindingを呼んではいけない'); };
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
-  const response = await handleRequest(request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }), standardEnv, async (input, key) => {
-    expect(input).toEqual({ provider: 'anthropic', model: 'operator-model', blocks: body.blocks });
-    expect(key).toBe('operator-key');
-    return [];
-  });
+  // Gateway用secretがなくても、AI bindingだけで標準校閲は成立する。
+  const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY };
+  const response = await handleRequest(
+    request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }),
+    minimal, neverReview, neverReview,
+    async (input, bindings) => {
+      expect(input).toEqual({ model: '@cf/deepseek-ai/deepseek-v4-flash-0731', blocks: body.blocks });
+      expect(bindings.AI).toBe(minimal.AI);
+      return [];
+    },
+  );
   expect(response.status).toBe(200);
-  expect(await response.text()).not.toContain('operator-key');
 });
 
 test('標準モードの運営設定が未完了なら実行しない', async () => {
   expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }), env, neverReview)).status).toBe(503);
-  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: '__proto__' }, neverReview)).status).toBe(503);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, AI: undefined }, neverReview, neverReview, neverStandard)).status).toBe(503);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_MODEL: '../../evil' }, neverReview)).status).toBe(503);
 });
 
-test('DeepSeekの標準モードとBYOKはそれぞれのキーを使い、他社のキーへ切り替えない', async () => {
-  const configured = { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'deepseek', DEFAULT_REVIEW_MODEL: 'deepseek-flash' };
+test('DeepSeekのBYOKは利用者のキーを使い、標準モードはキーを送信しない', async () => {
   const deepseek = { ...body, provider: 'deepseek' as const, model: 'deepseek-flash' };
-  for (const mode of ['default', 'byok'] as const) {
-    let calls = 0;
-    const result = await handleRequest(request({ ...deepseek, mode }), configured, async (input, key) => {
-      calls++;
-      expect(input).toEqual(deepseek);
-      expect(key).toBe(mode === 'default' ? 'operator-key' : 'fixture-key');
-      return [];
-    });
-    expect(result.status).toBe(200);
-    expect(calls).toBe(1);
-  }
-  expect((await handleRequest(request(deepseek, { 'x-minaosi-api-key': '' }), configured, neverReview)).status).toBe(401);
+  const result = await handleRequest(request(deepseek), standardEnv, async (input, key) => {
+    expect(input).toEqual(deepseek);
+    expect(key).toBe('fixture-key');
+    return [];
+  });
+  expect(result.status).toBe(200);
+  expect((await handleRequest(request(deepseek, { 'x-minaosi-api-key': '' }), standardEnv, neverReview)).status).toBe(401);
+  // 標準モードは利用者キーを要求せず、AI binding経路へ流す。
+  let standardKeyless = false;
+  const standard = await handleRequest(
+    request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }),
+    standardEnv, neverReview, neverReview,
+    async (input) => { standardKeyless = true; expect(input.model).toBe('@cf/deepseek-ai/deepseek-v4-flash-0731'); return []; },
+  );
+  expect(standard.status).toBe(200);
+  expect(standardKeyless).toBe(true);
+});
+
+test('標準とBYOKの502はそれぞれの利用者が対応できる文言を返す', async () => {
+  const standard = await handleRequest(request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }), standardEnv, neverReview, neverReview, async () => { throw new Error('上流が失敗'); });
+  expect(standard.status).toBe(502);
+  expect(await standard.json()).toEqual({ error: '標準校閲に失敗しました。時間を置いて再試行し、続く場合は運営者へ連絡してください' });
+  const byok = await handleRequest(request(), standardEnv, async () => { throw new Error('上流が失敗'); });
+  expect(byok.status).toBe(502);
+  expect((await byok.json() as { error: string }).error).toContain('API key');
+});
+
+test('/health は標準とBYOKの設定状態を分けて返す', async () => {
+  const ready = await handleRequest(new Request('https://review.example.com/health'), standardEnv, neverReview);
+  expect(await ready.json()).toEqual({ ok: true, configured: true, byokConfigured: true });
+  const partial = await handleRequest(new Request('https://review.example.com/health'), { AI: standardEnv.AI }, neverReview);
+  expect(await partial.json()).toEqual({ ok: true, configured: true, byokConfigured: false });
 });
 
 test('BYOKのキー未設定・モード指定の誤りを標準課金へフォールバックしない', async () => {
@@ -172,7 +198,8 @@ test('本番と標準モードをOpenCodeの直接接続へ流さない', async 
   const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free', LOCAL_OPENCODE_BYOK: 'true' };
   expect((await handleRequest(request(opencode), env, neverReview, neverReview)).status).toBe(503);
   expect((await handleRequest(request(opencode), { ...env, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(503);
-  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'opencode-go', LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(503);
+  // 標準モードにproviderの選択肢はなく、OpenCode Goへ逃がす設定も存在しない。
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview, async () => [])).status).toBe(200);
 });
 
 test('成功・失敗のログに原稿・キー・URL・上流エラー本文を残さない', async () => {
@@ -233,7 +260,7 @@ describe('標準サービスの同時実行枠', () => {
           acquire: async () => { events.push('acquire'); return 'own-lease'; },
           release: async (id) => { events.push(`release:${id}`); },
         }) },
-      }, async () => {
+      }, neverReview, neverReview, async () => {
         events.push('review');
         if (fail) throw new Error('上流が失敗');
         return [];
@@ -265,7 +292,7 @@ describe('標準サービスの同時実行枠', () => {
       const response = await handleRequest(standardRequest(), {
         ...standardEnv,
         REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'own-lease', release: async () => { throw new Error('fixture-key 原稿'); } }) },
-      }, async () => []);
+      }, neverReview, neverReview, async () => []);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ findings: [] });
       expect(failure.mock.calls).toEqual([[{ event: 'review_lease_release_failed' }]]);

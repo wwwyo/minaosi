@@ -1,8 +1,12 @@
 export const FINDING_KINDS = ['typo', 'fact', 'rule'] as const;
 export type FindingKind = typeof FINDING_KINDS[number];
-export { isReviewProvider } from './input';
 export type { ReviewBlock, ReviewMode, ReviewProvider, ProviderReviewInput, ReviewInput } from './input';
 export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+/** env.AI の最小形。Workers固有の Ai 型を拡張側の型チェックへ持ち込まないため構造的に定義する。 */
+export interface AiBinding {
+  run(model: string, inputs: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
+}
 
 /** LLM が返す wire 形式。content 側の Finding への正規化は controller が行う。 */
 export interface RawMatch {
