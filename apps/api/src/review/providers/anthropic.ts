@@ -1,7 +1,7 @@
 import { createAnthropicChat } from '@tanstack/ai-anthropic';
 
-import { INVALID_TOOL_INPUT } from './errors';
-export { INVALID_TOOL_INPUT } from './errors';
+import { INVALID_TOOL_INPUT } from '../errors';
+export { INVALID_TOOL_INPUT } from '../errors';
 
 /** 固定した TanStack adapter 版で失われる pause_turn の継続を補う。 */
 export function anthropicAdapter(

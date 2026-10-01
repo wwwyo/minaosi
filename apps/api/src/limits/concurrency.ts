@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { Env } from './worker';
+import type { Env } from '../http/handler';
 
 /** 標準サービスの実行枠を、利用者やモデルによらず共有する。 */
 export class ReviewConcurrency extends DurableObject<Env> {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { reviewWithOpenCode } from './opencode';
-import type { HttpFetch } from './schema';
+import type { HttpFetch } from '../schema';
 
 const request = { provider: 'opencode-go' as const, model: 'space-bunny-free', blocks: [{ index: 0, text: '誤字' }] };
 const typo = { kind: 'typo' as const, block: 0, title: '誤字', reason: '理由', matches: [{ from: '誤字', to: '修正' }] };

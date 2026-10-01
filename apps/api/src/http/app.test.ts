@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { hc } from 'hono/client';
 import type { AppType } from './app';
-import { handleRequest, type Env } from './worker';
+import { handleRequest, type Env } from './handler';
 
 test('Hono RPCのクライアントが実際のルートへ原稿とBYOKを送り、型付き結果を受け取る', async () => {
   const env = { LOCAL_OPENCODE_BYOK: 'true' } as Env;

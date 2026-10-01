@@ -1,9 +1,9 @@
 import { app, type ConcurrencyService } from './app';
 export type { ConcurrencyService } from './app';
-import { reviewThroughGateway, type GatewayEnv } from './review';
-import { reviewWithOpenCode } from './opencode';
+import { reviewThroughGateway, type GatewayEnv } from '../review/providers/gateway';
+import { reviewWithOpenCode } from '../review/providers/opencode';
 import type { InferEnv, UnwrapConfig } from 'cf/config';
-import type config from '../cloudflare.config';
+import type config from '../../cloudflare.config';
 
 export type Env = GatewayEnv & Partial<Omit<InferEnv<UnwrapConfig<typeof config>['worker']>, 'REVIEW_CONCURRENCY'>> & {
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };

@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import { handleRequest, type Env } from './worker';
+import { handleRequest, type Env } from './handler';
 
 const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token' };
 const body = { provider: 'openai' as const, model: 'gpt-5.4-mini', blocks: [{ index: 0, text: '原稿' }] };

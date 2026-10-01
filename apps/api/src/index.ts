@@ -1,5 +1,5 @@
-import { handleRequest, type Env } from './worker';
-import { ReviewConcurrency } from './concurrency';
+import { handleRequest, type Env } from './http/handler';
+import { ReviewConcurrency } from './limits/concurrency';
 
 export { ReviewConcurrency };
 

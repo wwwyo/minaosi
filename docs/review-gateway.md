@@ -2,7 +2,7 @@
 
 拡張の background → minaosi の校閲サーバー → Cloudflare AI Gateway → 選んだ AI プロバイダーの順で通信する。校閲サーバーは TanStack AI で検索・tool calling を実行し、指摘を共通形式へ検証して返す。拡張側の UI と本文への適用は従来どおり。
 
-AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`apps/api/src/review.ts` はGateway経由の校閲、`apps/api/src/opencode.ts` はローカル試用のOpenAI互換経路を担当する。`apps/api/src/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
+AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`apps/api/src/review/providers/gateway.ts` はGateway経由の校閲、`apps/api/src/review/providers/opencode.ts` はローカル試用のOpenAI互換経路を担当する。`apps/api/src/review/providers/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
 
 ## 標準モードとBYOK
 
@@ -50,14 +50,20 @@ Cloudflare のリソース操作は `cf cli search` でコマンドを確認し�
 mise exec -- bun run api:dev
 mise exec -- bun run api:build
 mise exec -- bun run api:deploy
-mise exec -- bun run api:configure
 ```
 
 本番と同じGateway経路をローカルで確認するときは、`mise exec -- bun run api:worker:dev` を使う。8788で起動し、OpenCode Go経路は無効になる。拡張から検証する場合は、開発用の `WXT_REVIEW_API_URL` を `http://127.0.0.1:8788/review` に設定する。どちらの開発モードもbindingをローカルで模擬する。Gatewayへの実AI呼び出しには上記の接続設定が必要で、シミュレーターの起動だけでは外部AIの設定は完了しない。
 
 `api:build` は `.cloudflare/output/v0/` へビルドし、アップロードは行わない。`api:deploy` はビルド後にWorkerを公開する。デプロイは別途実行する。
 
-`api:configure` はGatewayとOriginの必須設定、および3項目が揃った標準モード設定をmiseの環境変数から `cf workers secrets bulk` にstdinで渡し、Workerへ設定する。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。設定情報がない場合、校閲APIは503を返して外部送信しない。
+Workerのsecretは、運営者またはセルフホストする人が自分のCloudflareアカウントへ登録する。拡張の利用者が登録するBYOKキーとは別の設定であり、BYOKキーをWorkerへ保存しない。登録にはCloudflare管理画面のWorker設定、またはcf標準コマンドを使う。`bindings.secret()`は必要な名前の宣言であり、秘密値を自動アップロードしない。
+
+```bash
+cd apps/api
+mise exec -- cf workers secrets bulk --worker minaosi-review --file /dev/stdin
+```
+
+stdinにはcfのJSON Merge Patch形式（`{"SECRET_NAME":{"type":"secret_text","text":"…"}}`）のJSONを、秘密管理ツールから渡す。実値をコマンド引数・履歴・trackedファイルに置かない。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。設定情報がない場合、校閲APIは503を返して外部送信しない。
 
 cfはNode.jsで実行する。`cf/config` をBunで読み込むことはサポートされないため、miseでNode.jsも管理する。cfは `1.0.0-beta.6` にexact固定し、2026-10-01のユーザー承認で、この依存追加だけ7日cooldownの例外とした。`bunfig.toml` の7日待機設定は維持する。
 
@@ -93,6 +99,6 @@ Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処�
 
 ## Hono RPC
 
-HTTPルートと入力検証は`apps/api/src/app.ts`に定義する。`apps/api/src/rpc.ts`はその`AppType`などの型だけをexportし、拡張は`hc<AppType>`でPOSTする。プロンプトと校閲ルールはAPIだけが持ち、拡張はサーバーの設定やAI SDKを実行時にimportしない。Hono RPCの型推論に加え、APIの入力・AI応答とブラウザの受信境界には実行時検証を残す。
+HTTPルートと入力検証は`apps/api/src/http/app.ts`に定義する。`apps/api/src/rpc.ts`はその`AppType`などの型だけをexportし、拡張は`hc<AppType>`でPOSTする。プロンプトと校閲ルールはAPIだけが持ち、拡張はサーバーの設定やAI SDKを実行時にimportしない。Hono RPCの型推論に加え、APIの入力・AI応答とブラウザの受信境界には実行時検証を残す。
 
 Cloudflare Vite pluginはWranglerに依存しない2.0 betaを使う。7日cooldownを満たす最新の `2.0.0-beta.sha-b747ec8ea` とVite `8.3.0` にexact固定している。型生成は `cf workers types` に統一する。

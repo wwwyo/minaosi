@@ -15,7 +15,6 @@
     "api:dev": "bun run --cwd apps/api dev",
     "api:build": "bun run --cwd apps/api build",
     "api:deploy": "bun run --cwd apps/api deploy",
-    "api:configure": "bun run --cwd apps/api configure",
     "api:worker:dev": "bun run --cwd apps/api dev:gateway"
   },
   "devDependencies": {

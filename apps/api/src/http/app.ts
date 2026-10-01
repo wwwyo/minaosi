@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
-import { INVALID_TOOL_INPUT } from './errors';
-import { isReviewProvider, type ProviderReviewInput, type ReviewInput, type ReviewedFinding } from './schema';
+import { INVALID_TOOL_INPUT } from '../review/errors';
+import { isReviewProvider, type ProviderReviewInput, type ReviewInput, type ReviewedFinding } from '../review/schema';
 
 export interface ConcurrencyService {
   acquire(): Promise<string | null>;

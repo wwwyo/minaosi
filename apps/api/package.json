@@ -13,8 +13,7 @@
     "dev:gateway": "cf dev --mode gateway",
     "build": "cf build",
     "deploy": "cf deploy",
-    "configure": "bun scripts/configure-worker.ts",
-    "check": "cf workers types && tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "check": "cf workers types && tsc --noEmit",
     "test": "bun test"
   },
   "dependencies": {

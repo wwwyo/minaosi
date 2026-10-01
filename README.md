@@ -23,3 +23,17 @@ Bun workspacesで、`apps/extension`（WXT拡張）と`apps/api`（Hono / Cloudf
 拡張はHonoの`hc<AppType>`でAPIを呼ぶ。APIの`@minaosi/api/rpc`を型だけ参照し、独立した共有パッケージは持たない。プロンプト・日本語ルール・AIのtool定義はAPI内に置く。APIの実装やAI SDKを拡張の実行時バンドルへ含めない。
 
 拡張の成果物は`apps/extension/.output/`。Workerの設定は`apps/api/cloudflare.config.ts`、入口は`apps/api/src/index.ts`。APIの開発・ビルドはcfからCloudflare Vite pluginへ委譲し、Wranglerは使わない。
+
+APIのコードは役割ごとに分けている。
+
+```text
+apps/api/src/
+├── index.ts           # Cloudflare Workerの入口
+├── rpc.ts             # 拡張に公開するHono RPCの型
+├── http/              # HTTPルート、入力検証、応答・実行ログ
+├── review/            # 校閲の型、プロンプト、日本語ルール
+│   └── providers/     # モデル呼び出しと上流HTTP通信
+└── limits/            # Durable Objectによる同時実行制限
+```
+
+モデル呼び出しを追う場合は `review/providers/gateway.ts` または `review/providers/opencode.ts` を読む。HTTPから呼び出す箇所は `http/app.ts`。
