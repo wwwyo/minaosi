@@ -19,6 +19,15 @@ function anthropicReport(findings: unknown[] = [finding]) {
     { type: 'message_stop' },
   ]);
 }
+function deepseekReport(findings: unknown[] = [finding]) {
+  const args = JSON.stringify({ findings });
+  const chunks = [
+    { tool_calls: [{ index: 0, id: 'deepseek-report', type: 'function', function: { name: 'report_findings', arguments: args.slice(0, 20) } }] },
+    { tool_calls: [{ index: 0, function: { arguments: args.slice(20) } }] },
+  ].map(delta => ({ id: 'deepseek-completion', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta, finish_reason: null }] }));
+  const end = { id: 'deepseek-completion', object: 'chat.completion.chunk', model: 'deepseek-flash', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] };
+  return new Response([...chunks, end].map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+}
 function fetchFixture(responses: Response[]) {
   const calls: { url: string; headers: Headers; body: Record<string, unknown> }[] = [];
   const fetcher = (async (input, options) => {
@@ -32,6 +41,48 @@ function fetchFixture(responses: Response[]) {
 }
 
 describe('TanStack AI via Cloudflare', () => {
+  test('DeepSeekはChat Completionsと利用者のキーで校閲し、通常endpointで実行できるtoolだけを送る', async () => {
+    const { fetcher, calls } = fetchFixture([deepseekReport()]);
+    expect(await reviewThroughGateway({ ...request, provider: 'deepseek', model: 'deepseek-flash' }, 'fixture-deepseek-key', env, fetcher)).toEqual([finding]);
+    expect(calls).toHaveLength(1);
+    const call = calls[0]!;
+    expect(call.url).toBe('https://gateway.ai.cloudflare.com/v1/fixture-account/fixture-gateway/deepseek/chat/completions');
+    expect(call.headers.get('authorization')).toBe('Bearer fixture-deepseek-key');
+    expect(call.headers.get('x-api-key')).toBeNull();
+    expect(call.headers.get('cf-aig-authorization')).toBe('Bearer fixture-cf-token');
+    expect(call.headers.get('cf-aig-skip-cache')).toBe('true');
+    expect(call.headers.get('cf-aig-collect-log')).toBe('true');
+    expect(call.headers.get('cf-aig-collect-log-payload')).toBe('false');
+    expect(call.body.model).toBe('deepseek-flash');
+    expect(call.body.max_tokens).toBe(8192);
+    expect(call.body.thinking).toEqual({ type: 'disabled' });
+    expect(call.body).not.toHaveProperty('store');
+    expect(call.body).not.toHaveProperty('max_output_tokens');
+    expect(call.body.tools).toEqual([{ type: 'function', function: {
+      name: 'report_findings', description: expect.any(String), strict: false, parameters: expect.any(Object),
+    } }]);
+    expect(call.body.tools).toMatchObject([{ function: { parameters: {
+      properties: { findings: { items: { properties: { kind: { enum: ['typo', 'rule'] } } } } },
+    } } }]);
+    expect(JSON.stringify(call.body.messages)).toContain('事実の正誤に関する指摘は出さない');
+  });
+
+  test('DeepSeekが検索なしの出典を生成しても事実指摘を返さず、空のreportは成功する', async () => {
+    const fact = { ...finding, kind: 'fact', source: { url: 'https://example.com/source', excerpt: '生成された出典' } };
+    const input = { ...request, provider: 'deepseek' as const, model: 'deepseek-flash' };
+    expect(await reviewThroughGateway(input, 'fixture-key', env, fetchFixture([deepseekReport([finding, fact])]).fetcher)).toEqual([finding]);
+    expect(await reviewThroughGateway(input, 'fixture-key', env, fetchFixture([deepseekReport([])]).fetcher)).toEqual([]);
+  });
+
+  test('DeepSeekの認証失敗を再送せず、reportのない完了を成功にしない', async () => {
+    const input = { ...request, provider: 'deepseek' as const, model: 'deepseek-flash' };
+    const { fetcher, calls } = fetchFixture([Response.json({ error: { message: 'fixture-private-key private-draft' } }, { status: 401 })]);
+    await expect(reviewThroughGateway(input, 'fixture-key', env, fetcher)).rejects.toThrow('校閲 API が処理を完了できませんでした');
+    expect(calls).toHaveLength(1);
+    const text = new Response('data: ' + JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: input.model, choices: [{ index: 0, delta: { content: '完了' }, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+    await expect(reviewThroughGateway(input, 'fixture-key', env, fetchFixture([text]).fetcher)).rejects.toThrow('校閲結果が返りませんでした');
+  });
+
   test('Anthropicの検索とreportをGateway経由で実行し、本文保存・キャッシュを無効にして使用量ログを残す', async () => {
     const { fetcher, calls } = fetchFixture([anthropicReport()]);
     expect(await reviewThroughGateway(request, 'fixture-user-key', env, fetcher)).toEqual([finding]);

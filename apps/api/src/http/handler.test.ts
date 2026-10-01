@@ -135,6 +135,23 @@ test('標準モードの運営設定が未完了なら実行しない', async ()
   expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: '__proto__' }, neverReview)).status).toBe(503);
 });
 
+test('DeepSeekの標準モードとBYOKはそれぞれのキーを使い、他社のキーへ切り替えない', async () => {
+  const configured = { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'deepseek', DEFAULT_REVIEW_MODEL: 'deepseek-flash' };
+  const deepseek = { ...body, provider: 'deepseek' as const, model: 'deepseek-flash' };
+  for (const mode of ['default', 'byok'] as const) {
+    let calls = 0;
+    const result = await handleRequest(request({ ...deepseek, mode }), configured, async (input, key) => {
+      calls++;
+      expect(input).toEqual(deepseek);
+      expect(key).toBe(mode === 'default' ? 'operator-key' : 'fixture-key');
+      return [];
+    });
+    expect(result.status).toBe(200);
+    expect(calls).toBe(1);
+  }
+  expect((await handleRequest(request(deepseek, { 'x-minaosi-api-key': '' }), configured, neverReview)).status).toBe(401);
+});
+
 test('BYOKのキー未設定・モード指定の誤りを標準課金へフォールバックしない', async () => {
   expect((await handleRequest(request(body, { 'x-minaosi-api-key': '' }), standardEnv, neverReview)).status).toBe(401);
   expect((await handleRequest(request({ ...body, mode: 'other' }), standardEnv, neverReview)).status).toBe(400);

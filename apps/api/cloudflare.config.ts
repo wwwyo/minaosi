@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => ({
       CLOUDFLARE_ACCOUNT_ID: bindings.secret(),
       CLOUDFLARE_AI_GATEWAY_ID: bindings.secret(),
       CF_AIG_TOKEN: bindings.secret(),
+      DEFAULT_REVIEW_PROVIDER: bindings.text<string>('deepseek'),
+      DEFAULT_REVIEW_MODEL: bindings.text<string>('deepseek-flash'),
+      DEFAULT_REVIEW_API_KEY: bindings.secret(),
       ALLOWED_ORIGINS: bindings.secret(),
       LOCAL_OPENCODE_BYOK: bindings.text<string>(mode === 'development' ? 'true' : 'false'),
       REVIEW_POLICY: bindings.json<{ concurrencyLimit: number; leaseTtlMs: number }>({

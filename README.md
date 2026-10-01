@@ -16,6 +16,8 @@ bun run dev
 
 校閲サーバーも起動する必要がある。接続設定・秘密の管理・Workerのビルド手順は[校閲Gatewayの設定](docs/review-gateway.md)を参照。
 
+標準モデルはDeepSeek V4.1 Flash（`deepseek-flash`）。DeepSeekでは誤字・日本語表現を校閲し、Web検索を使った事実確認は行わない。Claude / GPTのBYOKでは、従来どおり検索と一次情報の出典付きで事実の指摘も返す。標準モードの利用には運営者によるGatewayとsecretの設定が必要。
+
 ## 構成
 
 Bun workspacesで、`apps/extension`（WXT拡張）と`apps/api`（Hono / Cloudflare Worker）を管理する。各appの依存・型チェック・ビルド設定を分け、rootのコマンドから起動できる。

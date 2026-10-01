@@ -10,7 +10,7 @@ type ReviewClient = ReturnType<typeof hc<AppType>>;
 export type ReviewRequest = { type: 'minaosi:review' } & InferRequestType<ReviewClient['review']['$post']>['json'];
 
 export function isReviewProvider(value: unknown): value is ReviewProvider {
-  return value === 'anthropic' || value === 'openai' || value === 'opencode-go';
+  return value === 'anthropic' || value === 'openai' || value === 'deepseek' || value === 'opencode-go';
 }
 
 /** 原稿と利用者のキーを、ビルド時に指定した校閲サーバーへ送る。 */

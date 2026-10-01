@@ -6,9 +6,11 @@ AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプ�
 
 ## 標準モードとBYOK
 
-既定はminaosiの標準モード。利用者に接続先・キー・モデルを選ばせず、サーバーの `DEFAULT_REVIEW_PROVIDER` / `DEFAULT_REVIEW_MODEL` / `DEFAULT_REVIEW_API_KEY` を使う。運営設定がない場合は503（準備中）を返す。標準モードのAI料金は運営者に発生する。
+既定はminaosiの標準モード。利用者に接続先・キー・モデルを選ばせず、サーバーの `DEFAULT_REVIEW_PROVIDER` / `DEFAULT_REVIEW_MODEL` / `DEFAULT_REVIEW_API_KEY` を使う。providerとモデルは `cloudflare.config.ts` で `deepseek` / `deepseek-flash`（DeepSeek V4.1 Flash）を設定する。運営用キーとGatewayの接続設定がない場合は503（準備中）を返す。標準モードのAI料金は運営者に発生する。
 
-自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系）から判定する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
+自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系 / DeepSeek）から判定する。拡張はキーを接続先ごとにローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
+
+DeepSeekはTanStackの `OpenAIChatCompletionsTextAdapter` でGatewayの `/deepseek/chat/completions` を呼ぶ。OpenAIのResponses APIと内蔵検索toolは送らない。DeepSeekでは誤字・日本語表現だけを校閲し、検索していない事実指摘は結果からも除外する。通常endpointでは `strict: false` のfunction toolを使い、`thinking: { type: 'disabled' }` を明示する。thinkingを有効にするとtoolの継続時に `reasoning_content` の完全な再送が必要になるため、現adapterのまま既定のthinkingを使わない。事実確認はClaude / GPTのBYOKで引き続き利用できる。DeepSeekにも事実確認を追加する場合は、外部検索サービスとその認証・費用の設計が別途必要。[DeepSeekのモデルID](https://api-docs.deepseek.com/quick_start/pricing)、[thinkingの仕様](https://api-docs.deepseek.com/guides/thinking_mode)、[Gatewayの検索対応](https://developers.cloudflare.com/ai-gateway/usage/web-search/)。
 
 Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、BYOKモードで利用者のキーがないリクエストは必ず拒否する。標準モードへの自動切り替えはしない。標準モードのキーはサーバーのsecretとして保持する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化する。Workerには本文・キーを含めない実行結果のログだけを残す。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
 
@@ -33,8 +35,8 @@ mise exec -- bun run dev
 | `CLOUDFLARE_ACCOUNT_ID` | Gatewayを所有するアカウント |
 | `CLOUDFLARE_AI_GATEWAY_ID` | 使用するGateway |
 | `CF_AIG_TOKEN` | AI Gateway Run権限の接続用トークン |
-| `DEFAULT_REVIEW_PROVIDER` | 標準モードの運営指定（anthropic / openai） |
-| `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID |
+| `DEFAULT_REVIEW_PROVIDER` | 標準モードの運営指定。configの既定値はdeepseek（anthropic / openaiにも対応） |
+| `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID。configの既定値はdeepseek-flash |
 | `DEFAULT_REVIEW_API_KEY` | 標準モードの運営用キー。サーバーだけに置く |
 | `ALLOWED_ORIGINS` | 拡張で利用する場合は必須。許可する拡張のOriginをカンマ区切りで指定 |
 
