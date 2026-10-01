@@ -6,13 +6,18 @@ import { REPORT_TOOL, systemPrompt, userPrompt } from '../prompt';
 
 export interface WorkersAiEnv {
   AI?: AiBinding;
-  CLOUDFLARE_AI_GATEWAY_ID?: string;
+  // BYOK用のGateway IDとは別に、標準経路へGatewayログを載せる場合だけ設定する。
+  // binding経路ではpayload抑制ヘッダーを送れないため、本文非保存はGateway側設定に依存する。
+  REVIEW_GATEWAY_ID?: string;
 }
 
 export interface WorkersAiReviewInput {
   model: string;
   blocks: ReviewBlock[];
 }
+
+// DOリース（240秒）より短い上限で切り、枠の失効中に古い推論だけが残る状態を避ける。
+const REVIEW_TIMEOUT_MS = 210_000;
 
 /** 標準校閲を Workers AI の binding で実行する。利用者・運営者のプロバイダーキーは使わない。 */
 export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: WorkersAiEnv): Promise<ReviewedFinding[]> {
@@ -36,28 +41,39 @@ export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: Wo
     binding: env.AI as unknown as CloudflareBindingConfig['binding'],
     // binding経路ではリクエスト単位の本文ログ抑制（cf-aig-collect-log-payload）は送れない。
     // payload保存の抑制はGateway側の設定で担保する。Gateway未設定でも標準校閲は動く。
-    gateway: env.CLOUDFLARE_AI_GATEWAY_ID
-      ? { id: env.CLOUDFLARE_AI_GATEWAY_ID, collectLog: true, skipCache: true }
-      : undefined,
+    gateway: env.REVIEW_GATEWAY_ID ? { id: env.REVIEW_GATEWAY_ID, collectLog: true, skipCache: true } : undefined,
   });
   const abortController = new AbortController();
-  const timer = setTimeout(() => abortController.abort(), 210_000);
+  const stream = chat({
+    adapter,
+    messages: [{ role: 'user', content: userPrompt(request.blocks) }],
+    systemPrompts: [systemPrompt(LANGUAGE_RULES, false)],
+    tools: [report],
+    // deepseek-v4-flashのreasoning既定はhigh。reasoning_contentも出力枠を消費するため余裕を持たせる。
+    modelOptions: { max_tokens: 16_384 },
+    agentLoopStrategy: ({ iterationCount }) => findings === undefined && iterationCount < 5,
+    abortController,
+    debug: false,
+  });
+  // binding経路はAbortSignalを run() へ伝えないため、await自体をタイマーで打ち切る。
+  // 打ち切り後も上流の推論は続行し得るが、呼び出し側は枠を解放して応答を返せる。
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      abortController.abort();
+      reject(new Error('校閲がタイムアウトしました'));
+    }, REVIEW_TIMEOUT_MS);
+  });
   try {
-    const stream = chat({
-      adapter,
-      messages: [{ role: 'user', content: userPrompt(request.blocks) }],
-      systemPrompts: [systemPrompt(LANGUAGE_RULES, false)],
-      tools: [report],
-      // deepseek-v4-flashのreasoning既定はhigh。reasoning_contentも出力枠を消費するため余裕を持たせる。
-      modelOptions: { max_tokens: 16_384 },
-      agentLoopStrategy: ({ iterationCount }) => findings === undefined && iterationCount < 5,
-      abortController,
-      debug: false,
-    });
-    for await (const event of stream) {
-      if (event.type === 'RUN_ERROR') throw new Error('校閲 API が処理を完了できませんでした');
+    const iterator = stream[Symbol.asyncIterator]();
+    while (true) {
+      const pending = iterator.next();
+      // タイムアウトで打ち切った後に置き去りにしたstreamがrejectしても握り潰す。
+      pending.catch(() => {});
+      const next = await Promise.race([pending, timedOut]);
+      if (next.done) break;
+      if (next.value.type === 'RUN_ERROR') throw new Error('校閲 API が処理を完了できませんでした');
     }
-    if (abortController.signal.aborted) throw new Error('校閲がタイムアウトしました');
     if (findings === undefined) throw new Error(reportError ?? '校閲結果が返りませんでした');
     return findings;
   } finally {

@@ -47,7 +47,7 @@ describe('Workers AI bindingの標準校閲', () => {
 
   test('Gateway設定時はbindingのgatewayオプションでログとキャッシュ無効を伝える', async () => {
     const { AI, calls } = bindingFixture([deepseekReport()]);
-    await reviewWithWorkersAi(request, { AI, CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway' });
+    await reviewWithWorkersAi(request, { AI, REVIEW_GATEWAY_ID: 'fixture-gateway' });
     expect(calls[0]!.options?.gateway).toEqual({ id: 'fixture-gateway', collectLog: true, skipCache: true });
   });
 

@@ -18,6 +18,7 @@ interface ReviewBindings {
   CF_AIG_TOKEN?: string;
   ALLOWED_ORIGINS?: string;
   DEFAULT_REVIEW_MODEL?: string;
+  REVIEW_GATEWAY_ID?: string;
   LOCAL_OPENCODE_BYOK?: string;
   REVIEW_RATE_LIMIT?: { limit(input: { key: string }): Promise<{ success: boolean }> };
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };

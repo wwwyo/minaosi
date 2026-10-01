@@ -28,14 +28,15 @@ mise exec -- bun run dev
 
 `api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは実際にはCloudflareのAPIへ届くため、標準モードの実モデル実行にはCloudflareの認証とWorkers Paidプランが必要。
 
-次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードはAI bindingだけで動き、これらのうちBYOKに必要なのはGateway接続の3変数だけ。`CLOUDFLARE_AI_GATEWAY_ID` を設定すると標準モードの推論もそのGateway経由になり、メタデータログを残せる（必須ではない）。
+次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードはAI bindingだけで動き、Gateway接続の3変数はBYOKにだけ必要。
 
 | 変数 | 用途 |
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | BYOKで使うGatewayを所有するアカウント |
-| `CLOUDFLARE_AI_GATEWAY_ID` | 使用するGateway。標準モードのログ経路としても任意で使う |
+| `CLOUDFLARE_AI_GATEWAY_ID` | BYOKで使うGateway |
 | `CF_AIG_TOKEN` | BYOKのGateway接続用トークン（AI Gateway Run権限）。標準モードには不要 |
 | `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID。configの既定値は `@cf/deepseek-ai/deepseek-v4-flash-0731` |
+| `REVIEW_GATEWAY_ID` | 標準モードの推論をGateway経由でログへ残す場合だけ設定する。未設定ならGatewayを通らない |
 | `ALLOWED_ORIGINS` | 拡張で利用する場合は必須。許可する拡張のOriginをカンマ区切りで指定 |
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
@@ -91,7 +92,7 @@ Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処�
 
 BYOKのGatewayへのリクエストには `cf-aig-collect-log: true` と `cf-aig-collect-log-payload: false` を付ける。モデル・プロバイダー・トークン数・費用・ステータス・処理時間などのメタデータを記録し、原稿を含むリクエスト本文とAIの応答本文は保存しない。Gateway自体の設定でログを無効にしていても、リクエスト単位でこの方針を適用する。[Cloudflareのログ仕様](https://developers.cloudflare.com/ai-gateway/observability/logging/)。
 
-標準モードでGatewayを設定した場合は、binding経路の `gateway` オプションに `collectLog: true` と `skipCache: true` を渡す。binding経路ではリクエスト単位のpayload抑制ヘッダー（`cf-aig-collect-log-payload`）を送れないため、BYOKと同じ「原稿本文を保存しない」を担保するには、利用するGatewayの設定でログのpayload保存を無効にしておく必要がある。Gatewayを標準モードへ設定する場合はこの設定を先に確認する。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
+標準モードは `REVIEW_GATEWAY_ID` を設定した場合だけGatewayを通り、binding経路の `gateway` オプションに `collectLog: true` と `skipCache: true` を渡す。BYOK用の `CLOUDFLARE_AI_GATEWAY_ID` があっても標準経路へは流用しない — binding経路ではリクエスト単位のpayload抑制ヘッダー（`cf-aig-collect-log-payload`）を送れず、BYOK用Gatewayのpayload保存設定をそのまま共有できないため、専用のopt-in変数に分けた。`REVIEW_GATEWAY_ID` を設定する場合は、先にそのGatewayでログのpayload保存を無効にする。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
 
 `POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
 
