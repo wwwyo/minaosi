@@ -96,7 +96,9 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 /* .brand = logo mark + wordmark + 畳みシェブロンの単一クリックボタン */
 /* .filter-tab = 未対応/適用済み/削除 の3タブ。「すべて」は置かない */
 /* .progress = 非ゼロの状態件数のみ列挙 */
-/* hover で出る補助 UI（適用 tooltip）はカーソル位置の行の直上に出す */
+/* 適用 tooltip は白背景・墨色・1px の --color-line-strong。
+   ホバーした候補の表示行の中央・直上に出し、影は付けない */
+/* 候補は本文と同じ font・文字サイズ・行間。本文と重ならない空間に置く */
 ```
 
 ## Icons

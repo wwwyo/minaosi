@@ -2,6 +2,7 @@ import type { Finding } from '../types';
 import { resolveSite, undoSite } from '../surfaces/resolve';
 import { PAGE_HIGHLIGHT_CSS } from './styles';
 import { ICON_APPLY } from './icons';
+import { lineBoxes, suggestionPosition, type Box } from './suggestion-layout';
 
 /**
  * 本文上の重ね表示。contenteditable の DOM には一切触れず、
@@ -18,6 +19,11 @@ interface Site {
   el?: HTMLElement;
   to?: string;
   from?: string;
+}
+
+interface ChipTypography {
+  properties: [string, string][];
+  maxWidth: number;
 }
 
 export interface DecorationCallbacks {
@@ -45,6 +51,8 @@ export class Decorations {
   private pageStyle: HTMLStyleElement | null = null;
   private mo: MutationObserver | null = null;
   private sites: Site[] = [];
+  private candidates = new Map<string, Box[]>();
+  private tipLine = 0;
   /** 本文 or 指摘集合が変わったか。scroll/resize では解決し直さず位置だけ追従する */
   private dirty = true;
 
@@ -86,6 +94,7 @@ export class Decorations {
     const interval = setInterval(() => this.schedule(), 1500);
     const onLeave = (e: Event) => this.handleLeave(e);
     this.ovl.addEventListener('mouseover', (e) => this.handleOver(e));
+    this.ovl.addEventListener('mousemove', (e) => this.handleOver(e));
     this.ovl.addEventListener('mouseout', onLeave);
     this.ovl.addEventListener('click', (e) => this.handleClick(e));
     this.tip.addEventListener('mouseenter', () => clearTimeout(this.tipTimer));
@@ -202,17 +211,30 @@ export class Decorations {
     }
 
     this.ovl.textContent = '';
+    this.candidates.clear();
+    const occupied = this.textRects(this.editor).filter((r) => r.bottom >= 0 && r.top <= window.innerHeight);
+    for (const el of this.editor.querySelectorAll('img, video, iframe, hr')) occupied.push(el.getBoundingClientRect());
     const chips: { el: HTMLElement; s: Site; del: boolean }[] = [];
+    const editorBounds = this.editor.getBoundingClientRect();
+    const typography = new Map(this.sites.filter((s) => s.range).map((s) => {
+      const node = s.range!.startContainer;
+      const style = getComputedStyle(node instanceof Element ? node : node.parentElement!);
+      const block = s.range!.commonAncestorContainer;
+      const width = (block instanceof Element ? block : block.parentElement!).getBoundingClientRect().width;
+      const properties: [string, string][] = ['font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'line-height']
+        .map((property) => [property, style.getPropertyValue(property)]);
+      return [s, { properties, maxWidth: Math.max(24, Math.min(width, window.innerWidth - 16)) }];
+    }));
     for (const s of this.sites) {
       const selected = s.fid === this.selectedId;
       if (s.kind === 'suggest' && s.range) {
         if (!this.delHl) {
           for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
         }
-        if (s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s), s, del: false });
+        if (s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s, typography.get(s)!), s, del: false });
       }
       if (s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
-        chips.push({ el: this.chip('sug-del', s.from, s), s, del: true });
+        chips.push({ el: this.chip('sug-del', s.from, s, typography.get(s)!), s, del: true });
       }
       if (s.kind === 'suggest' && s.range) {
         // 打ち消し線が見えている箇所だけポインタを取る。修正案の無い mark は
@@ -235,9 +257,22 @@ export class Decorations {
         for (const r of s.rects) this.el('ring', r.left - 2, r.top - 2, r.width + 4, r.height + 4);
       }
     }
-    // chip のサイズ計測をまとめてから位置を書く（強制同期レイアウトを1回に抑える）
+    // 折り返しの計測と配置後の行アンカーの計測は、候補ごとに交互実行しない。
     const sizes = chips.map((c) => ({ w: c.el.offsetWidth, h: c.el.offsetHeight }));
-    chips.forEach((c, i) => this.placeChip(c.el, sizes[i]!, c.s, c.del));
+    chips.forEach((c, i) => this.placeChip(c.el, sizes[i]!, c.s, c.del, occupied, editorBounds));
+    for (const c of chips) {
+      if (!c.del && !c.el.hidden) {
+        const lines = lineBoxes(this.textRects(c.el));
+        const r = c.el.getBoundingClientRect();
+        this.candidates.set(`${c.s.fid}:${c.s.matchIndex}`, lines.length ? lines : [{ left: r.left, right: r.right, top: r.top, bottom: r.bottom }]);
+      }
+    }
+    const key = this.tip.dataset.apply;
+    if (key) {
+      const line = this.candidates.get(key)?.[this.tipLine];
+      if (line) this.positionTip(line);
+      else this.hideTip();
+    }
   }
 
   private el(cls: string, l: number, t: number, w: number, h: number): HTMLElement {
@@ -251,7 +286,7 @@ export class Decorations {
     return d;
   }
 
-  private chip(cls: 'sug-ins' | 'sug-del', text: string, s: Site): HTMLElement {
+  private chip(cls: 'sug-ins' | 'sug-del', text: string, s: Site, typography: ChipTypography): HTMLElement {
     const chip = document.createElement('span');
     chip.className = cls;
     chip.dataset.fid = s.fid;
@@ -260,31 +295,43 @@ export class Decorations {
       chip.dataset.suggest = '1';
     }
     chip.textContent = text;
+    for (const [property, value] of typography.properties) chip.style.setProperty(property, value);
+    chip.style.maxWidth = `${typography.maxWidth}px`;
     this.ovl.appendChild(chip);
     return chip;
   }
 
-  /** 修正案の挿入候補チップは原文の行末に重ね、右にはみ出す場合は行の上に置く。
-   *  適用済みプレビューの del チップは差分を示すため常に行の上に出す */
-  private placeChip(chip: HTMLElement, size: { w: number; h: number }, s: Site, del: boolean) {
+  private textRects(root: HTMLElement): Box[] {
+    const rects: Box[] = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) {
+        if (rect.width && rect.height) rects.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
+      }
+    }
+    return rects;
+  }
+
+  private placeChip(chip: HTMLElement, size: { w: number; h: number }, s: Site, del: boolean, occupied: Box[], editor: Box) {
     const first = s.rects[0];
     const last = s.rects[s.rects.length - 1];
     if (!first || !last) return;
-    let left: number;
-    let top: number;
-    if (del) {
-      left = first.left;
-      top = first.top - size.h - 2;
-    } else {
-      left = last.right + 3;
-      top = last.top + (last.height - size.h) / 2;
-      if (left + size.w > window.innerWidth - 4) {
-        left = first.left;
-        top = first.top - size.h - 2;
-      }
+    if (last.bottom < 0 || first.top > window.innerHeight) {
+      chip.hidden = true;
+      return;
     }
-    chip.style.left = `${Math.max(4, left)}px`;
-    chip.style.top = `${top}px`;
+    const anchor = del ? first : last;
+    const position = suggestionPosition(anchor, size, occupied, {
+      left: Math.max(8, editor.left), right: Math.min(window.innerWidth - 8, editor.right), top: 8, bottom: window.innerHeight - 8,
+    });
+    // 空き領域のない画面では本文を覆わず、サイドpaneの候補を使う。
+    chip.hidden = !position;
+    if (!position) return;
+    chip.style.left = `${position.left}px`;
+    chip.style.top = `${position.top}px`;
+    occupied.push({ ...position, right: position.left + size.w, bottom: position.top + size.h });
   }
 
   /* ---- tooltip / hit-test ---- */
@@ -315,14 +362,19 @@ export class Decorations {
   }
 
   private showTip(fid: string, idx: number, e: MouseEvent, host: HTMLElement) {
-    // 折り返し行ではカーソルがある行に合わせる
-    const rects = [...host.getClientRects()];
-    const line = rects.find((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom) ?? rects[0];
+    const rects = this.candidates.get(`${fid}:${idx}`) ?? [];
+    const index = host.classList.contains('sug-ins') ? rects.findIndex((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) : 0;
+    this.tipLine = Math.max(0, index);
+    const line = rects[this.tipLine];
     if (!line) return;
     this.tip.dataset.apply = `${fid}:${idx}`;
     this.tip.classList.add('on');
+    this.positionTip(line);
+  }
+
+  private positionTip(line: Box) {
     const half = this.tip.offsetWidth / 2;
-    const cx = Math.min(Math.max(e.clientX, half + 8), window.innerWidth - half - 8);
+    const cx = Math.min(Math.max((line.left + line.right) / 2, half + 8), window.innerWidth - half - 8);
     this.tip.style.left = `${cx}px`;
     this.tip.style.top = `${line.top - 2}px`;
   }

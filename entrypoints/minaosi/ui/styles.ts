@@ -167,13 +167,13 @@ export const PANEL_CSS = `
   pointer-events: auto; cursor: pointer;
   color: var(--color-accent-ink); background: var(--color-accent-tint);
   border-radius: var(--radius-sm); padding: 0 4px;
-  font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-width: 320px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .sug-del {
   pointer-events: none;
   color: var(--color-ink-mute); text-decoration: line-through;
   text-decoration-color: var(--color-strike); text-decoration-thickness: 1.5px;
-  font-size: 13px; line-height: 1.5; white-space: pre-wrap; max-width: 320px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .bbar { pointer-events: auto; cursor: pointer; width: 3px; background: var(--color-line-strong); border-radius: 2px; }
 .bbar[data-sel] { background: var(--color-accent); width: 3px; }
@@ -189,9 +189,9 @@ export const PANEL_CSS = `
 .tip button {
   display: inline-flex; align-items: center; gap: 4px;
   font-family: var(--font-ui); font-size: 12px; font-weight: 700; line-height: 1;
-  background: var(--color-primary); color: var(--color-on-primary);
-  border: 1px solid var(--color-primary); border-radius: var(--radius-md);
-  padding: 7px 10px; cursor: pointer; box-shadow: var(--shadow-pop);
+  background: var(--color-bg-surface); color: var(--color-ink);
+  border: 1px solid var(--color-line-strong); border-radius: var(--radius-md);
+  padding: 7px 10px; cursor: pointer;
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .tip button svg { width: 11px; height: 11px; display: block; }
