@@ -33,7 +33,9 @@ apps/api/src/
 ├── http/              # HTTPルート、入力検証、応答・実行ログ
 ├── review/            # 校閲の型、プロンプト、日本語ルール
 │   └── providers/     # モデル呼び出しと上流HTTP通信
-└── limits/            # Durable Objectによる同時実行制限
+└── durable-objects/   # 状態を持つDOクラス（校閲の同時実行枠）
 ```
 
 モデル呼び出しを追う場合は `review/providers/gateway.ts` または `review/providers/opencode.ts` を読む。HTTPから呼び出す箇所は `http/app.ts`。
+
+校閲入力は `review/input.ts` のZodスキーマを正本にし、`http/app.ts` の `zValidator` で検証する。入力の型もスキーマから推論し、Hono RPCで拡張へ伝える。

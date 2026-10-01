@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
+import { HTTPException } from 'hono/http-exception';
+import { zValidator } from '@hono/zod-validator';
 import { INVALID_TOOL_INPUT } from '../review/errors';
-import { isReviewProvider, type ProviderReviewInput, type ReviewInput, type ReviewedFinding } from '../review/schema';
+import { ModelSchema, ReviewInputSchema, isReviewProvider } from '../review/input';
+import type { ProviderReviewInput, ReviewedFinding } from '../review/schema';
+import { readBoundedBody } from './body';
 
 export interface ConcurrencyService {
   acquire(): Promise<string | null>;
@@ -27,67 +31,27 @@ interface RpcEnv {
   };
 }
 
-const MAX_BODY_BYTES = 262_144;
-
-function validInput(value: unknown): value is ReviewInput {
-  if (!value || typeof value !== 'object') return false;
-  const input = value as Partial<ProviderReviewInput> & { mode?: unknown };
-  if (input.mode !== undefined && input.mode !== 'byok' && input.mode !== 'default') return false;
-  if (input.mode !== 'default' && (!isReviewProvider(input.provider) || !validModel(input.model))) return false;
-  if (!Array.isArray(input.blocks) || !input.blocks.length || input.blocks.length > 2000) return false;
-  const indices = new Set<number>();
-  let characters = 0;
-  for (const block of input.blocks) {
-    if (!block || !Number.isSafeInteger(block.index) || block.index < 0 || indices.has(block.index) || typeof block.text !== 'string') return false;
-    indices.add(block.index);
-    characters += block.text.length;
-  }
-  return characters <= 80_000;
-}
-
-function validModel(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-zA-Z0-9._:-]{1,120}$/.test(value);
-}
-
-async function readBody(request: Request): Promise<unknown> {
-  if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES) throw new RangeError();
-  const reader = request.body?.getReader();
-  if (!reader) throw new SyntaxError();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_BODY_BYTES) throw new RangeError();
-      chunks.push(value);
-    }
-  } finally {
-    await reader.cancel();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return JSON.parse(new TextDecoder().decode(bytes));
-}
-
-const reviewInput = createMiddleware<RpcEnv, '/review', { in: { json: ReviewInput }; out: { json: ReviewInput } }>(async (c, next) => {
+const reviewBoundary = createMiddleware<RpcEnv>(async (c, next) => {
   const request = c.req.raw;
   const env = c.env.bindings;
   if (!request.headers.get('content-type')?.startsWith('application/json')) return c.json({ error: 'JSON 形式で送信してください' }, 415);
   if (env.REVIEW_RATE_LIMIT && !(await env.REVIEW_RATE_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'local' })).success) {
     return c.json({ error: '校閲の実行間隔を空けてください' }, 429);
   }
-  let input: unknown;
-  try { input = await readBody(request); }
-  catch (error) {
+  try {
+    const body = await readBoundedBody(request);
+    // サイズ確認で元の本文を消費するため、validatorへ同じ本文を再供給する。
+    c.req.raw = new Request(request, { body });
+  } catch (error) {
     if (error instanceof RangeError) return c.json({ error: '原稿が大きすぎます' }, 413);
     return c.json({ error: 'JSON 形式が不正です' }, 400);
   }
-  if (!validInput(input)) return c.json({ error: '校閲リクエストの形式が不正です' }, 400);
-  c.req.addValidatedData('json', input);
   await next();
+});
+
+const reviewInput = zValidator('json', ReviewInputSchema, (result, c) => {
+  // Zodの詳細には入力値が含まれ得るため、公開する診断は固定する。
+  if (!result.success) return c.json({ error: '校閲リクエストの形式が不正です' }, 400);
 });
 
 export const app = new Hono<RpcEnv>()
@@ -112,7 +76,7 @@ export const app = new Hono<RpcEnv>()
     c.header('access-control-allow-headers', 'content-type,x-minaosi-api-key');
     return c.body(null, 204);
   })
-  .post('/review', reviewInput, async c => {
+  .post('/review', reviewBoundary, reviewInput, async c => {
     const request = c.req.raw;
     const url = new URL(request.url);
     const { bindings: env, reviewer, opencodeReviewer } = c.env;
@@ -120,10 +84,11 @@ export const app = new Hono<RpcEnv>()
     let selected: ProviderReviewInput;
     let apiKey: string;
     if (input.mode === 'default') {
-      if (!isReviewProvider(env.DEFAULT_REVIEW_PROVIDER) || !validModel(env.DEFAULT_REVIEW_MODEL) || !env.DEFAULT_REVIEW_API_KEY?.trim()) {
+      const model = ModelSchema.safeParse(env.DEFAULT_REVIEW_MODEL);
+      if (!isReviewProvider(env.DEFAULT_REVIEW_PROVIDER) || !model.success || !env.DEFAULT_REVIEW_API_KEY?.trim()) {
         return c.json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
       }
-      selected = { provider: env.DEFAULT_REVIEW_PROVIDER, model: env.DEFAULT_REVIEW_MODEL, blocks: input.blocks };
+      selected = { provider: env.DEFAULT_REVIEW_PROVIDER, model: model.data, blocks: input.blocks };
       apiKey = env.DEFAULT_REVIEW_API_KEY.trim();
     } else {
       apiKey = request.headers.get('x-minaosi-api-key')?.trim() ?? '';
@@ -169,7 +134,10 @@ export const app = new Hono<RpcEnv>()
 app.all('/review', c => c.json({ error: 'POST を使ってください' }, 405));
 
 // Upstream and binding exceptions can contain credentials; do not use Hono's raw-error logger.
-app.onError((_error, c) => c.json({ error: '校閲サーバーで処理に失敗しました' }, 500));
+app.onError((error, c) => {
+  if (error instanceof HTTPException && error.status === 400) return c.json({ error: 'JSON 形式が不正です' }, 400);
+  return c.json({ error: '校閲サーバーで処理に失敗しました' }, 500);
+});
 app.notFound(c => c.json({ error: '接続先が見つかりません' }, 404));
 
 export type AppType = typeof app;

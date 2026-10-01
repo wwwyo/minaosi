@@ -53,6 +53,39 @@ describe('anonymous BYOK API', () => {
     expect((await handleRequest(malformed, env, neverReview)).status).toBe(400);
   });
 
+  test('原稿の上限は受理し、空・超過・不正なブロック番号は外部送信しない', async () => {
+    const accepted = [
+      { ...body, mode: 'byok', blocks: [{ index: Number.MAX_SAFE_INTEGER, text: 'a'.repeat(80_000) }] },
+      { ...body, blocks: Array.from({ length: 2000 }, (_, index) => ({ index, text: '' })) },
+    ];
+    for (const value of accepted) {
+      expect((await handleRequest(request(value), env, async () => [])).status).toBe(200);
+    }
+    const rejected = [
+      { ...body, blocks: [] },
+      { ...body, blocks: Array.from({ length: 2001 }, (_, index) => ({ index, text: '' })) },
+      ...[-1, 0.5, Number.MAX_SAFE_INTEGER + 1].map(index => ({ ...body, blocks: [{ index, text: '原稿' }] })),
+    ];
+    for (const value of rejected) expect((await handleRequest(request(value), env, neverReview)).status).toBe(400);
+  });
+
+  test('Content-Lengthが過少でも受信したバイト数で巨大な本文を拒否する', async () => {
+    const response = await handleRequest(request({ ...body, extra: 'あ'.repeat(90_000) }, { 'content-length': '1' }), env, neverReview);
+    expect(response.status).toBe(413);
+  });
+
+  test('Zodの検証エラーにも入力内容や認証情報を含めない', async () => {
+    const logs = spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const response = await handleRequest(request({ ...body, model: '秘密の原稿 fixture-key', apiKey: 'fixture-private' }), env, neverReview);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: '校閲リクエストの形式が不正です' });
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('秘密の原稿');
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('fixture-key');
+      expect(JSON.stringify(logs.mock.calls)).not.toContain('fixture-private');
+    } finally { logs.mockRestore(); }
+  });
+
   test('許可した拡張のOriginだけにCORSを返す', async () => {
     const configured = { ...env, ALLOWED_ORIGINS: 'chrome-extension://fixture-extension' };
     const allowed = await handleRequest(request(body, { origin: 'chrome-extension://fixture-extension' }), configured, async () => []);

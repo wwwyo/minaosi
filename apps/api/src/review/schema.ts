@@ -1,6 +1,7 @@
 export const FINDING_KINDS = ['typo', 'fact', 'rule'] as const;
 export type FindingKind = typeof FINDING_KINDS[number];
-export interface ReviewBlock { index: number; text: string; }
+export { isReviewProvider } from './input';
+export type { ReviewBlock, ReviewMode, ReviewProvider, ProviderReviewInput, ReviewInput } from './input';
 export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 /** LLM が返す wire 形式。content 側の Finding への正規化は controller が行う。 */
@@ -21,23 +22,6 @@ export interface RawFinding {
 
 /** kind の妥当性を検証済みの RawFinding */
 export type ReviewedFinding = RawFinding & { kind: FindingKind };
-
-export type ReviewMode = 'default' | 'byok';
-
-export type ReviewProvider = 'anthropic' | 'openai' | 'opencode-go';
-
-export function isReviewProvider(value: unknown): value is ReviewProvider {
-  return value === 'anthropic' || value === 'openai' || value === 'opencode-go';
-}
-
-export interface ProviderReviewInput {
-  provider: ReviewProvider;
-  model: string;
-  blocks: ReviewBlock[];
-}
-
-
-export type ReviewInput = (ProviderReviewInput & { mode?: 'byok' }) | { mode: 'default'; blocks: ReviewBlock[] };
 
 /** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
 export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
