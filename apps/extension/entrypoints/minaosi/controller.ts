@@ -217,8 +217,9 @@ export class Controller {
       const blocks = this.adapter.extractBlocks(this.editor);
       const draft = blocks.map(({ index, text }) => ({ index, text }));
       const msg: ReviewRequest = this.config.mode === 'default'
-        ? { type: 'minaosi:review', mode: 'default', blocks: draft, turnstileToken: turnstile?.token }
-        : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft, turnstileToken: turnstile?.token };
+        ? { type: 'minaosi:review', mode: 'default', blocks: draft }
+        : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
+      msg.turnstileToken = turnstile?.token;
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');

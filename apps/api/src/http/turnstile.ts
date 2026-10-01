@@ -66,11 +66,11 @@ export async function verifyTurnstile(input: TurnstileCheck, env: TurnstileEnv, 
     return { ok: false, status: 503, error: '確認サービスへの接続に失敗しました。時間を置いて再試行してください' };
   }
   if (result.success !== true) {
-    console.warn({ event: 'turnstile_verification_failed' });
+    console.warn({ event: 'turnstile_verification_failed', reason: 'rejected' });
     return { ok: false, status: 403, error: REJECTED };
   }
   if (!resolved.testing && (result.hostname !== input.hostname || result.action !== TURNSTILE_ACTION || result.cdata)) {
-    console.warn({ event: 'turnstile_verification_failed' });
+    console.warn({ event: 'turnstile_verification_failed', reason: 'mismatch' });
     return { ok: false, status: 403, error: REJECTED };
   }
   return { ok: true };
@@ -102,6 +102,11 @@ function report(payload) {
   }
 }
 window.minaosiTurnstileOnload = function () {
+  // 拡張以外のページへ埋め込まれた場合は widget を発行しない。
+  // frame-ancestors が効かない経路への保険として ancestorOrigins でも確認する。
+  var ancestors = location.ancestorOrigins;
+  var embedder = ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '';
+  if (embedder && !embedder.split(':')[0].endsWith('-extension')) return;
   widget = turnstile.render('#t', {
     sitekey: ${JSON.stringify(sitekey)},
     action: ${JSON.stringify(TURNSTILE_ACTION)},

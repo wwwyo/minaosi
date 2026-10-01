@@ -96,6 +96,8 @@ BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用�
 
 widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の side panel がそのページを隠し iframe で開く。「見直す」のたびに side panel が postMessage で実行を依頼し、トークンを受け取って `run` コマンドに載せる。対話が必要な判定になったときだけ widget を pane 内に表示する。拡張の document は MV3 の CSP で remote script（`challenges.cloudflare.com` の api.js）を読めず、content script からページ DOM へ埋めると surface 側の frame-src CSP に遮られるため、この構成にした。API オリジンに置くことで surface ごとの CSP 差を吸収し、multi-surface にもそのまま使える。トークンは実行を依頼した親オリジンにだけ返す。
 
+任意の Web サイトが `/turnstile` を iframe で埋め込めると、hostname が校閲サーバーになる正当なトークンをサーバー側の照合をすり抜けて量産できてしまう。ページは CSP の `frame-ancestors` で拡張のオリジン（`chrome-extension:` など）だけに埋め込みを制限し、保険としてページ内でも `location.ancestorOrigins` を確認して拡張以外への埋め込みでは widget を描画しない。
+
 ### 本番キーの設定手順
 
 このリポジトリでは widget の作成・secret 登録・デプロイは行わない。公開するときの手順:

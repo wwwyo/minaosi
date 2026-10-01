@@ -86,6 +86,14 @@ test('POST /reviewはトークンを検証してからrate limitへ進む', asyn
   expect((await post({ 'cf-turnstile-response': 'x' }, async () => ({ ok: false, status: 503, error: '確認サービスへの接続に失敗しました' }))).status).toBe(503);
   expect(rateLimited).toBe(false);
 
+  // GET /turnstile: 拡張のオリジンだけに埋め込みを許す widget ページ
+  const page = await handleRequest(new Request('http://localhost/turnstile'), { TURNSTILE_SITE_KEY: '0x4AAAAAAA-real-sitekey' });
+  expect(page.status).toBe(200);
+  expect(page.headers.get('content-security-policy')).toContain('frame-ancestors chrome-extension: moz-extension: safari-web-extension:');
+  expect(await page.text()).toContain('ancestorOrigins');
+  // sitekey 未設定は fail closed
+  expect((await handleRequest(new Request('http://localhost/turnstile'), {})).status).toBe(503);
+
   // 検証成功なら rate limit → 校閲へ進む（AI未設定の503に到達する）
   const ok = await post({ 'cf-turnstile-response': 'x' }, async (input) => {
     expect(input).toEqual({ token: 'x', remoteip: null, hostname: 'localhost' });

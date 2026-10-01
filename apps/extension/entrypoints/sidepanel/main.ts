@@ -28,15 +28,23 @@ const send = connection.send.bind(connection);
 // 「見直す」の前に人間性の確認トークンを取る。widget は校閲サーバーの /turnstile を
 // iframe で開き、postMessage でトークンを受け取る（詳細は docs/review-gateway.md）。
 const turnstile = TurnstileGate.fromReviewEndpoint(import.meta.env.WXT_REVIEW_API_URL ?? '');
+let runInFlight = false;
 async function runReview() {
-  if (!turnstile) {
-    send({ action: 'run', turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
-    return;
-  }
+  // トークン取得中の連打を無視する（run コマンド側の running 状態が立つのはトークン到着後）
+  if (runInFlight) return;
+  runInFlight = true;
   try {
-    send({ action: 'run', turnstile: { token: await turnstile.acquire() } });
-  } catch (e) {
-    send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
+    if (!turnstile) {
+      send({ action: 'run', turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
+      return;
+    }
+    try {
+      send({ action: 'run', turnstile: { token: await turnstile.acquire() } });
+    } catch (e) {
+      send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
+    }
+  } finally {
+    runInFlight = false;
   }
 }
 

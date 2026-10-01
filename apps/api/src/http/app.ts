@@ -92,7 +92,9 @@ export const app = new Hono<RpcEnv>()
     const nonce = crypto.randomUUID();
     c.header(
       'content-security-policy',
-      `default-src 'none'; script-src 'nonce-${nonce}' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src https://challenges.cloudflare.com data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
+      // frame-ancestors で拡張以外の埋め込みを禁じる。任意サイトへ埋められると
+      // widget の hostname がこのオリジンになる正当トークンを量産できるため。
+      `default-src 'none'; script-src 'nonce-${nonce}' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src https://challenges.cloudflare.com data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors chrome-extension: moz-extension: safari-web-extension:`,
     );
     return c.html(turnstilePage(sitekey, nonce));
   })
