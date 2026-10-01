@@ -38,13 +38,15 @@ async function runReview() {
       send({ action: 'run', turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
       return;
     }
+    // 確認の応答待ちに別タブへ切り替わっていると、そのタブの原稿送信・エラー表示に化ける
+    const tabAtStart = connection.activeTabId;
+    const switched = () => connection.activeTabId !== tabAtStart;
     try {
-      // 確認の応答待ちに別タブへ切り替わっていると、そのタブの原稿が送られてしまう
-      const tabAtStart = connection.activeTabId;
       const token = await turnstile.acquire();
-      if (connection.activeTabId !== tabAtStart) return;
+      if (switched()) return;
       send({ action: 'run', turnstile: { token } });
     } catch (e) {
+      if (switched()) return;
       send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
     }
   } finally {
