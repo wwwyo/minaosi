@@ -88,7 +88,7 @@ BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用�
 
 ## Turnstile による人間性の確認
 
-`POST /review` は認証なしの公開エンドポイントで、per-IP のレート制限は分散 IP からの連打を止めない。入口として Cloudflare Turnstile の人間性確認を追加し、拡張は校閲実行のたびに widget でトークンを発行して `cf-turnstile-response` ヘッダーで送る。Worker は content-type・rate limit・本文サイズのチェックより先に siteverify で検証し、トークンが無い・検証に失敗した場合は403、確認サービスへの接続失敗・タイムアウトは503を返す（レート制限の枠を消費しない）。siteverify へ送るのは secret・トークン・呼び出し元IPだけで、原稿やBYOKのキーは送らない。応答は `success` に加え、`hostname` が要求ホストと一致すること・widget側の `action`（`review`）が一致すること・送っていない `cdata` が返らないことを検証する。
+`POST /review` は認証なしの公開エンドポイントで、per-IP のレート制限は分散 IP からの連打を止めない。入口として Cloudflare Turnstile の人間性確認を追加し、拡張は校閲実行のたびに widget でトークンを発行して `cf-turnstile-response` ヘッダーで送る。Worker はまずトークンの有無と形式だけを確認し（403、外部送信なし）、rate limit を通過してから siteverify で検証する。siteverify を先に呼ぶと、偽トークンの連打がそのまま外部への subrequest 増幅になるため。検証に失敗した場合は403、確認サービスへの接続失敗・タイムアウトは503を返す。siteverify へ送るのは secret・トークン・呼び出し元IPだけで、原稿やBYOKのキーは送らない。応答は `success` に加え、`hostname` が要求ホストと一致すること・widget側の `action`（`review`）が一致すること・送っていない `cdata` が返らないことを検証する。
 
 標準モードとBYOKの両方に適用する。BYOKの推論料金は利用者のキーに発生するが、Worker の invocation や枠管理は共有インフラであり、BYOK だけ検証を外すとエンドポイント自体への連打の抜け道が残るため。
 

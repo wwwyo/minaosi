@@ -63,8 +63,9 @@ test('テストsitekeyだけの環境はテストsecretで検証し、dummy応�
   expect(result).toEqual({ ok: true });
 });
 
-test('POST /reviewはトークンを検証してからrate limitへ進む', async () => {
+test('POST /reviewはトークン・rate limit・siteverifyの順で入口を通す', async () => {
   let rateLimited = false;
+  let verified = false;
   const env: Env = {
     LOCAL_OPENCODE_BYOK: 'true',
     TURNSTILE_SECRET_KEY: 'real-secret',
@@ -77,28 +78,40 @@ test('POST /reviewはトークンを検証してからrate limitへ進む', asyn
       body: JSON.stringify({ mode: 'default', blocks: [{ index: 0, text: 'こんにちは' }] }),
     }), env, undefined, undefined, undefined, verifier);
 
-  // トークンなし: 403 で止まり、rate limit を消費しない
+  // トークンなし: 形式チェックで403。rate limit・siteverify のどちらも消費しない
   expect((await post({})).status).toBe(403);
   expect(rateLimited).toBe(false);
+  expect(verified).toBe(false);
 
-  // 検証失敗の結果はそのまま利用者へ返す
-  expect((await post({ 'cf-turnstile-response': 'x' }, async () => ({ ok: false, status: 403, error: '人間性の確認に失敗しました。もう一度お試しください' }))).status).toBe(403);
-  expect((await post({ 'cf-turnstile-response': 'x' }, async () => ({ ok: false, status: 503, error: '確認サービスへの接続に失敗しました' }))).status).toBe(503);
-  expect(rateLimited).toBe(false);
+  // 検証失敗: rate limit は通過するが siteverify の結果をそのまま返す
+  expect((await post({ 'cf-turnstile-response': 'x' }, async () => { verified = true; return { ok: false, status: 403, error: '人間性の確認に失敗しました。もう一度お試しください' }; })).status).toBe(403);
+  expect((await post({ 'cf-turnstile-response': 'x' }, async () => { verified = true; return { ok: false, status: 503, error: '確認サービスへの接続に失敗しました' }; })).status).toBe(503);
+  expect(rateLimited).toBe(true);
 
-  // GET /turnstile: 拡張のオリジンだけに埋め込みを許す widget ページ
+  // rate limit 超過: siteverify を呼ばず429（偽トークン連打で外部呼出しを増幅させない）
+  verified = false;
+  const limited = await handleRequest(new Request('http://localhost/review', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'cf-turnstile-response': 'x' },
+    body: JSON.stringify({ mode: 'default', blocks: [{ index: 0, text: 'こんにちは' }] }),
+  }), { ...env, REVIEW_RATE_LIMIT: { limit: async () => ({ success: false }) } }, undefined, undefined, undefined,
+    async () => { verified = true; return { ok: true }; });
+  expect(limited.status).toBe(429);
+  expect(verified).toBe(false);
+
+  // 検証成功なら校閲へ進む（AI未設定の503に到達する）
+  const ok = await post({ 'cf-turnstile-response': 'x' }, async (input) => {
+    expect(input).toEqual({ token: 'x', remoteip: null, hostname: 'localhost' });
+    return { ok: true };
+  });
+  expect(ok.status).toBe(503);
+});
+
+test('GET /turnstileは拡張のオリジンだけに埋め込みを許すwidgetページを返す', async () => {
   const page = await handleRequest(new Request('http://localhost/turnstile'), { TURNSTILE_SITE_KEY: '0x4AAAAAAA-real-sitekey' });
   expect(page.status).toBe(200);
   expect(page.headers.get('content-security-policy')).toContain('frame-ancestors chrome-extension: moz-extension: safari-web-extension:');
   expect(await page.text()).toContain('ancestorOrigins');
   // sitekey 未設定は fail closed
   expect((await handleRequest(new Request('http://localhost/turnstile'), {})).status).toBe(503);
-
-  // 検証成功なら rate limit → 校閲へ進む（AI未設定の503に到達する）
-  const ok = await post({ 'cf-turnstile-response': 'x' }, async (input) => {
-    expect(input).toEqual({ token: 'x', remoteip: null, hostname: 'localhost' });
-    return { ok: true };
-  });
-  expect(rateLimited).toBe(true);
-  expect(ok.status).toBe(503);
 });

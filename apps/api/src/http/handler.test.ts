@@ -4,7 +4,7 @@ import { handleRequest, type Env } from './handler';
 // Turnstile の検証経路（siteverify呼出し）は turnstile.test.ts が担う。ここではテスト用
 // secret で通し、外部への fetch だけモックする。テスト用 secret では hostname/action の
 // 照合を行わないため、任意のローカルURLで通る。
-const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token', TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' };
+const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token', TURNSTILE_SITE_KEY: '1x00000000000000000000BB', TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' };
 spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   if (String(input).startsWith('https://challenges.cloudflare.com/')) return Response.json({ success: true });
   throw new Error('siteverify以外の外部通信はテスト対象外です');
@@ -130,7 +130,7 @@ const standardEnv: Env = {
 const neverStandard = async () => { throw new Error('AI bindingを呼んではいけない'); };
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
   // Gateway用secretがなくても、AI bindingだけで標準校閲は成立する。
-  const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY };
+  const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY, TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY };
   const response = await handleRequest(
     request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }),
     minimal, neverReview, neverReview,

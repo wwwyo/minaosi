@@ -6,7 +6,7 @@ import { INVALID_TOOL_INPUT } from '../review/errors';
 import { ModelSchema, ReviewInputSchema } from '../review/input';
 import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding } from '../review/schema';
 import { readBoundedBody } from './body';
-import { turnstilePage, type TurnstileVerifier } from './turnstile';
+import { readTurnstileToken, turnstilePage, TURNSTILE_REJECT_MESSAGE, type TurnstileVerifier } from './turnstile';
 
 export interface ConcurrencyService {
   acquire(): Promise<string | null>;
@@ -39,20 +39,19 @@ interface RpcEnv {
 const reviewBoundary = createMiddleware<RpcEnv>(async (c, next) => {
   const request = c.req.raw;
   const env = c.env.bindings;
-  // 人間性の確認は入口の先頭で行い、rate limit の枠を消費しない。
-  const turnstile = await c.env.turnstileVerifier(
-    {
-      token: request.headers.get('cf-turnstile-response') ?? '',
-      remoteip: request.headers.get('cf-connecting-ip'),
-      hostname: new URL(request.url).hostname,
-    },
-    env,
-  );
-  if (!turnstile.ok) return c.json({ error: turnstile.error }, turnstile.status);
+  // siteverify 呼出しは rate limit より後に置く。先に呼ぶと、偽トークンの連打が
+  // 外部への subrequest 増幅になる。有無と形式の確認だけでは送信しない。
+  const turnstileToken = readTurnstileToken(request);
+  if (!turnstileToken) return c.json({ error: TURNSTILE_REJECT_MESSAGE }, 403);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return c.json({ error: 'JSON 形式で送信してください' }, 415);
   if (env.REVIEW_RATE_LIMIT && !(await env.REVIEW_RATE_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'local' })).success) {
     return c.json({ error: '校閲の実行間隔を空けてください' }, 429);
   }
+  const turnstile = await c.env.turnstileVerifier(
+    { token: turnstileToken, remoteip: request.headers.get('cf-connecting-ip'), hostname: new URL(request.url).hostname },
+    env,
+  );
+  if (!turnstile.ok) return c.json({ error: turnstile.error }, turnstile.status);
   try {
     const body = await readBoundedBody(request);
     // サイズ確認で元の本文を消費するため、validatorへ同じ本文を再供給する。

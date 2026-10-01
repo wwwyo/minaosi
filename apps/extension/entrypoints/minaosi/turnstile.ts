@@ -17,11 +17,15 @@ export class TurnstileGate {
     private readonly origin: string,
   ) {}
 
-  /** 校閲サーバーの /review URL から widget ページのURLを組み立てる。未設定なら null。 */
+  /** 校閲サーバーの /review URL から widget ページのURLを組み立てる。未設定・不正なURLは null。 */
   static fromReviewEndpoint(endpoint: string): TurnstileGate | null {
     if (!endpoint) return null;
-    const page = new URL('/turnstile', endpoint);
-    return new TurnstileGate(page.href, page.origin);
+    try {
+      const page = new URL('/turnstile', endpoint);
+      return new TurnstileGate(page.href, page.origin);
+    } catch {
+      return null;
+    }
   }
 
   /** 新しいトークンを1件取得する。同時実行は認めない（トークンは使い切り）。 */

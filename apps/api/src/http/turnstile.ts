@@ -9,6 +9,13 @@ const TURNSTILE_TEST_SECRET = '1x0000000000000000000000000000000AA';
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const MAX_TOKEN_LENGTH = 2048;
 const VERIFY_TIMEOUT_MS = 10_000;
+const REJECTED = '人間性の確認に失敗しました。もう一度お試しください';
+
+/** cf-turnstile-response ヘッダーの有無と形式を確認し、妥当なトークン文字列を返す。 */
+export function readTurnstileToken(request: Request): string {
+  const token = request.headers.get('cf-turnstile-response') ?? '';
+  return token && token.length <= MAX_TOKEN_LENGTH ? token : '';
+}
 
 export interface TurnstileEnv {
   TURNSTILE_SITE_KEY?: string;
@@ -24,19 +31,19 @@ export interface TurnstileCheck {
 export type TurnstileResult = { ok: true } | { ok: false; status: 403 | 503; error: string };
 export type TurnstileVerifier = (input: TurnstileCheck, env: TurnstileEnv) => Promise<TurnstileResult>;
 
-const REJECTED = '人間性の確認に失敗しました。もう一度お試しください';
+export { REJECTED as TURNSTILE_REJECT_MESSAGE };
 
 function resolveSecret(env: TurnstileEnv): { secret: string; testing: boolean } | null {
-  if (env.TURNSTILE_SECRET_KEY) {
-    return { secret: env.TURNSTILE_SECRET_KEY, testing: env.TURNSTILE_SECRET_KEY === TURNSTILE_TEST_SECRET };
-  }
-  // 開発用のテスト sitekey だけは対応するテスト secret で検証する。それ以外の未設定は fail closed。
-  if (env.TURNSTILE_SITE_KEY === TURNSTILE_TEST_SITE_KEY) return { secret: TURNSTILE_TEST_SECRET, testing: true };
-  return null;
+  const secret = env.TURNSTILE_SECRET_KEY || (env.TURNSTILE_SITE_KEY === TURNSTILE_TEST_SITE_KEY ? TURNSTILE_TEST_SECRET : '');
+  if (!secret) return null;
+  // 照合の緩和は sitekey と secret の両方がテストキーの組のときだけにする。
+  // テスト secret が実 sitekey に残ると検証だけが緩んだまま動くため。
+  return { secret, testing: secret === TURNSTILE_TEST_SECRET && env.TURNSTILE_SITE_KEY === TURNSTILE_TEST_SITE_KEY };
 }
 
 interface SiteverifyResponse {
   success?: boolean;
+  'error-codes'?: string[];
   hostname?: string;
   action?: string;
   cdata?: string;
@@ -66,7 +73,8 @@ export async function verifyTurnstile(input: TurnstileCheck, env: TurnstileEnv, 
     return { ok: false, status: 503, error: '確認サービスへの接続に失敗しました。時間を置いて再試行してください' };
   }
   if (result.success !== true) {
-    console.warn({ event: 'turnstile_verification_failed', reason: 'rejected' });
+    // error-codes は Cloudflare が定める固定の列挙値で、利用者の情報を含まない
+    console.warn({ event: 'turnstile_verification_failed', reason: 'rejected', codes: result['error-codes'] });
     return { ok: false, status: 403, error: REJECTED };
   }
   if (!resolved.testing && (result.hostname !== input.hostname || result.action !== TURNSTILE_ACTION || result.cdata)) {
@@ -105,7 +113,8 @@ window.minaosiTurnstileOnload = function () {
   // 拡張以外のページへ埋め込まれた場合は widget を発行しない。
   // frame-ancestors が効かない経路への保険として ancestorOrigins でも確認する。
   var ancestors = location.ancestorOrigins;
-  var embedder = ancestors && ancestors.length ? ancestors[ancestors.length - 1] : '';
+  // ancestorOrigins は Chromium 系のみ。Firefox では iframe の referrer が埋め込み元になる
+  var embedder = ancestors && ancestors.length ? ancestors[ancestors.length - 1] : (document.referrer || '');
   if (embedder && !embedder.split(':')[0].endsWith('-extension')) return;
   widget = turnstile.render('#t', {
     sitekey: ${JSON.stringify(sitekey)},
