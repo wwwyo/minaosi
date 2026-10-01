@@ -2,24 +2,29 @@ import { app, type ConcurrencyService } from './app';
 export type { ConcurrencyService } from './app';
 import { reviewThroughGateway, type GatewayEnv } from '../review/providers/gateway';
 import { reviewWithOpenCode } from '../review/providers/opencode';
+import { reviewWithWorkersAi } from '../review/providers/workers-ai';
 import type { InferEnv, UnwrapConfig } from 'cf/config';
 import type config from '../../cloudflare.config';
 
-export type Env = GatewayEnv & Partial<Omit<InferEnv<UnwrapConfig<typeof config>['worker']>, 'REVIEW_CONCURRENCY'>> & {
+export type Env = Partial<GatewayEnv> & Partial<Omit<InferEnv<UnwrapConfig<typeof config>['worker']>, 'REVIEW_CONCURRENCY'>> & {
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };
-  DEFAULT_REVIEW_PROVIDER?: string;
-  DEFAULT_REVIEW_MODEL?: string;
-  DEFAULT_REVIEW_API_KEY?: string;
 };
 
 type Reviewer = typeof reviewThroughGateway;
+type StandardReviewer = typeof reviewWithWorkersAi;
 
 /** 校閲を処理し、原稿や認証情報を含まない実行結果だけを記録する。 */
-export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway, opencodeReviewer = reviewWithOpenCode): Promise<Response> {
+export async function handleRequest(
+  request: Request,
+  env: Env,
+  reviewer: Reviewer = reviewThroughGateway,
+  opencodeReviewer = reviewWithOpenCode,
+  standardReviewer: StandardReviewer = reviewWithWorkersAi,
+): Promise<Response> {
   const started = performance.now();
   let response: Response;
   try {
-    response = await app.fetch(request, { bindings: env, reviewer, opencodeReviewer });
+    response = await app.fetch(request, { bindings: env, reviewer, opencodeReviewer, standardReviewer });
   } catch {
     // bindingの例外も原稿・認証情報を含む可能性があるため、生の例外を記録しない。
     const headers = new Headers({ 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', vary: 'Origin' });

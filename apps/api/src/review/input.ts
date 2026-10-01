@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const ReviewProviderSchema = z.enum(['anthropic', 'openai', 'deepseek', 'opencode-go']);
 export const ReviewModeSchema = z.enum(['default', 'byok']);
-export const ModelSchema = z.string().regex(/^[a-zA-Z0-9._:-]{1,120}$/);
+export const ModelSchema = z.string().regex(/^[@a-zA-Z0-9._:/-]{1,120}$/).refine(value => !value.includes('..'));
 
 export const ReviewBlockSchema = z.object({
   index: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -34,7 +34,3 @@ export type ReviewProvider = z.infer<typeof ReviewProviderSchema>;
 export type ReviewMode = z.infer<typeof ReviewModeSchema>;
 export type ProviderReviewInput = z.infer<typeof ProviderReviewInputSchema>;
 export type ReviewInput = z.infer<typeof ReviewInputSchema>;
-
-export function isReviewProvider(value: unknown): value is ReviewProvider {
-  return ReviewProviderSchema.safeParse(value).success;
-}

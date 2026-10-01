@@ -11,9 +11,9 @@ import { REPORT_TOOL, systemPrompt, userPrompt } from '../prompt';
 import type { HttpFetch, ProviderReviewInput } from '../schema';
 
 export interface GatewayEnv {
-  CLOUDFLARE_ACCOUNT_ID: string;
-  CLOUDFLARE_AI_GATEWAY_ID: string;
-  CF_AIG_TOKEN: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_AI_GATEWAY_ID?: string;
+  CF_AIG_TOKEN?: string;
 }
 
 /** TanStack AI の校閲を、利用者のキーで Gateway の provider-native 経路へ送る。 */
@@ -24,6 +24,7 @@ export async function reviewThroughGateway(
   fetcher: HttpFetch = fetch,
 ): Promise<ReviewedFinding[]> {
   if (request.provider === 'opencode-go') throw new Error('OpenCode GoはローカルBYOK経路で実行してください');
+  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN) throw new Error('Gatewayの接続設定がありません');
   const gateway = cloudflareGateway(request.provider, {
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,
