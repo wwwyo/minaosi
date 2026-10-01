@@ -58,14 +58,17 @@ export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: Wo
   // binding経路はAbortSignalを run() へ伝えないため、await自体をタイマーで打ち切る。
   // 打ち切り後も上流の推論は続行し得るが、呼び出し側は枠を解放して応答を返せる。
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let abandoned = false;
   const timedOut = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
+      // run()が応答しない状態でreturn()を呼ぶとpendingなnext()の後ろに並んで戻らないため、ここでは閉じずに放置する。
+      abandoned = true;
       abortController.abort();
       reject(new Error('校閲がタイムアウトしました'));
     }, REVIEW_TIMEOUT_MS);
   });
+  const iterator = stream[Symbol.asyncIterator]();
   try {
-    const iterator = stream[Symbol.asyncIterator]();
     while (true) {
       const pending = iterator.next();
       // タイムアウトで打ち切った後に置き去りにしたstreamがrejectしても握り潰す。
@@ -78,5 +81,9 @@ export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: Wo
     return findings;
   } finally {
     clearTimeout(timer);
+    // 手動ループではreturnが自動で呼ばれないため、中断・失敗時にgeneratorを閉じる。
+    if (!abandoned) {
+      try { await iterator.return?.(); } catch { /* 打ち切ったstreamの拒否は無視する */ }
+    }
   }
 }
