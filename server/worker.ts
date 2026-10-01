@@ -2,15 +2,14 @@ import { reviewThroughGateway, type GatewayEnv } from './review';
 import { reviewWithOpenCode } from './opencode';
 import { INVALID_TOOL_INPUT } from './anthropic';
 import { isReviewProvider, type ProviderReviewInput } from '../entrypoints/minaosi/review/providers';
+import type { InferEnv, UnwrapConfig } from 'cf/config';
+import type config from '../cloudflare.config';
 
-export interface Env extends GatewayEnv {
-  ALLOWED_ORIGINS?: string;
-  LOCAL_OPENCODE_BYOK?: boolean;
+export type Env = GatewayEnv & Partial<InferEnv<UnwrapConfig<typeof config>['worker']>> & {
   DEFAULT_REVIEW_PROVIDER?: string;
   DEFAULT_REVIEW_MODEL?: string;
   DEFAULT_REVIEW_API_KEY?: string;
-  REVIEW_RATE_LIMIT?: { limit(options: { key: string }): Promise<{ success: boolean }> };
-}
+};
 
 type ReviewInput = (ProviderReviewInput & { mode?: 'byok' }) | { mode: 'default'; blocks: ProviderReviewInput['blocks'] };
 type Reviewer = typeof reviewThroughGateway;
@@ -59,8 +58,7 @@ async function readBody(request: Request): Promise<unknown> {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-/** 標準・BYOKの校閲を受け付け、原稿・キーを永続化しない。 */
-export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway, opencodeReviewer = reviewWithOpenCode): Promise<Response> {
+async function reviewRequest(request: Request, env: Env, reviewer: Reviewer, opencodeReviewer: typeof reviewWithOpenCode): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get('origin');
   const allowed = (env.ALLOWED_ORIGINS ?? '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -101,7 +99,8 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
     selected = { provider: input.provider, model: input.model, blocks: input.blocks };
   }
 
-  const localOpenCode = selected.provider === 'opencode-go' && env.LOCAL_OPENCODE_BYOK && input.mode !== 'default';
+  const loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+  const localOpenCode = selected.provider === 'opencode-go' && loopback && env.LOCAL_OPENCODE_BYOK === 'true' && input.mode !== 'default';
   if (selected.provider === 'opencode-go' && !localOpenCode) {
     return json({ error: 'OpenCode Goの試用経路はローカルBYOKで利用できます' }, 503);
   }
@@ -115,6 +114,27 @@ export async function handleRequest(request: Request, env: Env, reviewer: Review
     // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
     return json({ error: error instanceof Error && error.message === INVALID_TOOL_INPUT ? INVALID_TOOL_INPUT : '校閲に失敗しました。API key・モデル・Gateway の接続設定を確認してください' }, 502);
   }
+}
+
+/** 校閲を処理し、原稿や認証情報を含まない実行結果だけを記録する。 */
+export async function handleRequest(request: Request, env: Env, reviewer: Reviewer = reviewThroughGateway, opencodeReviewer = reviewWithOpenCode): Promise<Response> {
+  const started = performance.now();
+  let response: Response;
+  try {
+    response = await reviewRequest(request, env, reviewer, opencodeReviewer);
+  } catch {
+    // bindingの例外も原稿・認証情報を含む可能性があるため、生の例外を記録しない。
+    const headers = new Headers({ 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', vary: 'Origin' });
+    const origin = request.headers.get('origin');
+    if (origin && (env.ALLOWED_ORIGINS ?? '').split(',').some((allowed) => allowed.trim() === origin)) headers.set('access-control-allow-origin', origin);
+    response = Response.json({ error: '校閲サーバーで処理に失敗しました' }, { status: 500, headers });
+  }
+  if (request.method === 'POST' && new URL(request.url).pathname === '/review') {
+    const record = { event: 'review_request_completed', requestId: crypto.randomUUID(), status: response.status, durationMs: Math.round(performance.now() - started) };
+    if (response.status >= 500) console.error(record);
+    else console.log(record);
+  }
+  return response;
 }
 
 export default { fetch: (request: Request, env: Env) => handleRequest(request, env) };

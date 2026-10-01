@@ -6,15 +6,17 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
-    "check": "wxt prepare && tsc --noEmit",
+    "check": "wxt prepare && cf workers types && tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "bun test",
-    "api:dev": "bun --watch server/dev.ts",
-    "api:build": "wrangler deploy --dry-run --outdir .output/review-worker",
-    "api:deploy": "wrangler deploy",
-    "api:configure": "bun scripts/configure-worker.ts"
+    "api:dev": "cf dev --mode local",
+    "api:build": "cf build",
+    "api:deploy": "cf deploy",
+    "api:configure": "bun scripts/configure-worker.ts",
+    "api:worker:dev": "cf dev --mode gateway"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
+    "cf": "1.0.0-beta.6",
     "typescript": "7.0.2",
     "wrangler": "4.136.3",
     "wxt": "0.21.4"

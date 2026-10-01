@@ -1,10 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { handleRequest, type Env } from './worker';
 
 const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token' };
 const body = { provider: 'openai' as const, model: 'gpt-5.4-mini', blocks: [{ index: 0, text: '原稿' }] };
-function request(value: unknown = body, headers: Record<string, string> = {}) {
-  return new Request('https://review.example.com/review', { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key', ...headers }, body: JSON.stringify(value) });
+function request(value: unknown = body, headers: Record<string, string> = {}, url = 'https://review.example.com/review') {
+  return new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key', ...headers }, body: JSON.stringify(value) });
 }
 const neverReview = async () => { throw new Error('upstreamを呼んではいけない'); };
 
@@ -106,17 +106,53 @@ test('BYOKのキー未設定・モード指定の誤りを標準課金へフォ�
 
 test('ローカルOpenCode BYOKだけはGateway未設定でも利用者のキーで校閲する', async () => {
   const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free' };
-  const result = await handleRequest(request(opencode), { ...env, CF_AIG_TOKEN: '', LOCAL_OPENCODE_BYOK: true }, neverReview, async (input, key) => {
+  const result = await handleRequest(request(opencode, {}, 'http://127.0.0.1:8787/review'), { ...env, CF_AIG_TOKEN: '', LOCAL_OPENCODE_BYOK: 'true' }, neverReview, async (input, key) => {
     expect(input).toEqual(opencode);
     expect(key).toBe('fixture-key');
     return [];
   });
   expect(result.status).toBe(200);
-  expect((await handleRequest(request(opencode, { 'x-minaosi-api-key': '' }), { ...env, LOCAL_OPENCODE_BYOK: true }, neverReview, neverReview)).status).toBe(401);
+  expect((await handleRequest(request(opencode, { 'x-minaosi-api-key': '' }), { ...env, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(401);
 });
 
 test('本番と標準モードをOpenCodeの直接接続へ流さない', async () => {
-  const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free', LOCAL_OPENCODE_BYOK: true };
+  const opencode = { ...body, provider: 'opencode-go' as const, model: 'space-bunny-free', LOCAL_OPENCODE_BYOK: 'true' };
   expect((await handleRequest(request(opencode), env, neverReview, neverReview)).status).toBe(503);
-  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'opencode-go', LOCAL_OPENCODE_BYOK: true }, neverReview, neverReview)).status).toBe(503);
+  expect((await handleRequest(request(opencode), { ...env, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(503);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, DEFAULT_REVIEW_PROVIDER: 'opencode-go', LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(503);
+});
+
+test('成功・失敗のログに原稿・キー・URL・上流エラー本文を残さない', async () => {
+  const success = spyOn(console, 'log').mockImplementation(() => {});
+  const failure = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await handleRequest(request(), env, async () => []);
+    const response = await handleRequest(request(body, {}, 'https://review.example.com/review?private=fixture-key'), env, async () => {
+      throw new Error('原稿 fixture-key fixture-cf-token');
+    });
+    expect(response.status).toBe(502);
+    const records = [success.mock.calls[0]?.[0], failure.mock.calls[0]?.[0]];
+    for (const record of records) {
+      expect(record).toEqual({ event: 'review_request_completed', requestId: expect.any(String), status: expect.any(Number), durationMs: expect.any(Number) });
+    }
+    expect(records.map((record) => record.status)).toEqual([200, 502]);
+    const serialized = JSON.stringify(records);
+    for (const secret of ['原稿', 'fixture-key', 'fixture-cf-token', 'review.example.com', 'private=']) expect(serialized).not.toContain(secret);
+  } finally {
+    success.mockRestore();
+    failure.mockRestore();
+  }
+});
+
+test('bindingの例外も安全な500応答とメタデータだけにする', async () => {
+  const failure = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const response = await handleRequest(request(body, { origin: 'chrome-extension://fixture-extension' }), { ...env, ALLOWED_ORIGINS: 'chrome-extension://fixture-extension', REVIEW_RATE_LIMIT: { limit: async () => { throw new Error('fixture-key 原稿'); } } }, neverReview);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('access-control-allow-origin')).toBe('chrome-extension://fixture-extension');
+    expect(await response.text()).not.toContain('fixture-key');
+    expect(JSON.stringify(failure.mock.calls)).not.toContain('原稿');
+  } finally {
+    failure.mockRestore();
+  }
 });

@@ -1,4 +1,5 @@
 import { chat, toolDefinition } from '@tanstack/ai';
+import { fetchWithoutRedirects } from './fetch';
 import { OpenAIChatCompletionsTextAdapter, type createOpenaiChatCompletions } from '@tanstack/ai-openai';
 import { LANGUAGE_RULES } from '../entrypoints/minaosi/rubric';
 import { REPORT_TOOL, systemPrompt, userPrompt, validateReport, type ReviewedFinding } from '../entrypoints/minaosi/review/prompt';
@@ -22,7 +23,7 @@ export async function reviewWithOpenCode(request: ProviderReviewInput, apiKey: s
   let requests = 0;
   const safeFetch: HttpFetch = (input, options) => {
     if (++requests > 3) throw new Error('校閲の実行回数上限に達しました');
-    return fetcher(input, { ...options, redirect: 'error' });
+    return fetchWithoutRedirects(fetcher, input, options);
   };
   const adapter = new OpenAIChatCompletionsTextAdapter<Parameters<typeof createOpenaiChatCompletions>[0], { max_tokens: number }>({
     apiKey,

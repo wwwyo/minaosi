@@ -14,3 +14,6 @@ mise.local.toml
 
 .wrangler/
 .dev.vars*
+
+.cloudflare/
+worker-configuration.d.ts

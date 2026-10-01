@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": [] },
+  "include": ["*.ts", "../.cloudflare/types/index.d.ts"],
+  "exclude": ["*.test.ts"]
+}

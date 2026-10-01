@@ -19,7 +19,7 @@ test('OpenCode Goに利用者のキーと正しいモデル・toolを送信す�
     expect(headers.get('authorization')).toBe('Bearer fixture-opencode-key');
     expect(headers.get('user-agent')).toBe('minaosi/0.1.0');
     expect(headers.get('x-opencode-session')).toBeTruthy();
-    expect(options?.redirect).toBe('error');
+    expect(options?.redirect).toBe('manual');
     const body = JSON.parse(options?.body as string);
     expect(body.model).toBe('space-bunny-free');
     expect(body.max_tokens).toBe(8192);

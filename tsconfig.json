@@ -4,5 +4,6 @@
     "types": [
       "bun"
     ]
-  }
+  },
+  "exclude": ["**/node_modules", ".output", ".cloudflare", "worker-configuration.d.ts"]
 }

@@ -1,4 +1,5 @@
 import { chat, toolDefinition } from '@tanstack/ai';
+import { fetchWithoutRedirects } from './fetch';
 import { anthropicAdapter, INVALID_TOOL_INPUT } from './anthropic';
 import { webSearchTool as anthropicSearch } from '@tanstack/ai-anthropic/tools';
 import { createOpenaiChat } from '@tanstack/ai-openai';
@@ -47,7 +48,7 @@ export async function reviewThroughGateway(
   let requests = 0;
   const safeFetch = (input: RequestInfo | URL, init?: RequestInit) => {
     if (++requests > 5) throw new Error('校閲の実行回数上限に達しました');
-    return fetcher(input, { ...init, redirect: 'error' });
+    return fetchWithoutRedirects(fetcher, input, init);
   };
   const config = { baseURL: gateway.baseURL, defaultHeaders: gateway.headers, fetch: safeFetch, maxRetries: 0, timeout: 210_000 };
   const abortController = new AbortController();

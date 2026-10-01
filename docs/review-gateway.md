@@ -8,7 +8,7 @@
 
 自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系）から判定する。拡張はキーをローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
 
-Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、BYOKモードで利用者のキーがないリクエストは必ず拒否する。標準モードへの自動切り替えはしない。標準モードのキーはサーバーのsecretとして保持する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化し、Worker の observability も無効にする。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
+Gateway の `default` 保存キーや運営者の AI 課金を利用しないよう、BYOKモードで利用者のキーがないリクエストは必ず拒否する。標準モードへの自動切り替えはしない。標準モードのキーはサーバーのsecretとして保持する。Gateway の認証トークンはサーバーだけに置き、拡張には含めない。Gateway のキャッシュと本文ログはリクエスト単位で無効化する。Workerには本文・キーを含めない実行結果のログだけを残す。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
 
 この方式はGatewayにキーを保存する方式とは異なる。複数端末への同期や、保存キーを匿名端末トークンで利用する仕組みはまだ実装しない。拡張のローカル保存は秘密専用の保管庫ではなく、端末や拡張が侵害された場合のキー流出は防げない。
 
@@ -22,7 +22,7 @@ mise exec -- bun run api:dev
 mise exec -- bun run dev
 ```
 
-校閲サーバーは `http://127.0.0.1:8787` で起動する。開発用拡張の接続先は既定で `/review`。`GET /health` の `configured` はGateway接続設定の有無だけを返し、AIを呼び出さない。
+`api:dev` は `cf dev --mode local` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はGateway接続設定の有無だけを返し、AIを呼び出さない。
 
 次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。
 
@@ -38,19 +38,26 @@ mise exec -- bun run dev
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
-開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。ローカルサーバーだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を用意している。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカル校閲サーバーからOpenCode Goへ接続する。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。本番Workerや標準モードではこの経路を拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
+開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。localモードだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を有効にする。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカルWorkerからOpenCode Goへ接続する。Gateway設定がなくてもローカル試用は動くため、起動時のGateway用secret未設定の警告はこの用途では問題ない。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。通常ビルドではこの経路を無効にし、仮にlocalモードの設定を使ってもループバック以外のリクエストと標準モードは拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
 
 ## Worker の公開設定
 
-Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。このプロジェクトは Wrangler 設定なので、ビルド・デプロイは Wrangler を使う。
+Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。Workerの設定の正本は `cloudflare.config.ts`。開発・ビルド・デプロイの入口はcfに統一する。`wrangler.config.ts` はcfが利用する既存のbundler設定で、Worker名・binding・互換性設定は重複させない。
 
 ```bash
+mise exec -- bun run api:dev
 mise exec -- bun run api:build
 mise exec -- bun run api:deploy
 mise exec -- bun run api:configure
 ```
 
+本番と同じGateway経路をローカルで確認するときは、`mise exec -- bun run api:worker:dev` を使う。8788で起動し、OpenCode Go経路は無効になる。拡張から検証する場合は、開発用の `WXT_REVIEW_API_URL` を `http://127.0.0.1:8788/review` に設定する。どちらの開発モードもbindingをローカルで模擬する。Gatewayへの実AI呼び出しには上記の接続設定が必要で、シミュレーターの起動だけでは外部AIの設定は完了しない。
+
+`api:build` は `.cloudflare/output/v0/` へビルドし、アップロードは行わない。`api:deploy` はビルド後にWorkerを公開する。デプロイは別途実行する。
+
 `api:configure` はGatewayとOriginの必須設定、および3項目が揃った標準モード設定をmiseの環境変数から `cf workers secrets bulk` にstdinで渡し、Workerへ設定する。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。設定情報がない場合、校閲APIは503を返して外部送信しない。
+
+cfはNode.jsで実行する。`cf/config` をBunで読み込むことはサポートされないため、miseでNode.jsも管理する。cfは `1.0.0-beta.6` にexact固定し、2026-10-01のユーザー承認で、この依存追加だけ7日cooldownの例外とした。`bunfig.toml` の7日待機設定は維持する。
 
 公開したサーバーの `https://…/review` を `WXT_REVIEW_API_URL` に設定して拡張をビルドする。これは公開URLだけで、トークンやキーを含めない。拡張のhost permissionはこのURLのOriginだけに限定する。設定がない本番ビルドでは外部接続を許可せず、校閲実行時に未設定と表示する。
 
@@ -60,6 +67,16 @@ mise exec -- bun run check
 mise exec -- bun test
 ```
 
-Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・リクエストサイズ制限を持つ。制限は匿名サービスの負荷抑制であり、アカウント別の請求・利用上限管理ではない。標準モードを一般公開する際は運営側で費用上限を設ける。
+Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・リクエストサイズ制限を持つ。レート制限はCloudflare拠点ごとの近似的な制限で、厳密な全世界共通の利用上限ではない。標準モードを一般公開する際は運営側で費用上限を設ける。
+
+## 実行結果のログ
+
+`POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
+
+ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `cloudflare.config.ts` の `observability.logs` にあり、サンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。
+
+型チェックでは `cf workers types` でbinding・runtimeの型を生成し、Worker用の `server/tsconfig.json` と拡張用の型チェックを分ける。Workersの型をブラウザ側へ混ぜるとDOMの型と衝突するため、生成物は拡張用の対象から除外する。
+
+参照: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)、[ローカル開発](https://developers.cloudflare.com/workers/local-development/)。
 
 参照: [TanStack Cloudflare adapter](https://tanstack.com/ai/latest/docs/adapters/cloudflare)、[Cloudflare BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)。

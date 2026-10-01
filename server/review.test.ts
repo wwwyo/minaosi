@@ -23,7 +23,7 @@ function fetchFixture(responses: Response[]) {
   const calls: { url: string; headers: Headers; body: Record<string, unknown> }[] = [];
   const fetcher = (async (input, options) => {
     calls.push({ url: String(input), headers: new Headers(options?.headers), body: JSON.parse(options?.body as string) });
-    expect(options?.redirect).toBe('error');
+    expect(options?.redirect).toBe('manual');
     const response = responses.shift();
     if (!response) throw new Error('想定外の追加リクエスト');
     return response;

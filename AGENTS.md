@@ -60,3 +60,4 @@ bun run zip    # 配布用 zip を .output/ へ生成
 
 - CloudflareのCLI操作は `.agents/skills/cloudflare-cf/SKILL.md` を使う。`cf` を優先し、コマンドは匿名の操作説明で `cf cli search` から探す。
 - プロダクト選定・AI Gatewayの参照資料は `.agents/skills/cloudflare/SKILL.md`、Worker実装は `.agents/skills/workers-best-practices/SKILL.md` を参照する。
+- 校閲APIのローカル開発は `bun run api:dev` からWorkersシミュレーター（workerd）で行う。OpenCode Goの試用も同じ実行環境を使い、Bunの別サーバーで代替しない。
