@@ -131,6 +131,9 @@ window.minaosiTurnstileOnload = function () {
     'after-interactive-callback': function () { report({ event: 'interactive', interactive: false }); }
   });
   if (pendingExecute) { turnstile.execute(widget); }
+  // 初期化完了の通知だけはオリジン不特定で返す（execute 前は replyOrigin が未確定のため）。
+  // ready には秘密情報を含めない。
+  if (parent !== window) parent.postMessage({ type: 'minaosi-turnstile', event: 'ready' }, '*');
 };
 addEventListener('message', function (e) {
   if (e.source !== parent || !e.data || e.data.type !== 'minaosi-turnstile') return;

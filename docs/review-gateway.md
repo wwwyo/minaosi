@@ -102,7 +102,7 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 このリポジトリでは widget の作成・secret 登録・デプロイは行わない。公開するときの手順:
 
-1. Cloudflare ダッシュボードの Turnstile で widget を作成する。mode は invisible を推奨する（対話が要る判定のときだけ UI が出る）。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
+1. Cloudflare ダッシュボードの Turnstile で widget を作成する。mode は invisible を推奨する（widget は常時は表示されず、対話が必要な判定のときだけ challenge が表示される）。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
 2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
 3. secret key を Worker へ登録する（上記の `cf workers secrets bulk` と同じ手順）。
 

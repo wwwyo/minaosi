@@ -39,7 +39,11 @@ async function runReview() {
       return;
     }
     try {
-      send({ action: 'run', turnstile: { token: await turnstile.acquire() } });
+      // 確認の応答待ちに別タブへ切り替わっていると、そのタブの原稿が送られてしまう
+      const tabAtStart = connection.activeTabId;
+      const token = await turnstile.acquire();
+      if (connection.activeTabId !== tabAtStart) return;
+      send({ action: 'run', turnstile: { token } });
     } catch (e) {
       send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
     }

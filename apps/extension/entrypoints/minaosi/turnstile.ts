@@ -10,6 +10,7 @@ const LOAD_TIMEOUT_MS = 15_000;
 export class TurnstileGate {
   private frame: HTMLIFrameElement | null = null;
   private ready: Promise<HTMLIFrameElement> | null = null;
+  private readyResolve: (() => void) | null = null;
   private pending: { resolve(token: string): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> } | null = null;
 
   private constructor(
@@ -32,12 +33,16 @@ export class TurnstileGate {
   async acquire(): Promise<string> {
     if (this.pending) throw new Error('人間性の確認を実行中です');
     const frame = await this.mount();
+    // mount 待ちの間に別の acquire が先に pending を立てていることがある
+    if (this.pending) throw new Error('人間性の確認を実行中です');
     return new Promise<string>((resolve, reject) => {
       this.pending = {
         resolve,
         reject,
         timer: setTimeout(() => {
           this.settle(null, new Error('人間性の確認がタイムアウトしました。もう一度お試しください'));
+          // 応答しない widget は再利用できない可能性があるため枠ごと作り直す
+          this.unmount();
         }, ACQUIRE_TIMEOUT_MS),
       };
       frame.contentWindow?.postMessage({ type: MESSAGE_TYPE, event: 'execute' }, this.origin);
@@ -45,13 +50,19 @@ export class TurnstileGate {
   }
 
   dispose() {
-    window.removeEventListener('message', this.onMessage);
     this.settle(null, new Error('人間性の確認を中断しました'));
+    this.unmount();
+  }
+
+  private unmount() {
+    window.removeEventListener('message', this.onMessage);
     this.frame?.remove();
     this.frame = null;
     this.ready = null;
+    this.readyResolve = null;
   }
 
+  /** iframe の load では widget の初期化を保証できないため、ページからの ready 通知を待つ。 */
   private mount(): Promise<HTMLIFrameElement> {
     if (this.ready) return this.ready;
     const frame = document.createElement('iframe');
@@ -61,19 +72,15 @@ export class TurnstileGate {
     this.show(frame, false);
     this.ready = new Promise<HTMLIFrameElement>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('確認ページを読み込めませんでした')), LOAD_TIMEOUT_MS);
-      frame.addEventListener('load', () => {
+      this.readyResolve = () => {
         clearTimeout(timer);
+        this.readyResolve = null;
         resolve(frame);
-      });
+      };
     });
     this.ready.catch(() => {
       // 読み込みに失敗した枠は破棄し、次回の acquire で作り直す
-      if (this.frame === frame) {
-        this.frame = null;
-        this.ready = null;
-        window.removeEventListener('message', this.onMessage);
-        frame.remove();
-      }
+      if (this.frame === frame) this.unmount();
     });
     window.addEventListener('message', this.onMessage);
     this.frame = frame;
@@ -86,6 +93,9 @@ export class TurnstileGate {
     const data = e.data as { type?: string; event?: string; token?: unknown; interactive?: unknown } | undefined;
     if (data?.type !== MESSAGE_TYPE) return;
     switch (data.event) {
+      case 'ready':
+        this.readyResolve?.();
+        return;
       case 'token':
         if (typeof data.token === 'string') this.settle(data.token, null);
         return;
