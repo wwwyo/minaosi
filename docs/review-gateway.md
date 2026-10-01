@@ -38,6 +38,8 @@ mise exec -- bun run dev
 | `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID。configの既定値は `@cf/deepseek-ai/deepseek-v4-flash-0731` |
 | `REVIEW_GATEWAY_ID` | 標準モードの推論をGateway経由でログへ残す場合だけ設定する。未設定ならGatewayを通らない |
 | `ALLOWED_ORIGINS` | 拡張で利用する場合は必須。許可する拡張のOriginをカンマ区切りで指定 |
+| `TURNSTILE_SITE_KEY` | Turnstile widget の sitekey。秘密ではなく `/turnstile` の widget ページへ埋め込む。development は always-pass のテストキーが既定 |
+| `TURNSTILE_SECRET_KEY` | siteverify 検証用の secret。development で sitekey がテストキーなら未設定でもテスト secret を使う |
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
@@ -83,6 +85,26 @@ Workerは1IPあたり60秒に10回の呼び出し制限、原稿の文字数・�
 DOは有効な枠の数を確認し、新しい枠を保存する処理をトランザクションで実行する。10件実行中なら待ち行列には入れず429を返す。校閲が完了・失敗したら枠を解放し、Workerの異常終了で解放できなかった枠は期限後の次の取得時に削除する。DOの保存内容はランダムな枠IDと期限だけで、原稿・キー・IPを保存しない。DOの再起動でもSQLiteの枠は保持される。bindingが未設定・取得に失敗した場合は制限を迂回してAIを呼ばない。解放の失敗時は校閲結果を返し、本文を含まない `review_lease_release_failed` イベントだけを記録する。
 
 BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用する。1日100件の利用上限は検討値で、日次カウントはまだ実装していない。同時実行上限は累積料金の上限ではないため、標準モードを一般公開する際は別途費用上限を設ける。
+
+## Turnstile による人間性の確認
+
+`POST /review` は認証なしの公開エンドポイントで、per-IP のレート制限は分散 IP からの連打を止めない。入口として Cloudflare Turnstile の人間性確認を追加し、拡張は校閲実行のたびに widget でトークンを発行して `cf-turnstile-response` ヘッダーで送る。Worker は content-type・rate limit・本文サイズのチェックより先に siteverify で検証し、トークンが無い・検証に失敗した場合は403、確認サービスへの接続失敗・タイムアウトは503を返す（レート制限の枠を消費しない）。siteverify へ送るのは secret・トークン・呼び出し元IPだけで、原稿やBYOKのキーは送らない。応答は `success` に加え、`hostname` が要求ホストと一致すること・widget側の `action`（`review`）が一致すること・送っていない `cdata` が返らないことを検証する。
+
+標準モードとBYOKの両方に適用する。BYOKの推論料金は利用者のキーに発生するが、Worker の invocation や枠管理は共有インフラであり、BYOK だけ検証を外すとエンドポイント自体への連打の抜け道が残るため。
+
+### widget の置き場所
+
+widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の side panel がそのページを隠し iframe で開く。「見直す」のたびに side panel が postMessage で実行を依頼し、トークンを受け取って `run` コマンドに載せる。対話が必要な判定になったときだけ widget を pane 内に表示する。拡張の document は MV3 の CSP で remote script（`challenges.cloudflare.com` の api.js）を読めず、content script からページ DOM へ埋めると surface 側の frame-src CSP に遮られるため、この構成にした。API オリジンに置くことで surface ごとの CSP 差を吸収し、multi-surface にもそのまま使える。トークンは実行を依頼した親オリジンにだけ返す。
+
+### 本番キーの設定手順
+
+このリポジトリでは widget の作成・secret 登録・デプロイは行わない。公開するときの手順:
+
+1. Cloudflare ダッシュボードの Turnstile で widget を作成する。mode は invisible を推奨する（対話が要る判定のときだけ UI が出る）。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
+2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
+3. secret key を Worker へ登録する（上記の `cf workers secrets bulk` と同じ手順）。
+
+`TURNSTILE_SECRET_KEY` が無く sitekey もテストキー以外なら `/review` は503を返す（fail closed）。本番で必ず実キーを設定する。テスト用の鍵ペアの一覧は [Testing](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) を参照。
 
 Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処理と、Workers固有のDOクラスをここでexportする。DOクラスはWorker用の型チェックで検証し、BunのHTTP処理テストにはWorkersのruntime moduleを読み込ませない。
 

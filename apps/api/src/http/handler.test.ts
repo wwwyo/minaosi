@@ -1,10 +1,17 @@
 import { describe, expect, spyOn, test } from 'bun:test';
 import { handleRequest, type Env } from './handler';
 
-const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token' };
+// Turnstile の検証経路（siteverify呼出し）は turnstile.test.ts が担う。ここではテスト用
+// secret で通し、外部への fetch だけモックする。テスト用 secret では hostname/action の
+// 照合を行わないため、任意のローカルURLで通る。
+const env: Env = { CLOUDFLARE_ACCOUNT_ID: 'fixture-account', CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway', CF_AIG_TOKEN: 'fixture-cf-token', TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA' };
+spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+  if (String(input).startsWith('https://challenges.cloudflare.com/')) return Response.json({ success: true });
+  throw new Error('siteverify以外の外部通信はテスト対象外です');
+});
 const body = { provider: 'openai' as const, model: 'gpt-5.4-mini', blocks: [{ index: 0, text: '原稿' }] };
 function request(value: unknown = body, headers: Record<string, string> = {}, url = 'https://review.example.com/review') {
-  return new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key', ...headers }, body: JSON.stringify(value) });
+  return new Request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key', 'cf-turnstile-response': 'XXXX.DUMMY.TOKEN.XXXX', ...headers }, body: JSON.stringify(value) });
 }
 const neverReview = async () => { throw new Error('upstreamを呼んではいけない'); };
 
@@ -49,7 +56,7 @@ describe('anonymous BYOK API', () => {
 
   test('JSON以外・壊れたJSONを拒否する', async () => {
     expect((await handleRequest(request(body, { 'content-type': 'text/plain' }), env, neverReview)).status).toBe(415);
-    const malformed = new Request('https://review.example.com/review', { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key' }, body: '{' });
+    const malformed = new Request('https://review.example.com/review', { method: 'POST', headers: { 'content-type': 'application/json', 'x-minaosi-api-key': 'fixture-key', 'cf-turnstile-response': 'XXXX.DUMMY.TOKEN.XXXX' }, body: '{' });
     expect((await handleRequest(malformed, env, neverReview)).status).toBe(400);
   });
 
@@ -123,7 +130,7 @@ const standardEnv: Env = {
 const neverStandard = async () => { throw new Error('AI bindingを呼んではいけない'); };
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
   // Gateway用secretがなくても、AI bindingだけで標準校閲は成立する。
-  const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY };
+  const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY };
   const response = await handleRequest(
     request({ ...body, mode: 'default', model: 'client-model', provider: 'openai' }, { 'x-minaosi-api-key': '' }),
     minimal, neverReview, neverReview,
