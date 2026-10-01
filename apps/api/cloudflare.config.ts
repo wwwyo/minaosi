@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
       CLOUDFLARE_AI_GATEWAY_ID: bindings.secret(),
       CF_AIG_TOKEN: bindings.secret(),
       ALLOWED_ORIGINS: bindings.secret(),
-      LOCAL_OPENCODE_BYOK: bindings.text<string>(mode === 'local' ? 'true' : 'false'),
+      LOCAL_OPENCODE_BYOK: bindings.text<string>(mode === 'development' ? 'true' : 'false'),
       REVIEW_POLICY: bindings.json<{ concurrencyLimit: number; leaseTtlMs: number }>({
         concurrencyLimit: 10,
         leaseTtlMs: 240_000,

@@ -9,7 +9,7 @@
     }
   },
   "scripts": {
-    "dev": "cf dev --mode local",
+    "dev": "cf dev --mode development",
     "dev:gateway": "cf dev --mode gateway",
     "build": "cf build",
     "deploy": "cf deploy",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "cf": "1.0.0-beta.6",
-    "wrangler": "4.136.3"
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-b747ec8ea",
+    "vite": "8.3.0"
   }
 }

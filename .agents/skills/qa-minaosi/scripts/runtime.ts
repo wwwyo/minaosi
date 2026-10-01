@@ -64,10 +64,21 @@ if (command === 'api' || command === 'web' || command === 'browser') {
     if (!existsSync(join(runtime, 'apps/extension/.output/chrome-mv3-dev/manifest.json'))) throw new Error('Start web and wait for the development extension build first.');
     const landing = `data:text/html,${encodeURIComponent(`<title>minaosi QA ${runId}</title><p>Isolated QA browser</p>`)}`;
     args = [binary, `--user-data-dir=${join(runtime, 'chrome-profile')}`, `--load-extension=${join(runtime, 'apps/extension/.output/chrome-mv3-dev')}`, landing];
+  } else if (command === 'api') {
+    const apiRoot = join(runtime, 'apps/api');
+    const original = join(apiRoot, '.qa-vite-base.ts');
+    if (!existsSync(original)) cpSync(join(apiRoot, 'vite.config.ts'), original);
+    // cf delegates to Vite and accepts only --mode; override the port inside this run's copy.
+    writeFileSync(join(apiRoot, 'vite.config.ts'), `import { defineConfig, mergeConfig } from 'vite';
+import base from './.qa-vite-base.ts';
+export default defineConfig(async (context) => mergeConfig(
+  typeof base === 'function' ? await base(context) : await base,
+  { server: { host: '127.0.0.1', port: ${ports.api}, strictPort: true } },
+));
+`);
+    args = ['bun', 'run', 'api:dev'];
   } else {
-    args = command === 'api'
-      ? ['bun', 'run', 'api:dev', '--', '--port', String(ports.api), '--persist-to', join(runtime, 'worker-state')]
-      : ['node', join(import.meta.dir, 'start-web.mjs'), join(runtime, 'apps/extension'), String(ports.web)];
+    args = ['node', join(import.meta.dir, 'start-web.mjs'), join(runtime, 'apps/extension'), String(ports.web)];
   }
   save(`${command}.pid`, String(process.pid));
   save(`${command}.action.txt`, JSON.stringify({ cwd: runtime, args }, null, 2));

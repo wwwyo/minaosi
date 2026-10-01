@@ -24,7 +24,7 @@ mise exec -- bun run api:dev
 mise exec -- bun run dev
 ```
 
-`api:dev` は `cf dev --mode local` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はGateway接続設定の有無だけを返し、AIを呼び出さない。
+`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はGateway接続設定の有無だけを返し、AIを呼び出さない。
 
 次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。
 
@@ -40,11 +40,11 @@ mise exec -- bun run dev
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
-開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。localモードだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を有効にする。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカルWorkerからOpenCode Goへ接続する。Gateway設定がなくてもローカル試用は動くため、起動時のGateway用secret未設定の警告はこの用途では問題ない。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。通常ビルドではこの経路を無効にし、仮にlocalモードの設定を使ってもループバック以外のリクエストと標準モードは拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
+開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。developmentモードだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を有効にする。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカルWorkerからOpenCode Goへ接続する。Gateway設定がなくてもローカル試用は動くため、起動時のGateway用secret未設定の警告はこの用途では問題ない。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。通常ビルドではこの経路を無効にし、仮にdevelopmentモードの設定を使ってもループバック以外のリクエストと標準モードは拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
 
 ## Worker の公開設定
 
-Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。Workerの設定の正本は `apps/api/cloudflare.config.ts`。開発・ビルド・デプロイの入口はcfに統一する。`apps/api/wrangler.config.ts` はcfが利用する既存のbundler設定で、Worker名・binding・互換性設定は重複させない。
+Cloudflare のリソース操作は `cf cli search` でコマンドを確認してから `cf` CLI を使う。検索文にアカウント名・ID・秘密情報を含めない。Workerの設定の正本は `apps/api/cloudflare.config.ts`。開発・ビルド・デプロイの入口はcfに統一する。`apps/api/vite.config.ts` のCloudflare Vite pluginがビルドとworkerdでのローカル実行を担当する。Wranglerへの依存と設定は持たない。開発用のIP・ポートはViteに置き、Worker名・binding・互換性設定は `cloudflare.config.ts` に置く。
 
 ```bash
 mise exec -- bun run api:dev
@@ -94,3 +94,5 @@ Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処�
 ## Hono RPC
 
 HTTPルートと入力検証は`apps/api/src/app.ts`に定義する。`apps/api/src/rpc.ts`はその`AppType`などの型だけをexportし、拡張は`hc<AppType>`でPOSTする。プロンプトと校閲ルールはAPIだけが持ち、拡張はサーバーの設定やAI SDKを実行時にimportしない。Hono RPCの型推論に加え、APIの入力・AI応答とブラウザの受信境界には実行時検証を残す。
+
+Cloudflare Vite pluginはWranglerに依存しない2.0 betaを使う。7日cooldownを満たす最新の `2.0.0-beta.sha-b747ec8ea` とVite `8.3.0` にexact固定している。型生成は `cf workers types` に統一する。

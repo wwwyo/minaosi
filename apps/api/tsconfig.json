@@ -5,7 +5,9 @@
   },
   "include": [
     "src/**/*.ts",
-    ".cloudflare/types/index.d.ts"
+    ".cloudflare/types/index.d.ts",
+    "cloudflare.config.ts",
+    "vite.config.ts"
   ],
   "exclude": [
     "src/**/*.test.ts"
