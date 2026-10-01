@@ -27,7 +27,8 @@ export default defineConfig(({ mode }) => ({
         leaseTtlMs: 240_000,
       }),
       REVIEW_CONCURRENCY: bindings.durableObject({ worker: 'minaosi-review', exportName: 'ReviewConcurrency' }),
-      AI: bindings.ai(),
+      // ローカルのworkerdはAI bindingをローカル推論できないため、dev時はCloudflareへリモート接続する。
+      AI: bindings.ai({ dev: { remote: true } }),
       REVIEW_RATE_LIMIT: bindings.rateLimit({
         namespace: '1001',
         simple: { limit: 10, period: 60 },
