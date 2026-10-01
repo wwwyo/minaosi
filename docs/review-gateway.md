@@ -66,7 +66,7 @@ cd apps/api
 mise exec -- cf workers secrets bulk --worker minaosi-review --file /dev/stdin
 ```
 
-stdinにはcfのJSON Merge Patch形式（`{"SECRET_NAME":{"type":"secret_text","text":"…"}}`）のJSONを、秘密管理ツールから渡す。実値をコマンド引数・履歴・trackedファイルに置かない。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードはこれらのsecretなしで動き、AI bindingがない場合だけ503を返す。
+stdinにはcfのJSON Merge Patch形式（`{"SECRET_NAME":{"type":"secret_text","text":"…"}}`）のJSONを、秘密管理ツールから渡す。実値をコマンド引数・履歴・trackedファイルに置かない。Workerがまだ存在しない初回 deploy では `secrets bulk` が使えないため、`cf deploy --secrets-file <path>` で secret を一緒に渡す。secrets-file は `SECRET_NAME=value` を1行ずつ書いた .env 形式で通った実績がある（JSON 形式も可）。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードはこれらのsecretなしで動き、AI bindingがない場合だけ503を返す。
 
 cfはNode.jsで実行する。`cf/config` をBunで読み込むことはサポートされないため、miseでNode.jsも管理する。cfは `1.0.0-beta.6` にexact固定し、2026-10-01のユーザー承認で、この依存追加だけ7日cooldownの例外とした。`bunfig.toml` の7日待機設定は維持する。
 
@@ -98,11 +98,11 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 任意の Web サイトが `/turnstile` を iframe で埋め込めると、hostname が校閲サーバーになる正当なトークンをサーバー側の照合をすり抜けて量産できてしまう。ページは CSP の `frame-ancestors` で拡張のオリジン（`chrome-extension:` など）だけに埋め込みを制限し、保険としてページ内でも `location.ancestorOrigins` を確認して拡張以外への埋め込みでは widget を描画しない。
 
-### 本番キーの設定手順
+### 本番キー
 
-このリポジトリでは widget の作成・secret 登録・デプロイは行わない。公開するときの手順:
+本番 widget（`minaosi-review`、invisible）は `minaosi-review.mix-mix.workers.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。別環境で作り直す場合の手順:
 
-1. Cloudflare ダッシュボードの Turnstile で widget を作成する。mode は invisible を推奨する（widget は常時は表示されず、対話が必要な判定のときだけ challenge が表示される）。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
+1. `cf turnstile widgets create --body '{"name":"<widget名>","domains":["<公開ホスト名>"],"mode":"invisible"}'` で widget を作成する（`mode` は生成されたフラグに無いため `--body` で渡す）。invisible は常時は表示されず、対話が必要な判定のときだけ challenge が表示される。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
 2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
 3. secret key を Worker へ登録する（上記の `cf workers secrets bulk` と同じ手順）。
 
