@@ -23,7 +23,9 @@ Core actions:
 
 ```
 minaosi/
-├── entrypoints/   # WXT entrypoints（content script / background）
+├── apps/
+│   ├── extension/ # WXT拡張。entrypoints/ がブラウザの入口
+│   └── api/       # Hono / Cloudflare Worker。src/ がBE実装
 ├── docs/          # プロジェクト固有のドキュメントを収集する dir（共有・tracked）
 └── .agent/        # 同上（個人メモ。gitignore される）
 ```
@@ -37,8 +39,8 @@ mise install   # mise.toml に従ってツールをインストール
 bun install
 bun run dev    # WXT dev server（拡張をロードしたブラウザが起動）
 bun run check  # typecheck
-bun run build  # 拡張を .output/ へ build
-bun run zip    # 配布用 zip を .output/ へ生成
+bun run build  # 拡張を apps/extension/.output/ へ build
+bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 ```
 
 ## 技術スタック
@@ -55,3 +57,15 @@ bun run zip    # 配布用 zip を .output/ へ生成
 ## Skills
 
 - 学び・ハマりどころ・過去の失敗は `.agents/skills/<topic>/` を参照
+
+### Hono
+
+- Honoのルーティング・middleware・validation・RPC・テストでは、公式の `.agents/skills/hono/SKILL.md` を参照する。
+- skillのWrangler向け手順より、このrepoの `cf`＋Cloudflare Vite plugin構成を優先する。bindingsの型生成は `bun run --cwd apps/api check` 内の `cf workers types` を使い、bindings付きの実通信検証は `bun run api:dev` のworkerdで行う。
+- skill内の `@hono/cli@next` は自動追加しない。CLIを追加するときもrepoのexact指定・cooldown 7日のルールに従う。
+
+### Cloudflare
+
+- CloudflareのCLI操作は `.agents/skills/cloudflare-cf/SKILL.md` を使う。`cf` を優先し、コマンドは匿名の操作説明で `cf cli search` から探す。
+- プロダクト選定・AI Gatewayの参照資料は `.agents/skills/cloudflare/SKILL.md`、Worker実装は `.agents/skills/workers-best-practices/SKILL.md` を参照する。
+- 校閲APIのローカル開発は `bun run api:dev` からWorkersシミュレーター（workerd）で行う。OpenCode Goの試用も同じ実行環境を使い、Bunの別サーバーで代替しない。

@@ -83,8 +83,12 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 ```css
 /* 基盤 component の規約。実装は content script 側と prototype を見る */
 
-/* .btn-primary（墨塗り）= 適用・見直すの主操作。副操作は .btn-ghost。
+/* .btn-primary（墨塗り）= 見直すの主操作。適用は白背景と境界線。
+   副操作は .btn-ghost。
    icon-only は .icon-btn */
+/* .fab = 白い --color-bg-surface に --color-ink のマーク。
+   1px の --color-line-strong で境界を示し、影は付けない。
+   hover でも色・境界・影・位置を変えない。クリックで pane を開閉する */
 /* .card-finding = 指摘カード。区切り線で分け、選択時は左に墨バー。
    状態バッジは置かない（タブ位置と右上アクションで表す） */
 /* .mark / .suggest = 本文上の指摘印。選択中は修正範囲だけを 1.5px の
@@ -92,9 +96,11 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 /* .suggest-del（前）= --color-strike の取り消し線 / .suggest-ins（後）=
    --color-accent-ink 文字＋--color-accent-tint 背景。ボタン化しない */
 /* .brand = logo mark + wordmark + 畳みシェブロンの単一クリックボタン */
-/* .filter-tab = 未対応/適用済み/削除 の3タブ。「すべて」は置かない */
+/* .filter-tab = 未対応/対応済み の2タブ。対応済みには適用済み・削除をまとめる */
 /* .progress = 非ゼロの状態件数のみ列挙 */
-/* hover で出る補助 UI（適用 tooltip）はカーソル位置の行の直上に出す */
+/* 適用 tooltip は白背景・墨色・1px の --color-line-strong。
+   ホバーした候補の表示行の中央・直上に出し、影は付けない */
+/* 候補は本文と同じ font・文字サイズ・行間。本文と重ならない空間に置く */
 ```
 
 ## Icons
@@ -115,8 +121,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 </svg>
 ```
 
-- Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`、`--letter-spacing-brand`（0.04em）。mark との間は gap 6px
-- 配置: パネル左上、mark + wordmark + collapse chevron を1つの clickable button として組む
+- Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`。オプション画面ではmarkの透明余白を除き、文字と見た目の中央を揃える（マークを1px下げる）。間隔は `--space-1`、ワードマークの字間は0、行高は1
+- 配置: サイドpaneの名前とアイコンはブラウザの標準ヘッダーに委ね、pane内では重複させない。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
 
