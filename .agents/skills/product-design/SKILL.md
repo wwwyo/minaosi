@@ -31,7 +31,7 @@ description: minaosi の UI/UX 判断と視覚値の正本。校閲 chrome（パ
 | `--color-ink-sub` | 二次テキスト（理由・メタ） |
 | `--color-ink-mute` | 三次テキスト（件数・静かな icon） |
 | `--color-line` / `--color-line-strong` | 区切り線 / 操作枠線 |
-| `--color-primary` + `--color-on-primary` | 主操作（墨塗りボタン・FAB・tooltip） |
+| `--color-primary` + `--color-on-primary` | 主操作（墨塗りボタン・tooltip） |
 | `--color-accent` / `-ink` / `-tint` + `--color-on-accent` | 修正案・選択中だけ |
 | `--color-strike` | 修正案の「前」の取り消し線のみ |
 | `--color-ring` / `--color-flash` | 選択リング / アンカーフラッシュ |

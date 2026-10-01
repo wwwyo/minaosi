@@ -148,12 +148,11 @@ export const PANEL_CSS = `
 .fab {
   position: fixed; right: 24px; bottom: 24px; z-index: 2147483646;
   width: 44px; height: 44px; border-radius: 50%;
-  background: var(--color-primary); color: var(--color-on-primary); border: 0;
+  background: var(--color-bg-surface); color: var(--color-ink); border: 1px solid var(--color-line-strong);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-fab);
-  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
-.fab:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow-fab-hover); }
+.fab:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--color-ink); }
 .fab:active:not(:disabled) { transform: translateY(1px); }
 .fab:disabled { opacity: .55; cursor: default; }
 .fab svg { width: 20px; height: 20px; display: block; }
