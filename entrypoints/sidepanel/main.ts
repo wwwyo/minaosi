@@ -44,6 +44,12 @@ const onContentReady: Parameters<typeof browser.runtime.onMessage.addListener>[0
 browser.runtime.onMessage.addListener(onContentReady);
 
 const currentWindow = await browser.windows.getCurrent();
+const onVisibility: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender, sendResponse) => {
+  if (sender.id === browser.runtime.id && message?.type === 'minaosi:panel-visibility' && message.windowId === currentWindow.id) {
+    sendResponse({ open: document.visibilityState === 'visible' });
+  }
+};
+browser.runtime.onMessage.addListener(onVisibility);
 browser.tabs.onActivated.addListener(({ tabId: id, windowId }) => {
   if (windowId === currentWindow.id) connection.connectToTab(id);
 });
@@ -53,6 +59,7 @@ browser.tabs.onUpdated.addListener((id, change) => {
 const [active] = await browser.tabs.query({ active: true, windowId: currentWindow.id });
 connection.connectToTab(active?.id);
 window.addEventListener('pagehide', () => {
+  browser.runtime.onMessage.removeListener(onVisibility);
   browser.runtime.onMessage.removeListener(onContentReady);
   connection.dispose();
 });

@@ -87,7 +87,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
    副操作は .btn-ghost。
    icon-only は .icon-btn */
 /* .fab = 白い --color-bg-surface に --color-ink のマーク。
-   1px の --color-line-strong で境界を示し、影は付けない */
+   1px の --color-line-strong で境界を示し、影は付けない。
+   hover でも色・境界・影・位置を変えない。クリックで pane を開閉する */
 /* .card-finding = 指摘カード。区切り線で分け、選択時は左に墨バー。
    状態バッジは置かない（タブ位置と右上アクションで表す） */
 /* .mark / .suggest = 本文上の指摘印。選択中は修正範囲だけを 1.5px の

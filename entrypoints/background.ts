@@ -9,19 +9,37 @@ import { PROVIDER_SETTINGS } from './minaosi/store';
  */
 
 export default defineBackground(() => {
-  const sidebar = (browser as typeof browser & { sidebarAction: { open(): Promise<void> } }).sidebarAction;
+  const sidebar = (browser as typeof browser & { sidebarAction: { toggle(): Promise<void> } }).sidebarAction;
   if (import.meta.env.BROWSER !== 'firefox') {
     void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    const notify = (windowId: number, open: boolean) => {
+      void browser.tabs.query({ windowId }).then((tabs) => {
+        for (const tab of tabs) {
+          if (tab.id !== undefined) void browser.tabs.sendMessage(tab.id, { type: 'minaosi:panel-state', open }).catch(() => {});
+        }
+      });
+    };
+    browser.sidePanel.onOpened.addListener(({ windowId }) => notify(windowId, true));
+    browser.sidePanel.onClosed.addListener(({ windowId }) => notify(windowId, false));
   } else {
-    browser.action.onClicked.addListener(() => { void sidebar.open(); });
+    browser.action.onClicked.addListener(() => { void sidebar.toggle(); });
   }
 
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (msg?.type === 'minaosi:open-panel' && sender.tab?.windowId !== undefined) {
-      const opening = import.meta.env.BROWSER === 'firefox'
-        ? sidebar.open()
-        : browser.sidePanel.open({ windowId: sender.tab.windowId });
-      void opening.then(() => sendResponse({ ok: true }), (error: Error) => sendResponse({ ok: false, error: error.message }));
+    if (msg?.type === 'minaosi:get-panel-state' && sender.tab?.windowId !== undefined && import.meta.env.BROWSER !== 'firefox') {
+      const windowId = sender.tab.windowId;
+      // 別paneへの切り替え後もcontextが残ることがあるため、存在だけで開いていると判定しない。
+      void browser.runtime.sendMessage({ type: 'minaosi:panel-visibility', windowId })
+        .then(sendResponse, () => sendResponse({ open: false }));
+      return true;
+    }
+    if (msg?.type === 'minaosi:toggle-panel' && sender.tab?.windowId !== undefined && typeof msg.open === 'boolean') {
+      const toggling = import.meta.env.BROWSER === 'firefox'
+        ? sidebar.toggle()
+        : msg.open
+          ? browser.sidePanel.open({ windowId: sender.tab.windowId })
+          : browser.sidePanel.close({ windowId: sender.tab.windowId });
+      void toggling.then(() => sendResponse({ ok: true }), (error: Error) => sendResponse({ ok: false, error: error.message }));
       return true;
     }
     if (!msg || msg.type !== 'minaosi:review') return undefined;

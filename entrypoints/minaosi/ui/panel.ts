@@ -81,7 +81,7 @@ function listBody(s: PanelState): string {
 }
 
 export function renderFab(): string {
-  return `<button class="mn fab" title="指摘paneを開く" aria-label="指摘paneを開く">${LOGO_MARK}</button>`;
+  return `<button class="mn fab" title="指摘paneを開閉する" aria-label="指摘paneを開閉する">${LOGO_MARK}</button>`;
 }
 
 export function renderPanel(s: PanelState): string {

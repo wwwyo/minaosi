@@ -15,10 +15,11 @@ function reviewEndpoint(mode: string): string {
 
 export default defineConfig({
   vite: ({ mode }) => ({ define: { 'import.meta.env.WXT_REVIEW_API_URL': JSON.stringify(reviewEndpoint(mode)) } }),
-  manifest: ({ mode }) => {
+  manifest: ({ mode, browser }) => {
     const endpoint = reviewEndpoint(mode);
     return {
       name: 'minaosi',
+      minimum_chrome_version: browser === 'firefox' ? undefined : '142',
       description: '人間が書いた文章を、公開面そのままの表示の上で AI が校閲するブラウザ拡張',
       host_permissions: endpoint ? [`${new URL(endpoint).origin}/*`] : [],
       permissions: ['storage'],

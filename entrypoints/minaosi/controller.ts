@@ -9,6 +9,7 @@ import { Decorations } from './ui/decorations';
 import { renderFab, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand } from './panel-messages';
+import { PanelToggle } from './panel-toggle';
 
 interface ReviewReply {
   ok: boolean;
@@ -24,6 +25,7 @@ export class Controller {
   private staleRaf = 0;
   private providerLoad = 0;
   private unwatch: (() => void)[] = [];
+  private stopPanelWatch: (() => void) | null = null;
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
 
   private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
@@ -58,9 +60,31 @@ export class Controller {
     });
 
     this.fabRoot.innerHTML = renderFab();
-    this.fabRoot.querySelector('button')?.addEventListener('click', () => {
-      // ユーザー操作の直後に送る。await を挟むと sidePanel.open の user gesture が失われる。
-      void browser.runtime.sendMessage({ type: 'minaosi:open-panel' });
+    const fab = this.fabRoot.querySelector('button')!;
+    const toggle = new PanelToggle((open, busy) => {
+      fab.disabled = open === null || busy;
+      if (import.meta.env.BROWSER !== 'firefox') fab.setAttribute('aria-expanded', String(open === true));
+    });
+    if (import.meta.env.BROWSER === 'firefox') {
+      toggle.receive(false);
+    } else {
+      fab.disabled = true;
+      const onState: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender) => {
+        if (sender.id === browser.runtime.id && message?.type === 'minaosi:panel-state' && typeof message.open === 'boolean') toggle.receive(message.open);
+      };
+      browser.runtime.onMessage.addListener(onState);
+      this.stopPanelWatch = () => browser.runtime.onMessage.removeListener(onState);
+      void toggle.initialize(async () => {
+        const state = await browser.runtime.sendMessage({ type: 'minaosi:get-panel-state' });
+        if (typeof state?.open !== 'boolean') throw new Error('paneの状態を取得できません');
+        return state.open;
+      }).catch(() => {});
+    }
+    fab.addEventListener('click', () => {
+      void toggle.toggle(async (open) => {
+        const reply = await browser.runtime.sendMessage({ type: 'minaosi:toggle-panel', open });
+        if (!reply?.ok) throw new Error(reply?.error ?? 'paneを開閉できません');
+      }).catch(() => {});
     });
   }
 
@@ -400,6 +424,7 @@ export class Controller {
   }
 
   dispose() {
+    this.stopPanelWatch?.();
     ++this.providerLoad;
     for (const unwatch of this.unwatch) unwatch();
     this.deco.dispose();
