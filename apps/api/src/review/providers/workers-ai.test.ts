@@ -55,6 +55,19 @@ describe('Workers AI bindingの標準校閲', () => {
     await expect(reviewWithWorkersAi(request, {})).rejects.toThrow('Workers AI の binding が設定されていません');
   });
 
+  test('規範をモデルへ送り、明示された例外の指摘を除き、次の校閲へ規範を持ち越さない', async () => {
+    const styleGuide = '# 規範\n本文はですます調。\n## 例外\n- 会話部分では口語を許容する';
+    const rule = { ...finding, kind: 'rule', matches: [{ from: 'そうだよ' }], exception: { rule: '会話部分では口語を許容する', reason: 'かぎ括弧内の会話' } };
+    const style = { ...finding, kind: 'style' };
+    const { AI, calls } = bindingFixture([deepseekReport([rule, style]), deepseekReport([style])]);
+    const result = await reviewWithWorkersAi({ ...request, styleGuide, blocks: [{ index: 0, text: '「そうだよ」と答えました。原稿' }] }, { AI });
+    expect(result.findings).toEqual([style]);
+    expect(JSON.stringify(calls[0]!.inputs.messages)).toContain('本文はですます調');
+    expect(JSON.stringify(calls[0]!.inputs.messages)).toContain('明示されていない例外を作らない');
+    expect((await reviewWithWorkersAi(request, { AI })).findings).toEqual([]);
+    expect(JSON.stringify(calls[1]!.inputs.messages)).not.toContain('会話部分では口語を許容する');
+  });
+
   test('生成された出典つきの事実指摘を返さず、空のreportは成功する', async () => {
     const fact = { ...finding, kind: 'fact', source: { url: 'https://example.com/source', excerpt: '生成された出典' } };
     expect((await reviewWithWorkersAi(request, { AI: bindingFixture([deepseekReport([finding, fact])]).AI })).findings).toEqual([finding]);

@@ -97,10 +97,11 @@ Locked design system。この repo の視覚値の正本。product-design skill�
    --color-accent-ink 文字＋--color-accent-tint 背景。ボタン化しない */
 /* .brand = logo mark + wordmark + 畳みシェブロンの単一クリックボタン */
 /* .filter-tab = 未対応/対応済み の2タブ。対応済みには適用済み・削除をまとめる */
-/* .progress = 非ゼロの状態件数のみ列挙 */
+/* 状態件数の行は表示しない */
 /* 適用 tooltip は白背景・墨色・1px の --color-line-strong。
    ホバーした候補の表示行の中央・直上に出し、影は付けない */
-/* 候補は本文と同じ font・文字サイズ・行間。本文と重ならない空間に置く */
+/* 候補は本文と同じ font・文字サイズ・行間で、取り消し線のすぐ右に行内表示する */
+/* 本文の取り消し線・選択リングは、修正で変わる最小の範囲に限定する */
 ```
 
 ## Icons

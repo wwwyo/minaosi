@@ -63,7 +63,6 @@ export const PANEL_CSS = `
 .head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .head-row .filters { margin-top: 0; }
 
-.prog { color: var(--color-ink-mute); font-size: var(--font-size-caption); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .filters { display: flex; gap: 2px; margin-top: 10px; }
 .filters button {
   font-family: inherit; font-size: var(--font-size-caption); font-weight: 600;
@@ -160,6 +159,12 @@ export const PANEL_CSS = `
 /* ---- overlay（本文上の重ね表示。本文 DOM は触らない） ---- */
 .ovl { position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; }
 .ovl > * { position: fixed; }
+.inline-previews { position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; }
+.inline-preview { pointer-events: auto; cursor: text; }
+.inline-change { cursor: pointer; }
+.inline-change[data-sel] { outline: 1.5px solid var(--color-ring); border-radius: var(--radius-sm); }
+.inline-before { color: var(--color-ink-mute); text-decoration: line-through; text-decoration-color: var(--color-strike); text-decoration-thickness: 1.5px; }
+.inline-after { color: var(--color-accent-ink); background: var(--color-accent-tint); border-radius: var(--radius-sm); }
 .hot { pointer-events: auto; cursor: pointer; background: transparent; }
 .hot:hover { background: color-mix(in oklab, var(--color-bg-hover) 55%, transparent); border-radius: var(--radius-sm); }
 .ring { outline: 1.5px solid var(--color-ring); border-radius: var(--radius-sm); background: color-mix(in oklab, var(--color-accent-tint) 40%, transparent); }
@@ -234,5 +239,10 @@ export const PAGE_HIGHLIGHT_CSS = `
 }
 ::highlight(minaosi-sel) {
   background-color: ${HL_TINT};
+}
+::highlight(minaosi-preview) {
+  color: transparent;
+  background-color: transparent;
+  text-decoration: none;
 }
 `;

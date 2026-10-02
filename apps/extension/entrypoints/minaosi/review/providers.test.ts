@@ -65,3 +65,14 @@ test('標準モードは利用者のキーとモデルを送信しない', async
     return Response.json({ findings: [] });
   });
 });
+
+test('同じ文体規範を標準とBYOKの校閲本文に渡し、文体の指摘を表示対象にできる', async () => {
+  const styleGuide = '本文はですます調。';
+  for (const input of [{ ...request, styleGuide }, { type: 'minaosi:review' as const, mode: 'default' as const, blocks: request.blocks, styleGuide }]) {
+    const style = { ...finding, kind: 'style' as const };
+    expect(await review(input, 'fixture-key', endpoint, async (_url, options) => {
+      expect(JSON.parse(options?.body as string).styleGuide).toBe(styleGuide);
+      return Response.json({ findings: [style] });
+    })).toEqual({ findings: [style] });
+  }
+});

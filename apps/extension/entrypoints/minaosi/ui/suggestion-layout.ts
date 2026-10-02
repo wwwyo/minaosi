@@ -45,6 +45,7 @@ export function suggestionPosition(
       const distance = Math.abs(top - inlineTop) * 2 + Math.abs(left - anchor.right - gap);
       if (!best || distance < best.distance) best = { left, top, distance };
     }
+    if (top === inlineTop && best) return { left: best.left, top: best.top };
   }
   return best && { left: best.left, top: best.top };
 }

@@ -4,6 +4,7 @@ import { PAGE_HIGHLIGHT_CSS } from './styles';
 import { ICON_APPLY } from './icons';
 import { lineBoxes, suggestionPosition, type Box } from './suggestion-layout';
 import { GeometryCache } from './geometry-cache';
+import { InlinePreview } from './inline-preview';
 
 /**
  * 本文上の重ね表示。contenteditable の DOM には一切触れず、
@@ -59,6 +60,7 @@ export class Decorations {
   private geometry = new GeometryCache<Map<Site, ChipTypography>>();
   private layoutTimer = 0;
   private ro: ResizeObserver;
+  private inline: InlinePreview | null = null;
 
   constructor(
     private shadow: ShadowRoot,
@@ -84,6 +86,7 @@ export class Decorations {
       this.pageStyle = document.createElement('style');
       this.pageStyle.textContent = PAGE_HIGHLIGHT_CSS;
       document.head.appendChild(this.pageStyle);
+      this.inline = new InlinePreview(shadow, editor, () => this.schedule());
     }
 
     this.mo = new MutationObserver(() => {
@@ -109,6 +112,12 @@ export class Decorations {
     this.ovl.addEventListener('mousemove', (e) => this.handleOver(e));
     this.ovl.addEventListener('mouseout', onLeave);
     this.ovl.addEventListener('click', (e) => this.handleClick(e));
+    if (this.inline) {
+      this.inline.element.addEventListener('mouseover', (e) => this.handleOver(e));
+      this.inline.element.addEventListener('mousemove', (e) => this.handleOver(e));
+      this.inline.element.addEventListener('mouseout', onLeave);
+      this.inline.element.addEventListener('click', (e) => this.handleClick(e));
+    }
     this.tip.addEventListener('mouseenter', () => clearTimeout(this.tipTimer));
     this.tip.addEventListener('mouseleave', () => this.hideTip());
     this.tip.querySelector('button')?.addEventListener('click', () => {
@@ -133,6 +142,7 @@ export class Decorations {
   setEditor(editor: HTMLElement) {
     if (editor === this.editor) return;
     this.editor = editor;
+    this.inline?.setEditor(editor);
     this.mo?.disconnect();
     this.mo?.observe(editor, MO_OPTS);
     this.ro.disconnect();
@@ -142,6 +152,7 @@ export class Decorations {
   }
 
   render(findings: Finding[], selectedId: string | null) {
+    if (findings !== this.findings || selectedId !== this.selectedId) this.inline?.showReview();
     this.findings = findings;
     this.selectedId = selectedId;
     this.dirty = true;
@@ -159,6 +170,7 @@ export class Decorations {
   }
 
   private deferLayout() {
+    this.inline?.invalidate();
     this.geometry.invalidate();
     // resize中は古い折り返し座標で本文を覆わず、全文計測は操作が止まってから一度行う。
     this.ovl.hidden = true;
@@ -217,6 +229,7 @@ export class Decorations {
   }
 
   private recompute() {
+    const changed = this.dirty;
     if (this.dirty) {
       this.geometry.invalidate();
       // 本文・指摘集合の変化時だけテキスト解決をやり直す。
@@ -237,6 +250,7 @@ export class Decorations {
     const editorBounds = this.editor.getBoundingClientRect();
     if (this.geometry.sizeChanged(editorBounds)) this.deferLayout();
     if (this.layoutTimer) return;
+    this.inline?.render(this.sites, this.selectedId, changed);
     const { occupied, data: typography } = this.geometry.read(editorBounds, window.innerHeight, () => {
       const typography = new Map<Site, ChipTypography>();
       const suggestions = this.sites.filter((s) => s.range && (s.kind === 'suggest' || s.kind === 'applied'));
@@ -259,7 +273,7 @@ export class Decorations {
     });
     // scroll/resize では解決し直さず、生きている Range から位置だけ取り直す
     for (const s of this.sites) {
-      s.rects = s.range ? [...s.range.getClientRects()] : s.el ? [s.el.getBoundingClientRect()] : [];
+      s.rects = this.inline?.rects(s) ?? (s.range ? [...s.range.getClientRects()] : s.el ? [s.el.getBoundingClientRect()] : []);
     }
 
     this.ovl.hidden = false;
@@ -268,13 +282,19 @@ export class Decorations {
     const chips: { el: HTMLElement; s: Site; del: boolean }[] = [];
     for (const s of this.sites) {
       const selected = s.fid === this.selectedId;
+      const inlineCandidate = this.inline?.candidate(s);
+      if (inlineCandidate) {
+        if (s.kind === 'suggest') this.candidates.set(`${s.fid}:${s.matchIndex}`, lineBoxes(this.textRects(inlineCandidate)));
+        continue;
+      }
+      if (this.inline?.isEditing) continue;
       if (s.kind === 'suggest' && s.range) {
         if (!this.delHl) {
           for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
         }
-        if (s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s, typography.get(s)!), s, del: false });
+        if (!this.inline?.covers(s) && s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s, typography.get(s)!), s, del: false });
       }
-      if (s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
+      if (!this.inline?.covers(s) && s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
         chips.push({ el: this.chip('sug-del', s.from, s, typography.get(s)!), s, del: true });
       }
       if (s.kind === 'suggest' && s.range) {
@@ -387,7 +407,7 @@ export class Decorations {
     const t = e.target as HTMLElement;
     const s = this.siteOf(t);
     if (!s) return;
-    const host = t.closest('.hot, .sug-ins') as HTMLElement | null;
+    const host = t.closest('.hot, .sug-ins, .inline-change') as HTMLElement | null;
     if (host?.dataset.suggest) {
       clearTimeout(this.tipTimer);
       this.showTip(s.fid, s.idx, e as MouseEvent, host);
@@ -396,15 +416,15 @@ export class Decorations {
 
   private handleLeave(e: Event) {
     const t = e.target as HTMLElement;
-    if (!t.closest('.hot, .sug-ins')) return;
+    if (!t.closest('.hot, .sug-ins, .inline-change')) return;
     const related = (e as MouseEvent).relatedTarget as HTMLElement | null;
-    if (related && (related.closest('.hot, .sug-ins') || this.tip.contains(related))) return;
+    if (related && (related.closest('.hot, .sug-ins, .inline-change') || this.tip.contains(related))) return;
     this.tipTimer = window.setTimeout(() => this.hideTip(), 120);
   }
 
   private showTip(fid: string, idx: number, e: MouseEvent, host: HTMLElement) {
     const rects = this.candidates.get(`${fid}:${idx}`) ?? [];
-    const index = host.classList.contains('sug-ins') ? rects.findIndex((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2) : 0;
+    const index = host.classList.contains('hot') ? 0 : rects.findIndex((r) => e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2);
     this.tipLine = Math.max(0, index);
     const line = rects[this.tipLine];
     if (!line) return;
@@ -486,6 +506,7 @@ export class Decorations {
     }
     this.pageStyle?.remove();
     this.ovl.remove();
+    this.inline?.dispose();
     this.flashLayer.remove();
     this.tip.remove();
   }

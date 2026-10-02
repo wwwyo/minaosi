@@ -103,4 +103,41 @@ describe('事実の指摘と取得した出典の照合', () => {
     await next.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ' });
     expect(calls).toBe(4);
   });
+
+  test('文体規範の全文や一節を検索語として外部へ送らない', async () => {
+    const styleGuide = '書き手が自分のために用意した公開しない文体の規範を適用する。';
+    let calls = 0;
+    const search = createFactSearch(blocks, async () => { calls++; return results(); }, styleGuide);
+    await search.tools[0]!.execute!({ block: 0, query: styleGuide });
+    await search.tools[0]!.execute!({ block: 0, query: `公式 ${styleGuide.slice(0, 25)}` });
+    expect(calls).toBe(0);
+    await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+    expect(calls).toBe(1);
+  });
+
+  test('20文字未満の規範文や箇条書きを検索語に混ぜても外部へ送らない', async () => {
+    for (const styleGuide of ['本文はですます調。', '# 文体規範\n- 本文はですます調。\n- 会話は口語を許容']) {
+      let calls = 0;
+      const search = createFactSearch(blocks, async () => { calls++; return results(); }, styleGuide);
+      await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
+      expect(calls).toBe(0);
+      await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+      expect(calls).toBe(1);
+    }
+  });
+
+  test('Markdownで装飾した短い規範文も検索へ送らず、記号を含む原文も保護する', async () => {
+    for (const styleGuide of ['- **本文はですます調。**', '- _本文はですます調。_', '- `本文はですます調。`', '- ~~本文はですます調。~~']) {
+      let calls = 0;
+      const search = createFactSearch(blocks, async () => { calls++; return results(); }, styleGuide);
+      await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
+      expect(calls).toBe(0);
+      await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+      expect(calls).toBe(1);
+    }
+    let calls = 0;
+    const search = createFactSearch(blocks, async () => { calls++; return results(); }, '- my_ruleを優先');
+    await search.tools[0]!.execute!({ block: 0, query: '公式 my_ruleを優先' });
+    expect(calls).toBe(0);
+  });
 });

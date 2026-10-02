@@ -128,6 +128,23 @@ const standardEnv: Env = {
   REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'fixture-lease', release: async () => {} }) },
 };
 const neverStandard = async () => { throw new Error('AI bindingを呼んではいけない'); };
+test('文体規範を標準・BYOKに渡し、長すぎる規範は外部送信しない', async () => {
+  const styleGuide = '# 文体規範\n本文はですます調。';
+  const byok = await handleRequest(request({ ...body, styleGuide }), env, async input => {
+    expect(input.styleGuide).toBe(styleGuide);
+    return [];
+  });
+  expect(byok.status).toBe(200);
+  const standard = await handleRequest(request({ mode: 'default', blocks: body.blocks, styleGuide }), standardEnv, neverReview, async input => {
+    expect(input.styleGuide).toBe(styleGuide);
+    return { findings: [] };
+  });
+  expect(standard.status).toBe(200);
+  for (const input of [{ ...body }, { mode: 'default', blocks: body.blocks }]) {
+    expect((await handleRequest(request({ ...input, styleGuide: 'a'.repeat(16_001) }), standardEnv, neverReview, neverStandard)).status).toBe(400);
+  }
+});
+
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {
   // Gateway用secretがなくても、AI bindingだけで標準校閲は成立する。
   const minimal = { AI: standardEnv.AI, DEFAULT_REVIEW_MODEL: standardEnv.DEFAULT_REVIEW_MODEL, REVIEW_CONCURRENCY: standardEnv.REVIEW_CONCURRENCY, TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY };

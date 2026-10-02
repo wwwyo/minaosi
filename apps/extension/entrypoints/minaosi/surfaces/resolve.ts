@@ -8,6 +8,30 @@ export type ResolveResult =
   | { status: 'ambiguous' };
 
 const CTX = 32;
+const graphemes = new Intl.Segmenter('ja', { granularity: 'grapheme' });
+
+/** 共通の前後を除き、文字の途中を切らない最小の置換と原文からの位置差を返す。 */
+export function minimalReplacement(from: string, to: string): { from: string; to: string; offset: number } | null {
+  if (from === to) return null;
+  const before = [...graphemes.segment(from)].map(part => part.segment);
+  const after = [...graphemes.segment(to)].map(part => part.segment);
+  let prefix = 0;
+  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
+  let suffix = 0;
+  while (suffix < before.length - prefix && suffix < after.length - prefix
+    && before[before.length - suffix - 1] === after[after.length - suffix - 1]) suffix++;
+  // 空の原文は現在のアンカーで解決できないため、挿入だけの案には隣接文字を残す。
+  if (prefix + suffix === before.length) {
+    if (prefix > 0) prefix--;
+    else if (suffix > 0) suffix--;
+    else return null;
+  }
+  return {
+    from: before.slice(prefix, before.length - suffix).join(''),
+    to: after.slice(prefix, after.length - suffix).join(''),
+    offset: before.slice(0, prefix).join('').length,
+  };
+}
 
 export function blockText(el: HTMLElement): string {
   return (el.textContent ?? '').replace(/\u00a0/g, ' ');
@@ -65,7 +89,7 @@ export function rangeAt(block: HTMLElement, start: number, length: number): Rang
   let startOff = 0;
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
     const len = n.data.length;
-    if (!startNode && start < acc + len) {
+    if (!startNode && (start < acc + len || (length === 0 && start === acc + len))) {
       startNode = n;
       startOff = start - acc;
     }
