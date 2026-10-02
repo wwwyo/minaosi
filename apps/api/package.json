@@ -22,6 +22,7 @@
     "@tanstack/ai-anthropic": "0.18.11",
     "@tanstack/ai-cloudflare": "0.1.5",
     "@tanstack/ai-openai": "0.23.1",
+    "entities": "8.1.0",
     "hono": "4.13.9",
     "zod": "4.6.5"
   },

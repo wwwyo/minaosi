@@ -130,10 +130,11 @@ test('標準モードはキー・接続先・モデルをサーバーの設定�
     async (input, bindings) => {
       expect(input).toEqual({ model: '@cf/deepseek-ai/deepseek-v4-flash-0731', blocks: body.blocks });
       expect(bindings.AI).toBe(minimal.AI);
-      return [];
+      return { findings: [], factCheck: { status: 'unavailable' as const, sourceCheckedBlocks: [] } };
     },
   );
   expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ findings: [], factCheck: { status: 'unavailable', sourceCheckedBlocks: [] } });
 });
 
 test('標準モードの運営設定が未完了なら実行しない', async () => {
@@ -156,7 +157,7 @@ test('DeepSeekのBYOKは利用者のキーを使い、標準モードはキー�
   const standard = await handleRequest(
     request({ mode: 'default', blocks: body.blocks }, { 'x-minaosi-api-key': '' }),
     standardEnv, neverReview, neverReview,
-    async (input) => { standardKeyless = true; expect(input.model).toBe('@cf/deepseek-ai/deepseek-v4-flash-0731'); return []; },
+    async (input) => { standardKeyless = true; expect(input.model).toBe('@cf/deepseek-ai/deepseek-v4-flash-0731'); return { findings: [] }; },
   );
   expect(standard.status).toBe(200);
   expect(standardKeyless).toBe(true);
@@ -199,7 +200,7 @@ test('本番と標準モードをOpenCodeの直接接続へ流さない', async 
   expect((await handleRequest(request(opencode), env, neverReview, neverReview)).status).toBe(503);
   expect((await handleRequest(request(opencode), { ...env, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview)).status).toBe(503);
   // 標準モードにproviderの選択肢はなく、OpenCode Goへ逃がす設定も存在しない。
-  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview, async () => [])).status).toBe(200);
+  expect((await handleRequest(request({ mode: 'default', blocks: body.blocks }), { ...standardEnv, LOCAL_OPENCODE_BYOK: 'true' }, neverReview, neverReview, async () => ({ findings: [] }))).status).toBe(200);
 });
 
 test('成功・失敗のログに原稿・キー・URL・上流エラー本文を残さない', async () => {
@@ -263,7 +264,7 @@ describe('標準サービスの同時実行枠', () => {
       }, neverReview, neverReview, async () => {
         events.push('review');
         if (fail) throw new Error('上流が失敗');
-        return [];
+        return { findings: [] };
       });
       expect(response.status).toBe(fail ? 502 : 200);
       expect(events).toEqual(['acquire', 'review', 'release:own-lease']);
@@ -292,7 +293,7 @@ describe('標準サービスの同時実行枠', () => {
       const response = await handleRequest(standardRequest(), {
         ...standardEnv,
         REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'own-lease', release: async () => { throw new Error('fixture-key 原稿'); } }) },
-      }, neverReview, neverReview, async () => []);
+      }, neverReview, neverReview, async () => ({ findings: [] }));
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ findings: [] });
       expect(failure.mock.calls).toEqual([[{ event: 'review_lease_release_failed' }]]);

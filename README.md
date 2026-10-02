@@ -16,7 +16,11 @@ bun run dev
 
 校閲サーバーも起動する必要がある。接続設定・秘密の管理・Workerのビルド手順は[校閲サーバーの設定](docs/review-gateway.md)を参照。
 
-標準モデルはCloudflareのWorkers AI上のDeepSeek V4 Flash（`@cf/deepseek-ai/deepseek-v4-flash-0731`）。標準モードでは誤字・日本語表現を校閲し、Web検索を使った事実確認は行わない。Claude / GPTのBYOKでは、従来どおり検索と一次情報の出典付きで事実の指摘も返す。標準モードの利用には運営者によるWorkers PaidプランとAI bindingの設定が必要（同モデルは無料枠の対象外）。日本語校閲の品質は実測済みではない。
+標準モデルはCloudflareのWorkers AI上のDeepSeek V4 Flash（`@cf/deepseek-ai/deepseek-v4-flash-0731`）。標準モードは、誤字・日本語表現の校閲に加えて、DuckDuckGoで一次情報を探して事実を照合する。検索用のAPIキーは不要。原稿全文をDuckDuckGoへ送らず、照合に必要な短い検索語だけを送る。取得した参照先の本文に引用が存在する事実の指摘だけを返す。検索や出典取得に失敗しても他の校閲は続け、事実の未確認範囲を結果に示す。
+
+1回の校閲で検索は最大3回、参照先の取得は最大6回。HTMLとプレーンテキストを取得でき、PDF・アクセス制限・取得上限を超える本文は未確認とする。DuckDuckGoのHTML結果を利用するため、取得可否はそのサイトの動作に依存する。DuckDuckGoの検索語の学習への利用条件と自動取得の利用条件は、標準モードの公開前に確認が必要（[PRD](docs/prd/note-inline-review/prd.md)）。原稿の送信と学習への利用は設定画面で確認できる。
+
+Claude / GPTのBYOKでは、従来どおり各提供元の検索と一次情報の出典付きで事実の指摘も返す。標準モードの利用には運営者によるWorkers PaidプランとAI bindingの設定が必要（同モデルは無料枠の対象外）。検索・出典取得の実通信とツール連携の模擬応答は検証済みだが、実モデルを通した日本語校閲の品質は未検証。
 
 ## 構成
 
@@ -34,10 +38,11 @@ apps/api/src/
 ├── rpc.ts             # 拡張に公開するHono RPCの型
 ├── http/              # HTTPルート、入力検証、応答・実行ログ
 ├── review/            # 校閲の型、プロンプト、日本語ルール
-│   └── providers/     # モデル呼び出しと上流HTTP通信
+│   ├── providers/     # モデル呼び出しと上流HTTP通信
+│   └── search/        # DuckDuckGo検索、参照先の取得、引用の照合
 └── durable-objects/   # 状態を持つDOクラス（校閲の同時実行枠）
 ```
 
-モデル呼び出しを追う場合は `review/providers/gateway.ts` または `review/providers/opencode.ts` を読む。HTTPから呼び出す箇所は `http/app.ts`。
+モデル呼び出しを追う場合は、標準モードの `review/providers/workers-ai.ts`、BYOKの `review/providers/gateway.ts`、ローカル試用の `review/providers/opencode.ts` を読む。HTTPから呼び出す箇所は `http/app.ts`。
 
 校閲入力は `review/input.ts` のZodスキーマを正本にし、`http/app.ts` の `zValidator` で検証する。入力の型もスキーマから推論し、Hono RPCで拡張へ伝える。

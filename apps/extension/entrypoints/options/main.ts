@@ -29,6 +29,8 @@ const mode = (): ReviewMode => radios.find((radio) => radio.checked)?.value === 
 function showMode() {
   fields.hidden = mode() !== 'byok';
   fields.disabled = fields.hidden || saving;
+  document.querySelector<HTMLElement>('#standard-data-use')!.hidden = mode() === 'byok';
+  document.querySelector<HTMLElement>('#byok-data-use')!.hidden = mode() !== 'byok';
 }
 function stash() { drafts[provider] = { key: key.value, model: model.value }; dirtyProviders.add(provider); }
 function loadDraft() { key.value = drafts[provider].key; model.value = drafts[provider].model; }

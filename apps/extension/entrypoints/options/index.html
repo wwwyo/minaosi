@@ -41,6 +41,17 @@
         <button type="submit" class="run-btn" disabled>保存する</button>
         <p id="status" role="status" aria-live="polite">読み込み中…</p>
       </form>
+      <section aria-label="原稿の送信と学習への利用">
+        <h2>原稿の送信と学習への利用</h2>
+        <div id="standard-data-use">
+          <p class="help">原稿は校閲サーバーを経由してCloudflare Workers AIへ送信します。minaosiとWorkers AIは、原稿と校閲結果をAIモデルの学習に利用しません。</p>
+          <p class="help">事実確認では、原稿から作る短い検索語をDuckDuckGoへ送信し、参照先のページを取得します。原稿全文と校閲結果はDuckDuckGoへ送りません。DuckDuckGoは匿名の検索語を検索改善に利用します。検索語のAI学習への不使用は未確認です。</p>
+          <p class="help"><a href="https://developers.cloudflare.com/workers-ai/platform/data-usage/" target="_blank" rel="noopener noreferrer">Workers AIのデータ利用方針</a> · <a href="https://duckduckgo.com/privacy" target="_blank" rel="noopener noreferrer">DuckDuckGoのプライバシーポリシー</a></p>
+        </div>
+        <div id="byok-data-use" hidden>
+          <p class="help">原稿と登録したAPIキーを校閲サーバーへ送り、選択したモデルの提供元へ中継します。minaosiは原稿と校閲結果をAIモデルの学習に利用しません。提供元による学習への利用・保存は、提供元の利用条件とあなたのアカウント設定に従います。</p>
+        </div>
+      </section>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

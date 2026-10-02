@@ -1,6 +1,8 @@
 html, body { margin: 0; background: transparent; }
 .options { max-width: 560px; margin: 0 auto; padding: var(--space-4); }
 .options h1 { font-size: var(--font-size-brand); margin: 0 0 var(--space-4); line-height: 1; }
+.options h2 { font-size: var(--font-size-body); margin: var(--space-4) 0 var(--space-2); }
+.options .help { color: var(--color-ink-sub); font-size: var(--font-size-small); }
 .brand-lockup { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: 800; letter-spacing: 0; line-height: 1; }
 .brand-lockup svg { display: block; width: 16px; height: 13px; flex: none; transform: translateY(1px); }
 .options fieldset { min-width: 0; border: 0; padding: 0; margin: 0 0 var(--space-6); }
