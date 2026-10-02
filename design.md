@@ -122,9 +122,9 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 </svg>
 ```
 
-- Wordmark: `minaosi` の全7文字を mark と同じ stroke 2.4、square caps、miter joins で構築する。先頭の m は mark の二つの山を wordmark 用の比率で描き直し、全字の肩の高さとベースラインを SVG 内で揃える。正本は `apps/extension/assets/wordmark.svg`（`viewBox="0 -2 98.25 24"`）。オプション画面では SVG の高さを `--font-size-brand`（14px）とし、幅は縦横比から決める。フォントや CSS の文字ごとの transform 補正には依存しない
+- Wordmark: `minaosi` の全7文字を mark と同じ stroke 2.4、square caps、miter joins で構築する。先頭の m は mark の二つの山を wordmark 用の比率で描き直し、全字の肩の高さとベースラインを SVG 内で揃える。正本は `apps/extension/assets/wordmark.svg`（`viewBox="0 -2 99.25 24"`）。オプション画面では SVG の高さを `--font-size-brand`（14px）とし、幅は縦横比から決める。フォントや CSS の文字ごとの transform 補正には依存しない
 - 字幅: パス中心線の横幅は m=15、n=10、a=10、o=11、s=9。i は線幅 2.4 の縦線と点で構成する。m の幅を n の 1.5 倍に抑えて先頭の量感を整える。閉じた o は内側の余白を確保するために広げ、s は斜線の横への張りを抑えるために細くする
-- カーニング: 隣接するパス中心線の最右端と最左端の距離を mi=6.75、in=6.75、na=6.5、ao=6、os=6、si=5.25 とする（SVG 単位。ストロークを含む見える余白とは異なる）。前半の縦線が密集して見えないよう mi/in に余白を取り、端部が開いた s の右側は詰める。字幅と字間は SVG に焼き込み、CSS の一律 letter-spacing で上書きしない。変更時は高さ 14px の実使用表示と 28/96px の拡大表示を比較する
+- カーニング: 隣接するパス中心線の最右端と最左端の距離を mi=6.75、in=6.75、na=6.5、ao=6、os=6、si=6.25 とする（SVG 単位。ストロークを含む見える余白とは異なる）。前半の縦線が密集して見えないよう mi/in に余白を取り、名前の終端でも i が s に寄りすぎないよう si にも余白を確保する。字幅と字間は SVG に焼き込み、CSS の一律 letter-spacing で上書きしない。変更時は高さ 14px の実使用表示と 28/96px の拡大表示を比較する
 - 配置: サイドpaneの名前とアイコンはブラウザの標準ヘッダーに委ね、pane内では重複させない。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
