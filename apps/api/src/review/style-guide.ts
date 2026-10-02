@@ -22,7 +22,7 @@ export function styleExceptions(content: string): string[] {
       if (['例外', '許容する表現', '許容表現'].includes(title)) sectionLevel = heading[1]!.length;
       continue;
     }
-    const item = /^[-*+][ \t]+(\S.*)$/.exec(line.trim());
+    const item = /^(?:[-*+]|\d+[.)])[ \t]+(\S.*)$/.exec(line.trim());
     if (sectionLevel && item) exceptions.push(item[1]!);
     for (const sentence of line.split(/(?<=[。！？])/u)) {
       const text = sentence.trim();

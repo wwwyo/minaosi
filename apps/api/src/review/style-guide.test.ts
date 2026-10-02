@@ -38,6 +38,11 @@ describe('文体規範の例外', () => {
     expect(styleExceptions(`## ${' '.repeat(15_000)}\n- ${' '.repeat(500)}`)).toEqual([]);
   });
 
+  test('例外節の番号付きリストも認識し、通常節の項目は採用しない', () => {
+    expect(styleExceptions('## 例外\n1. 会話は口語を許容\n2) 引用は原文を保つ\n## 語彙\n1. 短い言葉を使う')).toEqual(['会話は口語を許容', '引用は原文を保つ']);
+    expect(validateReport({ findings: [{ ...finding, exception }] }, { blocks, styleGuide: `## 例外\n1. ${exception.rule}` })).toEqual([]);
+  });
+
   test('本文と明示された例外に対応する指摘だけを抑制し、通常の指摘は残す', () => {
     const unrelated = { ...finding, title: '本文の常体', matches: [{ from: '不自然な文章だ', to: '不自然な文章です' }] };
     expect(validateReport({ findings: [{ ...finding, exception }, unrelated] }, context)).toEqual([unrelated]);
