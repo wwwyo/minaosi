@@ -83,7 +83,7 @@ describe('出典取得', () => {
 describe('事実の指摘と取得した出典の照合', () => {
   test('原稿全文や未知の段落を検索へ送らず、任意URLも取得しない', async () => {
     let calls = 0;
-    const search = createFactSearch(blocks, 'fixture-key', async () => { calls++; return results(); });
+    const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); } });
     await search.tools[0]!.execute!({ block: 0, query: blocks[0]!.text });
     await search.tools[0]!.execute!({ block: 9, query: '東京タワー' });
     await search.tools[1]!.execute!({ block: 0, url });
@@ -94,7 +94,7 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('長い段落の逐語抜粋や検索語に混ぜた原稿の一節を外部送信しない', async () => {
     const text = '東京タワーの高さについて書き手が考えた公開前の文章です。'.repeat(10);
     let calls = 0;
-    const search = createFactSearch([{ index: 0, text }], 'fixture-key', async () => { calls++; return results(); });
+    const search = createFactSearch([{ index: 0, text }], { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); } });
     await search.tools[0]!.execute!({ block: 0, query: text.slice(0, 160) });
     await search.tools[0]!.execute!({ block: 0, query: `公式 ${text.slice(0, 25)} 高さ` });
     expect(calls).toBe(0);
@@ -104,11 +104,11 @@ describe('事実の指摘と取得した出典の照合', () => {
 
   test('検索だけの抜粋や捏造引用を除外し、取得した引用のみを認める', async () => {
     const excerpt = '東京タワーの高さは333メートルです。試験用の一次情報です。';
-    const search = createFactSearch(blocks, 'fixture-key', async (input, init) => {
+    const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async (input, init) => {
       if (new URL(String(input)).hostname === 'api.tavily.com') return results();
       expect(new Headers(init?.headers).has('authorization')).toBe(false);
       return html(`<body><p>${excerpt}</p></body>`);
-    });
+    } });
     const finding = { kind: 'fact' as const, block: 0, title: '高さ', reason: '理由', matches: [{ from: '100メートル' }], source: { url, excerpt } };
     await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
     expect(search.verified([finding])).toEqual([]);
@@ -121,10 +121,10 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('検索回数は校閲ごとに制限され、次の原稿へ持ち越さない', async () => {
     let calls = 0;
     const fetcher = async () => { calls++; return results(); };
-    const search = createFactSearch(blocks, 'fixture-key', fetcher);
+    const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher });
     for (let i = 0; i < 5; i++) await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ' });
     expect(calls).toBe(3);
-    const next = createFactSearch(blocks, 'fixture-key', fetcher);
+    const next = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher });
     await next.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ' });
     expect(calls).toBe(4);
   });
@@ -132,7 +132,7 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('文体規範の全文や一節を検索語として外部へ送らない', async () => {
     const styleGuide = '書き手が自分のために用意した公開しない文体の規範を適用する。';
     let calls = 0;
-    const search = createFactSearch(blocks, 'fixture-key', async () => { calls++; return results(); }, styleGuide);
+    const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); }, styleGuide });
     await search.tools[0]!.execute!({ block: 0, query: styleGuide });
     await search.tools[0]!.execute!({ block: 0, query: `公式 ${styleGuide.slice(0, 25)}` });
     expect(calls).toBe(0);
@@ -143,7 +143,7 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('20文字未満の規範文や箇条書きを検索語に混ぜても外部へ送らない', async () => {
     for (const styleGuide of ['本文はですます調。', '# 文体規範\n- 本文はですます調。\n- 会話は口語を許容']) {
       let calls = 0;
-      const search = createFactSearch(blocks, 'fixture-key', async () => { calls++; return results(); }, styleGuide);
+      const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); }, styleGuide });
       await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
       expect(calls).toBe(0);
       await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
@@ -154,14 +154,14 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('Markdownで装飾した短い規範文も検索へ送らず、記号を含む原文も保護する', async () => {
     for (const styleGuide of ['- **本文はですます調。**', '- _本文はですます調。_', '- `本文はですます調。`', '- ~~本文はですます調。~~']) {
       let calls = 0;
-      const search = createFactSearch(blocks, 'fixture-key', async () => { calls++; return results(); }, styleGuide);
+      const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); }, styleGuide });
       await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
       expect(calls).toBe(0);
       await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
       expect(calls).toBe(1);
     }
     let calls = 0;
-    const search = createFactSearch(blocks, 'fixture-key', async () => { calls++; return results(); }, '- my_ruleを優先');
+    const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); }, styleGuide: '- my_ruleを優先' });
     await search.tools[0]!.execute!({ block: 0, query: '公式 my_ruleを優先' });
     expect(calls).toBe(0);
   });
