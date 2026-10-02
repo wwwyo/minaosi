@@ -6,6 +6,10 @@ export default defineConfig(({ mode }) => ({
     entrypoint: 'src/index.ts',
     compatibilityDate: '2026-09-22',
     compatibilityFlags: ['nodejs_compat'],
+    // 公開入口は custom domain（minaoshi.syokan.dev）だけに絞る。workers.dev と preview URL は残すと
+    // 別 hostname で Turnstile widget の domain 登録を広げる必要があり、管理面を増やすだけになる。
+    workersDev: false,
+    previewUrls: false,
     exports: { ReviewConcurrency: exports.durableObject({ storage: 'sqlite' }) },
     observability: {
       enabled: true,
@@ -21,7 +25,7 @@ export default defineConfig(({ mode }) => ({
       REVIEW_GATEWAY_ID: bindings.text<string>(''),
       ALLOWED_ORIGINS: bindings.secret(),
       // Turnstile widget の sitekey。秘密ではなくクライアントへ配る値。開発時は always-pass のテストキー（invisible）。
-      // 本番値は `minaosi-review.mix-mix.workers.dev` に紐付く widget のもの。別ホストへ deploy する場合は
+      // 本番値は `minaoshi.syokan.dev` に紐付く widget のもの。別ホストへ deploy する場合は
       // その hostname で widget を作り直し、ここの値を差し替える（siteverify の hostname 照合で弾かれるため）。
       TURNSTILE_SITE_KEY: bindings.text<string>(mode === 'development' ? '1x00000000000000000000BB' : '0x4AAAAAAFLTQAfNx0YoHv9S'),
       TURNSTILE_SECRET_KEY: bindings.secret(),
