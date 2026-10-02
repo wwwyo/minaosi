@@ -71,7 +71,7 @@ cd apps/api
 mise exec -- cf workers secrets bulk --worker minaosi-review --file /dev/stdin
 ```
 
-stdinにはcfのJSON Merge Patch形式（`{"SECRET_NAME":{"type":"secret_text","text":"…"}}`）のJSONを、秘密管理ツールから渡す。実値をコマンド引数・履歴・trackedファイルに置かない。Workerがまだ存在しない初回 deploy では `secrets bulk` が使えないため、`cf deploy --secrets-file <path>` で secret を一緒に渡す。secrets-file は `SECRET_NAME=value` を1行ずつ書いた .env 形式で通った実績がある（JSON 形式も可）。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードはこれらのsecretなしで動き、AI bindingがない場合だけ503を返す。
+stdinにはcfのJSON Merge Patch形式（`{"secrets":{"SECRET_NAME":{"name":"SECRET_NAME","type":"secret_text","text":"…"}}}`）のJSONを、秘密管理ツールから渡す。登録後は `cf workers secrets list --worker minaosi-review` で名前の反映を確認する。実値をコマンド引数・履歴・trackedファイルに置かない。Workerがまだ存在しない初回 deploy では `secrets bulk` が使えないため、`cf deploy --secrets-file <path>` で secret を一緒に渡す。secrets-file は `SECRET_NAME=value` を1行ずつ書いた .env 形式で通った実績がある（JSON 形式も可）。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードはこれらのsecretなしで動き、AI bindingがない場合だけ503を返す。
 
 cfはNode.jsで実行する。`cf/config` をBunで読み込むことはサポートされないため、miseでNode.jsも管理する。cfは `1.0.0-beta.6` にexact固定し、2026-10-01のユーザー承認で、この依存追加だけ7日cooldownの例外とした。`bunfig.toml` の7日待機設定は維持する。
 
