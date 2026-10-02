@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
 import { INVALID_TOOL_INPUT } from '../review/errors';
 import { ModelSchema, ReviewInputSchema } from '../review/input';
-import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding } from '../review/schema';
+import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding, ReviewResult } from '../review/schema';
 import { readBoundedBody } from './body';
 import { readTurnstileToken, turnstilePage, TURNSTILE_REJECT_MESSAGE, type TurnstileVerifier } from './turnstile';
 
@@ -31,7 +31,7 @@ interface RpcEnv {
     bindings: ReviewBindings;
     reviewer: (input: ProviderReviewInput, key: string, env: ReviewBindings) => Promise<ReviewedFinding[]>;
     opencodeReviewer: (input: ProviderReviewInput, key: string) => Promise<ReviewedFinding[]>;
-    standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewedFinding[]>;
+    standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewResult>;
     turnstileVerifier: TurnstileVerifier;
   };
 }
@@ -139,10 +139,10 @@ export const app = new Hono<RpcEnv>()
       if (!lease) return c.json({ error: '校閲が混み合っています。少し待ってからお試しください' }, 429);
     }
     try {
-      const findings = standard
+      const result = standard
         ? await standardReviewer(standard, env)
-        : localOpenCode ? await opencodeReviewer(selected!, apiKey) : await reviewer(selected!, apiKey, env);
-      return c.json({ findings }, 200);
+        : { findings: localOpenCode ? await opencodeReviewer(selected!, apiKey) : await reviewer(selected!, apiKey, env) };
+      return c.json(result, 200);
     } catch (error) {
       // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。
       const failure = input.mode === 'default'

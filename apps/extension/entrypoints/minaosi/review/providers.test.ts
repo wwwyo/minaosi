@@ -17,7 +17,7 @@ describe('review relay', () => {
       expect(options?.credentials).toBe('omit');
       return Response.json({ findings: [finding] });
     }) as HttpFetch;
-    expect(await review(request, 'fixture-key', endpoint, fetcher)).toEqual([finding]);
+    expect(await review(request, 'fixture-key', endpoint, fetcher)).toEqual({ findings: [finding] });
     expect(called).toBe(true);
   });
 
@@ -36,9 +36,15 @@ describe('review relay', () => {
 
   test('不正な結果は失敗にし、一次出典がないfactは除外する', async () => {
     const fetcher = (async () => Response.json({ findings: [{ ...finding, kind: 'fact' }] })) as HttpFetch;
-    expect(await review(request, 'fixture-key', endpoint, fetcher)).toEqual([]);
+    expect(await review(request, 'fixture-key', endpoint, fetcher)).toEqual({ findings: [] });
     await expect(review(request, 'fixture-key', endpoint, (async () => Response.json({})) as HttpFetch)).rejects.toThrow('形式が不正');
   });
+});
+
+test('検索失敗の部分結果を指摘とともに返し、不正な確認範囲を拒否する', async () => {
+  const factCheck = { status: 'unavailable' as const, sourceCheckedBlocks: [] };
+  expect(await review(request, 'fixture-key', endpoint, async () => Response.json({ findings: [finding], factCheck }))).toEqual({ findings: [finding], factCheck });
+  await expect(review(request, 'fixture-key', endpoint, async () => Response.json({ findings: [], factCheck: { status: 'checked', sourceCheckedBlocks: [-1] } }))).rejects.toThrow('事実確認の結果形式');
 });
 
 

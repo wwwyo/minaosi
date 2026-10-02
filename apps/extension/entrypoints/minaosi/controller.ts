@@ -2,7 +2,7 @@ import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
-import type { ReviewedFinding } from '@minaosi/api/rpc';
+import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
@@ -15,6 +15,7 @@ interface ReviewReply {
   ok: boolean;
   error?: string;
   findings?: ReviewedFinding[];
+  factCheck?: FactCheckSummary;
 }
 
 export class Controller {
@@ -212,6 +213,7 @@ export class Controller {
     this.s.phase = 'running';
     this.s.view = 'list';
     this.s.error = undefined;
+    this.s.factCheck = undefined;
     this.render();
     try {
       const blocks = this.adapter.extractBlocks(this.editor);
@@ -225,6 +227,7 @@ export class Controller {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
       this.s.findings = this.normalize(reply.findings, blocks);
+      this.s.factCheck = reply.factCheck;
       this.s.phase = 'done';
       this.s.filter = 'open';
       this.s.selectedId = null;

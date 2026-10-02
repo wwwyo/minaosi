@@ -1,5 +1,5 @@
 import { hc, type InferRequestType } from 'hono/client';
-import type { AppType, ReviewedFinding, ReviewProvider } from '@minaosi/api/rpc';
+import type { AppType, ReviewedFinding, ReviewProvider, ReviewResult, FactCheckSummary } from '@minaosi/api/rpc';
 import { KIND_LABEL } from '../types';
 
 const FINDING_KINDS = Object.keys(KIND_LABEL);
@@ -19,7 +19,7 @@ export async function review(
   apiKey: string,
   endpoint: string,
   fetcher: HttpFetch = fetch,
-): Promise<ReviewedFinding[]> {
+): Promise<ReviewResult> {
   const url = new URL(endpoint);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
     throw new Error('校閲サーバーには HTTPS が必要です');
@@ -46,7 +46,16 @@ export async function review(
   }
   const findings = validateReport(data);
   if (!Array.isArray(findings)) throw new Error(findings.error);
-  return findings;
+  const factCheck = data && typeof data === 'object' && 'factCheck' in data ? data.factCheck : undefined;
+  if (factCheck !== undefined && !isFactCheckSummary(factCheck)) throw new Error('事実確認の結果形式が不正です');
+  return { findings, ...(factCheck ? { factCheck } : {}) };
+}
+
+function isFactCheckSummary(value: unknown): value is FactCheckSummary {
+  if (!value || typeof value !== 'object') return false;
+  const summary = value as FactCheckSummary;
+  return (summary.status === 'partial' || summary.status === 'unavailable') &&
+    Array.isArray(summary.sourceCheckedBlocks) && summary.sourceCheckedBlocks.every(block => Number.isInteger(block) && block >= 0);
 }
 
 /** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */

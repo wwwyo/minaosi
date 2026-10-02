@@ -1,4 +1,5 @@
 import { KIND_LABEL, type Finding } from '../types';
+import type { FactCheckSummary } from '@minaosi/api/rpc';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
   ICON_SPARKLES,
@@ -12,6 +13,7 @@ export type PanelFinding = Omit<Finding, 'blockEl'>;
 export interface PanelState {
   phase: 'idle' | 'running' | 'done' | 'error';
   error?: string;
+  factCheck?: FactCheckSummary;
   view: View;
   filter: PanelFilter;
   selectedId: string | null;
@@ -95,10 +97,15 @@ export function renderPanel(s: PanelState): string {
   const tabs = `<div class="filters">${TABS.map(
     ([k, l]) => `<button data-act="filter" data-f="${k}" class="${s.filter === k ? 'on' : ''}" aria-pressed="${s.filter === k}">${l}</button>`,
   ).join('')}</div>`;
+  const factCheck = s.phase === 'done' && s.factCheck
+    ? `<div class="notice" role="status">${s.factCheck.status === 'unavailable'
+      ? '事実の確認結果はありません。誤字・日本語ルールの校閲結果を表示しています。'
+      : `事実確認は原稿全体を網羅していません。参照先を取得した段落：${s.factCheck.sourceCheckedBlocks.map(block => block + 1).join('、')}。出典付きの指摘以外の主張は未確認です。`}</div>`
+    : '';
 
   return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
     <header><div class="head-row">${tabs}</div>${prog ? `<div class="prog">${prog}</div>` : ''}</header>
-    <div class="list">${listBody(s)}</div>
+    <div class="list">${factCheck}${listBody(s)}</div>
   </aside>`;
 }
 

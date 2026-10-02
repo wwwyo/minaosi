@@ -27,6 +27,17 @@ export interface RawFinding {
 /** kind の妥当性を検証済みの RawFinding */
 export type ReviewedFinding = RawFinding & { kind: FindingKind };
 
+export interface FactCheckSummary {
+  status: 'partial' | 'unavailable';
+  /** 参照先の本文を取得したブロック。原稿全体や主張の正しさの確認を意味しない。 */
+  sourceCheckedBlocks: number[];
+}
+
+export interface ReviewResult {
+  findings: ReviewedFinding[];
+  factCheck?: FactCheckSummary;
+}
+
 /** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
 export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
   const raw = input && typeof input === 'object' ? (input as { findings?: unknown }).findings : undefined;

@@ -10,7 +10,11 @@ AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプ�
 
 自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系 / DeepSeek）から判定する。拡張はキーを接続先ごとにローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
 
-標準モードのWorkers AIには組み込みのWeb検索がないため、誤字・日本語表現だけを校閲し、検索していない事実指摘は結果からも除外する。BYOKのDeepSeekもTanStackの `OpenAIChatCompletionsTextAdapter` でGatewayの `/deepseek/chat/completions` を呼び、OpenAIのResponses APIと内蔵検索toolは送らない。通常endpointでは `strict: false` のfunction toolを使い、`thinking: { type: 'disabled' }` を明示する。thinkingを有効にするとtoolの継続時に `reasoning_content` の完全な再送が必要になるため、現adapterのまま既定のthinkingを使わない。事実確認はClaude / GPTのBYOKで引き続き利用できる。標準モードにも事実確認を追加する場合は、外部検索サービスとその認証・費用の設計が別途必要。[DeepSeekのモデルID](https://api-docs.deepseek.com/quick_start/pricing)、[thinkingの仕様](https://api-docs.deepseek.com/guides/thinking_mode)、[Gatewayの検索対応](https://developers.cloudflare.com/ai-gateway/usage/web-search/)。
+標準モデルには組み込み検索がないため、校閲サーバーが `web_search`（DuckDuckGoのHTML検索）と `read_source`（検索結果にあるページの本文取得）をfunction toolとして提供する。検索用のAPIキーは不要。検索は最大3回、本文取得は最大6回で、個々の取得を12秒・512KiBまでに制限する。各リダイレクト先も公開HTTPSのURLか検証し、認証付きURLや内部アドレスのリテラルは拒否する。原稿全文・校閲結果をDuckDuckGoへ送らず、短い検索語だけを送る。
+
+事実の指摘は、同じ校閲で取得した参照先と本文内の引用が照合できた場合だけ採用する。出典の一次性や主張との関係はモデルが判定するため、引用の一致だけで事実の正しさを保証するものではない。検索結果の抜粋のみ、未取得のURL、本文に存在しない引用は根拠にしない。PDFなど非対応の形式や検索のアクセス制限は未確認として扱い、誤字・日本語ルールの校閲を続ける。応答の `factCheck` は参照先を取得したブロックを示すもので、原稿全体の確認完了を意味しない。原稿・検索語の送信先と学習への利用は拡張の設定画面に表示する。DuckDuckGoの検索語の学習への利用条件と自動取得の利用条件は、公開前の確認事項として残る。
+
+BYOKのDeepSeekはTanStackの `OpenAIChatCompletionsTextAdapter` でGatewayの `/deepseek/chat/completions` を呼び、OpenAIのResponses APIと内蔵検索toolは送らない。通常endpointでは `strict: false` のfunction toolを使い、`thinking: { type: 'disabled' }` を明示する。thinkingを有効にするとtoolの継続時に `reasoning_content` の完全な再送が必要になるため、現adapterのまま既定のthinkingを使わず、事実指摘は除外する。Claude / GPTのBYOKでは各提供元の検索による事実確認を引き続き利用できる。[DeepSeekのモデルID](https://api-docs.deepseek.com/quick_start/pricing)、[thinkingの仕様](https://api-docs.deepseek.com/guides/thinking_mode)、[Gatewayの検索対応](https://developers.cloudflare.com/ai-gateway/usage/web-search/)。
 
 BYOKモードで利用者のキーがないリクエストは必ず拒否し、標準モード（運営者課金）への自動切り替えはしない。Gateway の認証トークンはBYOK用にサーバーだけに置き、拡張には含めない。BYOKのGatewayリクエストではキャッシュと本文ログをリクエスト単位で無効化する。Workerには本文・キーを含めない実行結果のログだけを残す。AI プロバイダー側のデータ保持は各社の契約・設定に従う。
 
