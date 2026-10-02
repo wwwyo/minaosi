@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
     exports: { ReviewConcurrency: exports.durableObject({ storage: 'sqlite' }) },
     observability: {
       enabled: true,
-      logs: { enabled: true, invocationLogs: false, headSamplingRate: 1 },
+      logs: { enabled: true, invocationLogs: true, headSamplingRate: 1 },
       traces: { enabled: true, headSamplingRate: 1 },
     },
     env: {
