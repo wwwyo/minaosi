@@ -2,13 +2,13 @@ import { isReviewProvider, type ReviewMode, type ReviewProvider } from '../minao
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from '../minaosi/store';
 import { providerForModel } from '../minaosi/review/models';
 import { PANEL_CSS } from '../minaosi/ui/styles';
-import { BRAND_LOCKUP } from '../minaosi/ui/brand';
+import wordmark from '../../assets/wordmark.svg?raw';
 import './style.css';
 
 const style = document.createElement('style');
 style.textContent = PANEL_CSS;
 document.head.prepend(style);
-document.querySelector('#brand')!.innerHTML = BRAND_LOCKUP;
+document.querySelector('#brand')!.innerHTML = wordmark;
 const form = document.querySelector<HTMLFormElement>('#settings')!;
 const fields = document.querySelector<HTMLFieldSetElement>('#byok-fields')!;
 const model = document.querySelector<HTMLInputElement>('#model')!;
