@@ -16,3 +16,6 @@ export const PROVIDER_SETTINGS = {
   openai: { key: openaiKeyItem, model: openaiModelItem },
   deepseek: { key: deepseekKeyItem, model: deepseekModelItem },
 };
+
+// 廃止したローカル試用経路（opencode-go）の保存値を消す。残すと利用者のキーがstorageに残り続ける。
+void storage.removeItems(['local:opencodeKey', 'local:opencodeModel']);
