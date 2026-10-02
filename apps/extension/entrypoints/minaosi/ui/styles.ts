@@ -59,22 +59,12 @@ export const PANEL_CSS = `
   display: flex; flex-direction: column;
   background: transparent;
 }
-.panel header { padding: 14px 16px 12px; border-bottom: 1px solid var(--color-line); }
-.head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.head-row .filters { margin-top: 0; }
+.handled-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; color: var(--color-ink-mute); font-size: var(--font-size-caption); }
+.handled-heading button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-md); background: transparent; color: inherit; cursor: pointer; }
+.handled-heading button:hover { background: var(--color-bg-hover); color: var(--color-ink-sub); }
+.handled-heading svg { width: 14px; height: 14px; }
 
-.filters { display: flex; gap: 2px; margin-top: 10px; }
-.filters button {
-  font-family: inherit; font-size: var(--font-size-caption); font-weight: 600;
-  border: 1px solid transparent; background: transparent;
-  color: var(--color-ink-sub); padding: 3px 8px; cursor: pointer; border-radius: var(--radius-md);
-  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
-}
-.filters button:hover { color: var(--color-ink); background: var(--color-bg-hover); }
-.filters button:active { transform: translateY(1px); }
-.filters button.on { color: var(--color-ink); background: var(--color-bg-surface); border-color: var(--color-line-strong); }
-
-.list { overflow-y: auto; flex: 1; min-height: 0; }
+.list { position: relative; overflow-y: auto; flex: 1; min-height: 0; }
 .empty-start { height: 100%; display: flex; flex-direction: column; gap: var(--space-3); align-items: center; justify-content: center; }
 .mn .empty { padding: 24px 16px; color: var(--color-ink-mute); font-size: var(--font-size-small); text-align: center; }
 .list .notice { padding: 24px 16px; color: var(--color-ink-sub); font-size: var(--font-size-small); }
@@ -90,14 +80,17 @@ export const PANEL_CSS = `
 }
 .n-item:hover { background: var(--color-bg-hover); }
 .n-item[data-sel] { border-left-color: var(--color-ink); background: transparent; }
-.n-item .detail { display: none; }
-.n-item[data-sel] .detail { display: block; }
+.n-item .detail { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(8px); transition: grid-template-rows var(--dur-med) var(--ease-out), opacity var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out); }
+.n-item .detail-body { min-height: 0; overflow: hidden; }
+.n-item[data-sel] .detail { grid-template-rows: 1fr; opacity: 1; transform: translateY(0); }
 .n-item .meta { display: flex; align-items: baseline; gap: 6px; padding-right: 54px; }
 .n-item .kind { font-size: var(--font-size-micro); letter-spacing: 0.08em; color: var(--color-ink-sub); font-weight: 700; }
 .n-item .status { font-size: var(--font-size-micro); color: var(--color-ink-mute); }
 .n-item .ttl { font-weight: 600; font-size: var(--font-size-body); margin-top: 2px; padding-right: 54px; }
 .n-item .rsn { color: var(--color-ink-sub); font-size: var(--font-size-small); margin-top: 4px; }
-.n-item.is-resolved .ttl, .n-item.is-resolved .rsn { color: var(--color-ink-mute); }
+.n-item.is-resolved, .n-item.is-deleted { color: var(--color-ink-mute); }
+.n-item.is-resolved .ttl, .n-item.is-resolved .rsn, .n-item.is-deleted .ttl, .n-item.is-deleted .rsn { color: var(--color-ink-mute); }
+.n-item.is-exiting { position: absolute; pointer-events: none; z-index: 1; background: var(--color-bg-surface); }
 .n-item .detail .rsn { margin-top: 8px; }
 .n-item .stale { margin-top: 6px; color: var(--color-ink-sub); font-size: var(--font-size-small);
   border-left: 2px solid var(--color-line-strong); padding-left: 8px; }
@@ -105,7 +98,7 @@ export const PANEL_CSS = `
 .src a { color: var(--color-accent-ink); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
 .src .loc { color: var(--color-ink-sub); }
 
-.acts { position: absolute; top: 16px; right: 12px; display: flex; gap: 6px; align-items: center; }
+.acts { position: absolute; top: 20px; right: 12px; display: flex; gap: 6px; align-items: center; }
 .acts button {
   width: 28px; height: 28px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;

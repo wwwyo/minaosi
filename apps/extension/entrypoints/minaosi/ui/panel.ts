@@ -2,11 +2,10 @@ import { KIND_LABEL, type Finding } from '../types';
 import type { FactCheckSummary } from '@minaosi/api/rpc';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
-  ICON_SPARKLES,
+  ICON_SPARKLES, ICON_EYE, ICON_EYE_OFF,
 } from './icons';
 
 export type View = 'list';
-export type PanelFilter = 'open' | 'handled';
 
 export type PanelFinding = Omit<Finding, 'blockEl'>;
 
@@ -15,7 +14,6 @@ export interface PanelState {
   error?: string;
   factCheck?: FactCheckSummary;
   view: View;
-  filter: PanelFilter;
   selectedId: string | null;
   findings: PanelFinding[];
   connectionLoading: boolean;
@@ -23,7 +21,7 @@ export interface PanelState {
 
 export interface PanelHandlers {
   onRun(): void;
-  onFilter(f: PanelFilter): void;
+  onToggleHandled(): void;
   onSelect(fid: string | null): void;
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
@@ -33,8 +31,6 @@ export interface PanelHandlers {
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
-const TABS: [PanelFilter, string][] = [['open', '未対応'], ['handled', '対応済み']];
 
 function actsHTML(f: PanelFinding): string {
   if (f.state === 'resolved' || f.state === 'deleted') {
@@ -50,14 +46,14 @@ function actsHTML(f: PanelFinding): string {
 function cardHTML(f: PanelFinding, selectedId: string | null): string {
   const stale = f.state === 'open' && f.matches.length > 0 && f.matches.every((m) => m.stale || m.applied);
   const status = f.state === 'open' ? '' : `<span class="status">${f.state === 'resolved' ? '適用済み' : '削除'}</span>`;
-  return `<div class="n-item is-${f.state}" data-fid="${f.id}" tabindex="0" role="button"${f.id === selectedId ? ' data-sel' : ''}>
+  return `<div class="n-item is-${f.state}" data-fid="${esc(f.id)}" tabindex="0" role="button" aria-expanded="${f.id === selectedId}"${f.id === selectedId ? ' data-sel' : ''}>
     <div class="meta"><span class="kind">${KIND_LABEL[f.kind]}</span>${status}</div>
     <div class="ttl">${esc(f.title)}</div>
-    <div class="detail">
+    <div class="detail"${f.id === selectedId ? '' : ' inert'}><div class="detail-body">
       <div class="rsn">${esc(f.reason)}</div>
       ${f.source ? `<div class="src">出典: <a href="${esc(f.source.url)}" target="_blank" rel="noopener noreferrer">${esc(f.source.label || f.source.url)}</a>${f.source.excerpt ? `<span class="loc"> — ${esc(f.source.excerpt)}</span>` : ''}</div>` : ''}
       ${stale ? '<div class="stale">対象箇所が編集され、修正案と一致しなくなりました。</div>' : ''}
-    </div>
+    </div></div>
     ${actsHTML(f)}
   </div>`;
 }
@@ -66,7 +62,7 @@ function isEmptyState(s: PanelState): boolean {
   return s.phase === 'idle' && s.findings.length === 0;
 }
 
-function listBody(s: PanelState): string {
+function listBody(s: PanelState, showHandled: boolean): string {
   if (s.phase === 'error') {
     return `<div class="notice">見直しが完了しませんでした。<br>${esc(s.error ?? '不明なエラー')}</div>`;
   }
@@ -74,25 +70,28 @@ function listBody(s: PanelState): string {
     return `<div class="empty-start"><button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
   if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
-  const list = s.findings.filter((f) => s.filter === 'open' ? f.state === 'open' : f.state !== 'open');
-  return list.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>';
+  const open = s.findings.filter((f) => f.state === 'open');
+  const handled = s.findings.filter((f) => f.state !== 'open');
+  if (showHandled) handled.sort((a, b) => (a.handledOrder ?? 0) - (b.handledOrder ?? 0));
+  const toggleLabel = showHandled ? '対応済みを隠す' : '対応済みを表示する';
+  return `<div class="open-findings">${open.map((f) => cardHTML(f, s.selectedId)).join('') || '<div class="empty">指摘はありません</div>'}</div>
+    ${handled.length ? `<section class="handled-section" aria-label="対応済み">
+      <div class="handled-heading"><span>対応済み</span><button data-act="toggle-handled" title="${toggleLabel}" aria-label="${toggleLabel}" aria-expanded="${showHandled}" aria-controls="handled-findings">${showHandled ? ICON_EYE : ICON_EYE_OFF}</button></div>
+      <div id="handled-findings" class="handled-findings"${showHandled ? '' : ' hidden'}>${showHandled ? handled.map((f) => cardHTML(f, s.selectedId)).join('') : ''}</div>
+    </section>` : ''}`;
 }
 
 export function renderFab(): string {
   return `<button class="mn fab" title="指摘paneを開閉する" aria-label="指摘paneを開閉する">${LOGO_MARK}</button>`;
 }
 
-export function renderPanel(s: PanelState): string {
-  const tabs = `<div class="filters">${TABS.map(
-    ([k, l]) => `<button data-act="filter" data-f="${k}" class="${s.filter === k ? 'on' : ''}" aria-pressed="${s.filter === k}">${l}</button>`,
-  ).join('')}</div>`;
+export function renderPanel(s: PanelState, showHandled = false): string {
   const factCheck = s.phase === 'done' && s.factCheck?.status === 'partial'
     ? `<div class="notice" role="status">事実確認は原稿全体を網羅していません。参照先を取得した段落：${s.factCheck.sourceCheckedBlocks.map(block => block + 1).join('、')}。出典付きの指摘以外の主張は未確認です。</div>`
     : '';
 
   return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
-    <header><div class="head-row">${tabs}</div></header>
-    <div class="list">${factCheck}${listBody(s)}</div>
+    <div class="list">${factCheck}${listBody(s, showHandled)}</div>
   </aside>`;
 }
 
@@ -109,11 +108,7 @@ export function wirePanel(
     if (actEl) {
       switch (actEl.dataset.act) {
         case 'run': h.onRun(); return;
-        case 'filter': {
-          const filter = actEl.dataset.f;
-          if (filter === 'open' || filter === 'handled') h.onFilter(filter);
-          return;
-        }
+        case 'toggle-handled': h.onToggleHandled(); return;
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;
         case 'revert': if (fid) h.onRevert(fid); return;

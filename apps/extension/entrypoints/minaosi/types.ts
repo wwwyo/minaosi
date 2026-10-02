@@ -51,6 +51,8 @@ export interface Finding {
   /** kind === 'fact' のとき必須 */
   source?: Source;
   state: FindingState;
+  /** 対応済みに移った順番。復元後に再対応すると末尾へ積み直す。 */
+  handledOrder?: number;
 }
 
 export interface DraftBlock {

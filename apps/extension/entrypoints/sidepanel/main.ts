@@ -1,24 +1,29 @@
 import { browser } from '#imports';
 import { PanelConnection } from '../minaosi/panel-connection';
 import { TurnstileGate } from '../minaosi/turnstile';
-import { wirePanel } from '../minaosi/ui/panel';
+import { wirePanel, type PanelState } from '../minaosi/ui/panel';
 import { updatePanel } from '../minaosi/ui/panel-view';
 import { PANEL_CSS } from '../minaosi/ui/styles';
+import { readHandledVisibility, writeHandledVisibility } from '../minaosi/ui/handled-visibility';
 
 const root = document.querySelector<HTMLElement>('#panel-root')!;
 const style = document.createElement('style');
 style.textContent = `${PANEL_CSS}\nhtml, body { margin: 0; background: transparent; }`;
 document.head.append(style);
 
+let showHandled = readHandledVisibility();
+let latestState: PanelState | null = null;
 let selectedId: string | null = null;
 const connection = new PanelConnection(
   (tabId, name) => browser.tabs.connect(tabId, { name }),
   (state) => {
+    latestState = state;
     if (!state) { selectedId = null; showUnavailable(); return; }
-    updatePanel(root, state);
+    updatePanel(root, state, showHandled);
     if (state.selectedId !== selectedId) {
       selectedId = state.selectedId;
-      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior });
     }
   },
   () => { void browser.runtime.lastError; },
@@ -61,7 +66,11 @@ function showUnavailable() {
 
 wirePanel(root, {
   onRun: () => { void runReview(); },
-  onFilter: (filter) => send({ action: 'filter', filter }),
+  onToggleHandled: () => {
+    showHandled = !showHandled;
+    writeHandledVisibility(showHandled);
+    if (latestState) updatePanel(root, latestState, showHandled);
+  },
   onSelect: (id) => send({ action: 'select', id }),
   onApplyFinding: (id) => send({ action: 'apply', id }),
   onDelete: (id) => send({ action: 'delete', id }),

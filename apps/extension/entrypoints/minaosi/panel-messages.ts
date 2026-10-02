@@ -1,4 +1,4 @@
-import type { PanelFilter, PanelState } from './ui/panel';
+import type { PanelState } from './ui/panel';
 
 export const PANEL_PORT = 'minaosi:panel';
 
@@ -11,7 +11,6 @@ export interface TurnstileProof {
 
 export type PanelCommand =
   | { action: 'run'; turnstile?: TurnstileProof }
-  | { action: 'filter'; filter: PanelFilter }
   | { action: 'select'; id: string | null }
   | { action: 'apply' | 'delete' | 'revert'; id: string };
 
