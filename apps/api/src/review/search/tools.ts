@@ -12,8 +12,13 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
   let reads = 0;
   const blockExists = (index: number) => blocks.some(block => block.index === index && block.text.trim());
   const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizeText(styleGuide)];
+  const styleRules = styleGuide.split(/[。！？\r\n]+/u)
+    .filter(line => !/^\s*#{1,6}\s/.test(line))
+    .map(line => normalizeText(line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')))
+    .filter(Boolean);
   const copiesDraftExcerpt = (query: string) => {
     const text = normalizeText(query);
+    if (styleRules.some(rule => text.includes(rule))) return true;
     for (let offset = 0; offset + 20 <= text.length; offset++) {
       if (draftTexts.some(draft => draft.includes(text.slice(offset, offset + 20)))) return true;
     }

@@ -26,6 +26,13 @@ describe('文体規範の例外', () => {
     expect(styleExceptions(`\`\`\`txt\n${rule}\n\`\`\``)).toEqual([]);
   });
 
+  test('3スペースまでインデントした例外見出しを認識し、4スペースのコードは見出しにしない', () => {
+    for (const indent of [' ', '  ', '   ']) {
+      expect(styleExceptions(`${indent}## 例外\n- 会話は口語を許容\n${indent}## 語彙\n- 短い言葉を使う`)).toEqual(['会話は口語を許容']);
+    }
+    expect(styleExceptions('    ## 例外\n- 会話は口語を許容')).toEqual([]);
+  });
+
   test('本文と明示された例外に対応する指摘だけを抑制し、通常の指摘は残す', () => {
     const unrelated = { ...finding, title: '本文の常体', matches: [{ from: '不自然な文章だ', to: '不自然な文章です' }] };
     expect(validateReport({ findings: [{ ...finding, exception }, unrelated] }, context)).toEqual([unrelated]);

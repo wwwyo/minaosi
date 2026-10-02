@@ -15,7 +15,7 @@ export function styleExceptions(content: string): string[] {
       continue;
     }
     if (boundary) { fence = { marker: boundary[1]![0]!, length: boundary[1]!.length }; continue; }
-    const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    const heading = /^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) {
       if (sectionLevel && heading[1]!.length <= sectionLevel) sectionLevel = 0;
       if (['例外', '許容する表現', '許容表現'].includes(heading[2]!)) sectionLevel = heading[1]!.length;

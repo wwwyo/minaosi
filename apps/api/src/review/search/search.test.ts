@@ -114,4 +114,15 @@ describe('事実の指摘と取得した出典の照合', () => {
     await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
     expect(calls).toBe(1);
   });
+
+  test('20文字未満の規範文や箇条書きを検索語に混ぜても外部へ送らない', async () => {
+    for (const styleGuide of ['本文はですます調。', '# 文体規範\n- 本文はですます調。\n- 会話は口語を許容']) {
+      let calls = 0;
+      const search = createFactSearch(blocks, async () => { calls++; return results(); }, styleGuide);
+      await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
+      expect(calls).toBe(0);
+      await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+      expect(calls).toBe(1);
+    }
+  });
 });
