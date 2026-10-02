@@ -4,7 +4,7 @@ import { searchTavily } from './tavily';
 import { fetchPage, normalizeText, pageText, publicUrl } from './web';
 
 /** 取得済みの出典だけを採用するため、検索と本文の記録を校閲リクエスト内に閉じる。 */
-export function createFactSearch(blocks: ReviewBlock[], apiKey?: string, fetcher: HttpFetch = fetch, styleGuide = '') {
+export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetch, styleGuide = '' }: { apiKey?: string; fetcher?: HttpFetch; styleGuide?: string } = {}) {
   const candidates = new Map<number, Set<string>>();
   const sources = new Map<string, { url: string; text: string }>();
   const checked = new Set<number>();

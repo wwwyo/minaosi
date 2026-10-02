@@ -84,7 +84,7 @@ describe('Workers AI bindingの標準校閲', () => {
       deepseekTool('read_source', { block: 0, url: source.url }),
       deepseekReport([finding, valid, invented]),
     ]);
-    const fetcher = async (input: RequestInfo | URL) => String(input).includes('api.tavily.com')
+    const fetcher = async (input: RequestInfo | URL) => new URL(String(input)).hostname === 'api.tavily.com'
       ? Response.json({ results: [{ url: source.url, title: '公式' }] })
       : new Response(`<html><body><p>${excerpt}</p></body></html>`, { headers: { 'content-type': 'text/html' } });
     expect(await reviewWithWorkersAi(request, { AI, TAVILY_API_KEY: 'fixture-key' }, fetcher)).toEqual({ findings: [finding, valid], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
@@ -111,7 +111,7 @@ describe('Workers AI bindingの標準校閲', () => {
     let reads = 0;
     const fetcher = async (input: RequestInfo | URL) => {
       let body: string;
-      if (String(input).includes('api.tavily.com')) {
+      if (new URL(String(input)).hostname === 'api.tavily.com') {
         const results = urls.slice(searches * 2, searches * 2 + 2).map(url => ({ url, title: '公式' }));
         searches++;
         return Response.json({ results });

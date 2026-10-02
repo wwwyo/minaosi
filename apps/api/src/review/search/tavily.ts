@@ -1,5 +1,5 @@
 import type { HttpFetch } from '../schema';
-import { boundedText, publicUrl } from './web';
+import { boundedText, normalizeText, publicUrl } from './web';
 
 export interface SearchResult { url: string; title: string }
 
@@ -13,7 +13,7 @@ export function parseSearchResults(input: unknown): SearchResult[] {
     if (!item || typeof item.url !== 'string' || typeof item.title !== 'string' || item.url.length > 2048) continue;
     try {
       const url = publicUrl(item.url).href;
-      if (!results.some(result => result.url === url)) results.push({ url, title: item.title.slice(0, 300) });
+      if (!results.some(result => result.url === url)) results.push({ url, title: normalizeText(item.title).slice(0, 300) });
     } catch { /* 公開HTTPS以外を出典候補に含めない。 */ }
     if (results.length === 3) break;
   }
@@ -23,10 +23,11 @@ export function parseSearchResults(input: unknown): SearchResult[] {
 
 /** 運営者のキーでBasic Searchを呼び、検索語と認証情報の転送先を固定する。 */
 export async function searchTavily(query: string, apiKey: string | undefined, fetcher: HttpFetch = fetch): Promise<SearchResult[]> {
-  if (!apiKey?.trim()) throw new Error('検索の接続設定がありません');
+  const key = apiKey?.trim();
+  if (!key) throw new Error('検索の接続設定がありません');
   const response = await fetcher('https://api.tavily.com/search', {
     method: 'POST',
-    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       query, search_depth: 'basic', topic: 'general', max_results: 3,
       auto_parameters: false, include_answer: false, include_raw_content: false, include_images: false,

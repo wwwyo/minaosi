@@ -11,14 +11,14 @@ const blocks = [{ index: 0, text: '東京タワーは高さが100メートルだ
 describe('Tavily検索', () => {
   test('重複・内部URL・不正な結果を除き、最大3件の参照先だけを返す', () => {
     expect(parseSearchResults({ results: [
-      { url, title: '一次情報', content: '抜粋' }, { url: url + '#section', title: '重複' },
+      { url, title: '  一次情報\n ', content: '抜粋' }, { url: url + '#section', title: '重複' },
       { url: 'https://localhost/source', title: '内部' }, null, { url: 1, title: '不正' },
       ...Array.from({ length: 5 }, (_, i) => ({ url: `${url}/${i}`, title: '公式' })),
     ] })).toEqual([{ url, title: '一次情報' }, { url: url + '/0', title: '公式' }, { url: url + '/1', title: '公式' }]);
   });
 
   test('Basicの検索語だけを固定APIへ送り、回答生成・自動Advanced・本文抽出を使わない', async () => {
-    await searchTavily('東京タワー 高さ 公式', 'fixture-key', async (input, init) => {
+    await searchTavily('東京タワー 高さ 公式', ' fixture-key\n', async (input, init) => {
       expect(String(input)).toBe('https://api.tavily.com/search');
       expect(init?.method).toBe('POST');
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer fixture-key');
@@ -105,7 +105,7 @@ describe('事実の指摘と取得した出典の照合', () => {
   test('検索だけの抜粋や捏造引用を除外し、取得した引用のみを認める', async () => {
     const excerpt = '東京タワーの高さは333メートルです。試験用の一次情報です。';
     const search = createFactSearch(blocks, 'fixture-key', async (input, init) => {
-      if (String(input).includes('api.tavily.com')) return results();
+      if (new URL(String(input)).hostname === 'api.tavily.com') return results();
       expect(new Headers(init?.headers).has('authorization')).toBe(false);
       return html(`<body><p>${excerpt}</p></body>`);
     });

@@ -26,7 +26,7 @@ const REVIEW_TIMEOUT_MS = 210_000;
 export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: WorkersAiEnv, fetcher: HttpFetch = fetch): Promise<ReviewResult> {
   if (!env.AI) throw new Error('Workers AI の binding が設定されていません');
   const schema = structuredClone(REPORT_TOOL.input_schema);
-  const search = createFactSearch(request.blocks, env.TAVILY_API_KEY, fetcher, request.styleGuide);
+  const search = createFactSearch(request.blocks, { apiKey: env.TAVILY_API_KEY, fetcher, styleGuide: request.styleGuide });
   let findings: ReviewedFinding[] | undefined;
   let reportError: string | undefined;
   const report = toolDefinition({ name: REPORT_TOOL.name, description: REPORT_TOOL.description, inputSchema: schema }).server((input) => {
