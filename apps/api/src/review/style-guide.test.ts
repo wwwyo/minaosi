@@ -33,6 +33,11 @@ describe('文体規範の例外', () => {
     expect(styleExceptions('    ## 例外\n- 会話は口語を許容')).toEqual([]);
   });
 
+  test('閉じるハッシュと余白がある見出し・箇条書きを認識し、空の項目を例外にしない', () => {
+    expect(styleExceptions('## 例外 ##  \n  - 会話は口語を許容  \n*    \nただし、 会話は口語を許容。')).toEqual(['会話は口語を許容', 'ただし、 会話は口語を許容。']);
+    expect(styleExceptions(`## ${' '.repeat(15_000)}\n- ${' '.repeat(500)}`)).toEqual([]);
+  });
+
   test('本文と明示された例外に対応する指摘だけを抑制し、通常の指摘は残す', () => {
     const unrelated = { ...finding, title: '本文の常体', matches: [{ from: '不自然な文章だ', to: '不自然な文章です' }] };
     expect(validateReport({ findings: [{ ...finding, exception }, unrelated] }, context)).toEqual([unrelated]);

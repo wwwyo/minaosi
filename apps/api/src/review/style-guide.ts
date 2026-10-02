@@ -15,17 +15,18 @@ export function styleExceptions(content: string): string[] {
       continue;
     }
     if (boundary) { fence = { marker: boundary[1]![0]!, length: boundary[1]!.length }; continue; }
-    const heading = /^ {0,3}(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    const heading = /^ {0,3}(#{1,6})[ \t]+(\S.*)$/.exec(line);
     if (heading) {
       if (sectionLevel && heading[1]!.length <= sectionLevel) sectionLevel = 0;
-      if (['例外', '許容する表現', '許容表現'].includes(heading[2]!)) sectionLevel = heading[1]!.length;
+      const title = heading[2]!.trimEnd().replace(/#+$/, '').trimEnd();
+      if (['例外', '許容する表現', '許容表現'].includes(title)) sectionLevel = heading[1]!.length;
       continue;
     }
-    const item = /^\s*[-*+]\s+(.+?)\s*$/.exec(line);
+    const item = /^[-*+][ \t]+(\S.*)$/.exec(line.trim());
     if (sectionLevel && item) exceptions.push(item[1]!);
     for (const sentence of line.split(/(?<=[。！？])/u)) {
       const text = sentence.trim();
-      if (/^(?:ただし|但し)[、,]?\s*.+(?:許容する|許容します|許容|認める|認めます|使ってよい|使用してよい|でよい)[。！？]?$/.test(text)) exceptions.push(text);
+      if (/^(?:ただし|但し)[、,]?.+(?:許容する|許容します|許容|認める|認めます|使ってよい|使用してよい|でよい)[。！？]?$/.test(text)) exceptions.push(text);
     }
   }
   return [...new Set(exceptions)];
