@@ -1,7 +1,7 @@
 import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
 import type { SurfaceAdapter } from './surfaces/types';
-import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite } from './surfaces/resolve';
+import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
@@ -267,9 +267,13 @@ export class Controller {
           if (occ.length !== provided) continue;
           const cap = captureInText(text, m.from, nth);
           if (!cap) continue;
+          const replacement = m.to === undefined ? { from: m.from, to: undefined, offset: 0 } : minimalReplacement(m.from, m.to);
+          if (!replacement) continue;
+          const start = cap.start + replacement.offset;
           matches.push({
-            occurrence: nth, start: cap.start, from: m.from, to: m.to,
-            before: cap.before, after: cap.after, applied: false, stale: false,
+            occurrence: occurrences(text, replacement.from).indexOf(start), start,
+            from: replacement.from, to: replacement.to,
+            ...contextOf(text, start, replacement.from.length), applied: false, stale: false,
           });
         }
       }

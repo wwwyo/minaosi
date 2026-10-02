@@ -63,7 +63,6 @@ export const PANEL_CSS = `
 .head-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .head-row .filters { margin-top: 0; }
 
-.prog { color: var(--color-ink-mute); font-size: var(--font-size-caption); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .filters { display: flex; gap: 2px; margin-top: 10px; }
 .filters button {
   font-family: inherit; font-size: var(--font-size-caption); font-weight: 600;

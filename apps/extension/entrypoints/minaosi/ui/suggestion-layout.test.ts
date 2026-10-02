@@ -19,6 +19,11 @@ describe('候補の配置', () => {
     expect(position).toEqual({ left: 266, top: 100 });
   });
 
+  test('同じ行に空きがあれば、近い上の行へ候補を浮かせない', () => {
+    expect(suggestionPosition(anchor, { w: 100, h: 30 }, [box(80, 100, 400, 130)], bounds))
+      .toEqual({ left: 406, top: 100 });
+  });
+
   test('横幅が足りない場合は本文と重ならない別の行を使う', () => {
     const occupied = [box(8, 100, 780, 130), box(8, 155, 780, 185)];
     const position = suggestionPosition(anchor, { w: 180, h: 30 }, occupied, bounds)!;
