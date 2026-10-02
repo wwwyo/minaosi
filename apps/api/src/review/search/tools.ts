@@ -11,7 +11,8 @@ export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetc
   let searches = 0;
   let reads = 0;
   const blockExists = (index: number) => blocks.some(block => block.index === index && block.text.trim());
-  const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizeText(styleGuide)];
+  const normalizedStyleGuide = normalizeText(styleGuide);
+  const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizedStyleGuide];
   const styleRules = styleGuide.split(/[。！？\r\n]+/u)
     .filter(line => !/^\s*#{1,6}\s/.test(line))
     .flatMap(line => {
@@ -21,6 +22,7 @@ export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetc
     .filter(Boolean);
   const copiesDraftExcerpt = (query: string) => {
     const text = normalizeText(query);
+    if (normalizedStyleGuide.includes(text)) return true;
     if (styleRules.some(rule => text.includes(rule))) return true;
     for (let offset = 0; offset + 20 <= text.length; offset++) {
       if (draftTexts.some(draft => draft.includes(text.slice(offset, offset + 20)))) return true;

@@ -145,6 +145,7 @@ describe('事実の指摘と取得した出典の照合', () => {
       let calls = 0;
       const search = createFactSearch(blocks, { apiKey: 'fixture-key', fetcher: async () => { calls++; return results(); }, styleGuide });
       await search.tools[0]!.execute!({ block: 0, query: '公式 本文はですます調 文体' });
+      await search.tools[0]!.execute!({ block: 0, query: '本文はです' });
       expect(calls).toBe(0);
       await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
       expect(calls).toBe(1);
