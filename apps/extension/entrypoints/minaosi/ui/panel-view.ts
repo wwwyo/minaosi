@@ -99,7 +99,9 @@ export function updatePanel(root: HTMLElement, state: PanelState, showHandled = 
   }
   for (const ghost of exits) {
     const animation = ghost.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: 'translateX(12px)' }], MOTION);
-    void animation.finished.then(() => ghost.remove(), () => ghost.remove());
+    const timeout = window.setTimeout(() => ghost.remove(), MOTION.duration + 100);
+    const cleanup = () => { window.clearTimeout(timeout); ghost.remove(); };
+    void animation.finished.then(cleanup, cleanup);
   }
 }
 

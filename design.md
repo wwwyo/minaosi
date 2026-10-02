@@ -90,7 +90,8 @@ Locked design system。この repo の視覚値の正本。product-design skill�
    1px の --color-line-strong で境界を示し、影は付けない。
    hover でも色・境界・影・位置を変えない。クリックで pane を開閉する */
 /* .card-finding = 指摘カード。区切り線で分け、選択時は左に墨バー。
-   対応済みは薄く表示し、適用済み・削除のラベルと復元操作を付ける */
+   対応済みは --color-ink-mute で薄く表示し、適用済み・削除のラベルと復元操作を付ける。
+   カード全体の透過は文字と操作のコントラストを落とすため使わない */
 /* .mark / .suggest = 本文上の指摘印。選択中は修正範囲だけを 1.5px の
    --color-ring リングで囲う。段落・文全体は囲わない。下線による状態表現は禁止 */
 /* .suggest-del（前）= --color-strike の取り消し線 / .suggest-ins（後）=

@@ -88,9 +88,8 @@ export const PANEL_CSS = `
 .n-item .status { font-size: var(--font-size-micro); color: var(--color-ink-mute); }
 .n-item .ttl { font-weight: 600; font-size: var(--font-size-body); margin-top: 2px; padding-right: 54px; }
 .n-item .rsn { color: var(--color-ink-sub); font-size: var(--font-size-small); margin-top: 4px; }
-.n-item.is-resolved, .n-item.is-deleted { color: var(--color-ink-mute); opacity: .6; }
+.n-item.is-resolved, .n-item.is-deleted { color: var(--color-ink-mute); }
 .n-item.is-resolved .ttl, .n-item.is-resolved .rsn, .n-item.is-deleted .ttl, .n-item.is-deleted .rsn { color: var(--color-ink-mute); }
-.n-item.is-resolved:hover, .n-item.is-deleted:hover, .n-item.is-resolved:focus-within, .n-item.is-deleted:focus-within { opacity: .85; }
 .n-item.is-exiting { position: absolute; pointer-events: none; z-index: 1; background: var(--color-bg-surface); }
 .n-item .detail .rsn { margin-top: 8px; }
 .n-item .stale { margin-top: 6px; color: var(--color-ink-sub); font-size: var(--font-size-small);

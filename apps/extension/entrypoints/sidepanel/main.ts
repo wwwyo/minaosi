@@ -22,7 +22,8 @@ const connection = new PanelConnection(
     updatePanel(root, state, showHandled);
     if (state.selectedId !== selectedId) {
       selectedId = state.selectedId;
-      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      root.querySelector('.n-item[data-sel]')?.scrollIntoView({ block: 'nearest', behavior });
     }
   },
   () => { void browser.runtime.lastError; },
