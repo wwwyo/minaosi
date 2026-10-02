@@ -70,6 +70,17 @@ describe('事実の指摘と取得した出典の照合', () => {
     expect(search.summary()).toEqual({ status: 'unavailable', sourceCheckedBlocks: [] });
   });
 
+  test('長い段落の逐語抜粋や検索語に混ぜた原稿の一節を外部送信しない', async () => {
+    const text = '東京タワーの高さについて書き手が考えた公開前の文章です。'.repeat(10);
+    let calls = 0;
+    const search = createFactSearch([{ index: 0, text }], async () => { calls++; return results(); });
+    await search.tools[0]!.execute!({ block: 0, query: text.slice(0, 160) });
+    await search.tools[0]!.execute!({ block: 0, query: `公式 ${text.slice(0, 25)} 高さ` });
+    expect(calls).toBe(0);
+    await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+    expect(calls).toBe(1);
+  });
+
   test('検索だけの抜粋や捏造引用を除外し、取得した引用のみを認める', async () => {
     const excerpt = '東京タワーの高さは333メートルです。試験用の一次情報です。';
     const search = createFactSearch(blocks, async input => String(input).includes('duckduckgo.com') ? results() : html(`<body><p>${excerpt}</p></body>`));

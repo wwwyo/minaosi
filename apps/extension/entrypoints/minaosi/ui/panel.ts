@@ -99,7 +99,7 @@ export function renderPanel(s: PanelState): string {
   ).join('')}</div>`;
   const factCheck = s.phase === 'done' && s.factCheck
     ? `<div class="notice" role="status">${s.factCheck.status === 'unavailable'
-      ? '事実の確認ができませんでした。誤字・日本語ルールの校閲結果を表示しています。'
+      ? '事実の確認結果はありません。誤字・日本語ルールの校閲結果を表示しています。'
       : `事実確認は原稿全体を網羅していません。参照先を取得した段落：${s.factCheck.sourceCheckedBlocks.map(block => block + 1).join('、')}。出典付きの指摘以外の主張は未確認です。`}</div>`
     : '';
 

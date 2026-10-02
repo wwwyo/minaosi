@@ -11,6 +11,14 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
   let searches = 0;
   let reads = 0;
   const blockExists = (index: number) => blocks.some(block => block.index === index && block.text.trim());
+  const draftTexts = blocks.map(block => normalizeText(block.text));
+  const copiesDraftExcerpt = (query: string) => {
+    const text = normalizeText(query);
+    for (let offset = 0; offset + 20 <= text.length; offset++) {
+      if (draftTexts.some(draft => draft.includes(text.slice(offset, offset + 20)))) return true;
+    }
+    return false;
+  };
   const webSearch = toolDefinition({
     name: 'web_search',
     description: '指定したブロックの主張を照合する検索語でDuckDuckGoを検索する。原稿全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
@@ -21,7 +29,7 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
     const query = input.query.trim();
     if (!query || query.length > 160 || /[\r\n]/.test(query) ||
         query === blocks.map(block => block.text).join('\n').trim() ||
-        blocks.some(block => block.text.trim().length >= 20 && query.includes(block.text.trim()))) {
+        copiesDraftExcerpt(query)) {
       return { error: '原稿をコピーせず、照合に必要な短い検索語を指定してください' };
     }
     if (searches++ >= 3) return { error: '検索回数の上限です。未確認の主張は指摘しないでください' };
