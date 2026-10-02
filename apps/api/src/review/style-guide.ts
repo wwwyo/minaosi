@@ -15,6 +15,7 @@ export function styleExceptions(content: string): string[] {
       continue;
     }
     if (boundary) { fence = { marker: boundary[1]![0]!, length: boundary[1]!.length }; continue; }
+    if (/^(?: {4}| {0,3}\t)/.test(line)) continue;
     const heading = /^ {0,3}(#{1,6})[ \t]+(\S.*)$/.exec(line);
     if (heading) {
       if (sectionLevel && heading[1]!.length <= sectionLevel) sectionLevel = 0;

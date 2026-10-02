@@ -43,6 +43,12 @@ describe('文体規範の例外', () => {
     expect(validateReport({ findings: [{ ...finding, exception }] }, { blocks, styleGuide: `## 例外\n1. ${exception.rule}` })).toEqual([]);
   });
 
+  test('インデントしたコード例の箇条書きや自由文で指摘を抑制しない', () => {
+    const content = `## 例外\n\n    - ${exception.rule}\n\t1. 引用は原文を保つ\n \tただし会話は口語を許容。`;
+    expect(styleExceptions(content)).toEqual([]);
+    expect(validateReport({ findings: [{ ...finding, exception }] }, { blocks, styleGuide: content })).toEqual([finding]);
+  });
+
   test('本文と明示された例外に対応する指摘だけを抑制し、通常の指摘は残す', () => {
     const unrelated = { ...finding, title: '本文の常体', matches: [{ from: '不自然な文章だ', to: '不自然な文章です' }] };
     expect(validateReport({ findings: [{ ...finding, exception }, unrelated] }, context)).toEqual([unrelated]);

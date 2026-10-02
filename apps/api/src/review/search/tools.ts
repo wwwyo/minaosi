@@ -14,7 +14,10 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
   const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizeText(styleGuide)];
   const styleRules = styleGuide.split(/[。！？\r\n]+/u)
     .filter(line => !/^\s*#{1,6}\s/.test(line))
-    .map(line => normalizeText(line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')))
+    .flatMap(line => {
+      const rule = normalizeText(line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ''));
+      return [rule, rule.replace(/[*_`~]/g, '').trim()];
+    })
     .filter(Boolean);
   const copiesDraftExcerpt = (query: string) => {
     const text = normalizeText(query);
