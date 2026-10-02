@@ -121,7 +121,9 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 </svg>
 ```
 
-- Wordmark: `minaosi` の全7文字を mark と同じ stroke 2.4、square caps、miter joins で構築する。先頭の m が mark を兼ね、全字の肩の高さとベースラインを SVG 内で揃える。正本は `apps/extension/assets/wordmark.svg`（`viewBox="0 -2 104 24"`）。オプション画面では SVG の高さを `--font-size-brand`（14px）とし、幅は縦横比から決める。フォントや文字ごとの位置補正には依存しない
+- Wordmark: `minaosi` の全7文字を mark と同じ stroke 2.4、square caps、miter joins で構築する。先頭の m が mark を兼ね、全字の肩の高さとベースラインを SVG 内で揃える。正本は `apps/extension/assets/wordmark.svg`（`viewBox="0 -2 94.75 24"`）。オプション画面では SVG の高さを `--font-size-brand`（14px）とし、幅は縦横比から決める。フォントや文字ごとの位置補正には依存しない
+- 字幅: パス中心線の横幅は m=18、n=9、a=9、o=10、s=8。i は線幅 2.4 の縦線と点で構成する。m と n は同じ山の幅を持ち、閉じた o は内側の余白を確保するために広げ、s は斜線の横への張りを抑えるために細くする
+- カーニング: 隣接するパス中心線の最右端と最左端の距離を mi=5.5、in=5.5、na=6.5、ao=6、os=6、si=5.25 とする（SVG 単位。ストロークを含む見える余白とは異なる）。i の左右と、端部が開いた s の右側を詰める。字幅と字間は SVG に焼き込み、CSS の一律 letter-spacing で上書きしない。変更時は高さ 14px の実使用表示と 24/32/96px の拡大表示を比較する
 - 配置: サイドpaneの名前とアイコンはブラウザの標準ヘッダーに委ね、pane内では重複させない。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
