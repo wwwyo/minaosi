@@ -1,7 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -2 104 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 19V8l4.5-3L12 8v11M12 8l4.5-3L21 8v11"/>
-<path d="M28 8v11M35 19V8l4.5-3L44 8v11"/>
-<path d="M61 19V8l-4.5-3L52 8v8l4.5 3 4.5-3"/>
-<path d="M69 8l4.5-3L78 8v8l-4.5 3L69 16Z"/>
-<path d="M95 8l-4.5-3L86 8v3l9 2v3l-4.5 3L86 16M102 8v11"/>
-<path d="M28 .8v.2M102 .8v.2"/>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -2 98.25 24" aria-hidden="true">
+  <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M3 19V8l3.75-3L10.5 8v11M10.5 8l3.75-3L18 8v11"/>
+    <path d="M24.75 8v11M24.75 .8v.2"/>
+    <path d="M31.5 19V8l5.0-3L41.5 8v11"/>
+    <path d="M58.0 19V8l-5.0-3L48.0 8v8l5.0 3 5.0-3"/>
+    <path d="M64.0 8l5.5-3L75.0 8v8l-5.5 3L64.0 16Z"/>
+    <path d="M90.0 8l-4.5-3L81.0 8v3l9 2v3l-4.5 3L81.0 16"/>
+    <path d="M95.25 8v11M95.25 .8v.2"/>
+  </g>
+</svg>
