@@ -4,7 +4,8 @@ import { HTTPException } from 'hono/http-exception';
 import { zValidator } from '@hono/zod-validator';
 import { INVALID_TOOL_INPUT } from '../review/errors';
 import { ModelSchema, ReviewInputSchema } from '../review/input';
-import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding, ReviewResult } from '../review/schema';
+import type { WorkersAiReviewInput } from '../review/providers/workers-ai';
+import type { AiBinding, ProviderReviewInput, ReviewedFinding, ReviewResult } from '../review/schema';
 import { readBoundedBody } from './body';
 import { readTurnstileToken, turnstilePage, TURNSTILE_REJECT_MESSAGE, type TurnstileVerifier } from './turnstile';
 
@@ -29,7 +30,7 @@ interface RpcEnv {
   Bindings: {
     bindings: ReviewBindings;
     reviewer: (input: ProviderReviewInput, key: string, env: ReviewBindings) => Promise<ReviewedFinding[]>;
-    standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewResult>;
+    standardReviewer: (input: WorkersAiReviewInput, env: ReviewBindings) => Promise<ReviewResult>;
     turnstileVerifier: TurnstileVerifier;
   };
 }
@@ -104,19 +105,19 @@ export const app = new Hono<RpcEnv>()
     const request = c.req.raw;
     const { bindings: env, reviewer, standardReviewer } = c.env;
     const input = c.req.valid('json');
-    let standard: { model: string; blocks: ReviewBlock[] } | undefined;
+    let standard: WorkersAiReviewInput | undefined;
     let selected: ProviderReviewInput | undefined;
     let apiKey = '';
     if (input.mode === 'default') {
       const model = ModelSchema.safeParse(env.DEFAULT_REVIEW_MODEL);
       if (!model.success) return c.json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
       if (!env.AI) return c.json({ error: '標準校閲のAI接続がまだ準備できていません' }, 503);
-      standard = { model: model.data, blocks: input.blocks };
+      standard = { model: model.data, blocks: input.blocks, ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}) };
     } else {
       apiKey = request.headers.get('x-minaosi-api-key')?.trim() ?? '';
       // BYOKでキーを忘れても、運営者の課金へ切り替えない。
       if (!apiKey || apiKey.length > 4096) return c.json({ error: 'あなたの API key が必要です' }, 401);
-      selected = { provider: input.provider, model: input.model, blocks: input.blocks };
+      selected = { provider: input.provider, model: input.model, blocks: input.blocks, ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}) };
     }
 
     if (selected && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {

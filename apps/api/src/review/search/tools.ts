@@ -4,14 +4,14 @@ import { searchDuckDuckGo } from './duckduckgo';
 import { fetchPage, normalizeText, pageText, publicUrl } from './web';
 
 /** 取得済みの出典だけを採用するため、検索と本文の記録を校閲リクエスト内に閉じる。 */
-export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fetch) {
+export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fetch, styleGuide = '') {
   const candidates = new Map<number, Set<string>>();
   const sources = new Map<string, { url: string; text: string }>();
   const checked = new Set<number>();
   let searches = 0;
   let reads = 0;
   const blockExists = (index: number) => blocks.some(block => block.index === index && block.text.trim());
-  const draftTexts = blocks.map(block => normalizeText(block.text));
+  const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizeText(styleGuide)];
   const copiesDraftExcerpt = (query: string) => {
     const text = normalizeText(query);
     for (let offset = 0; offset + 20 <= text.length; offset++) {
@@ -21,14 +21,14 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
   };
   const webSearch = toolDefinition({
     name: 'web_search',
-    description: '指定したブロックの主張を照合する検索語でDuckDuckGoを検索する。原稿全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
+    description: '指定したブロックの主張を照合する検索語でDuckDuckGoを検索する。原稿・文体規範の全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
     inputSchema: { type: 'object', required: ['block', 'query'], properties: { block: { type: 'integer' }, query: { type: 'string', maxLength: 160 } } },
   }).server(async (args) => {
     const input = args as { block?: unknown; query?: unknown } | null;
     if (!input || typeof input.block !== 'number' || !blockExists(input.block) || typeof input.query !== 'string') return { error: '検索対象が不正です' };
     const query = input.query.trim();
     if (!query || query.length > 160 || /[\r\n]/.test(query) ||
-        query === blocks.map(block => block.text).join('\n').trim() ||
+        query === blocks.map(block => block.text).join('\n').trim() || query === styleGuide.trim() ||
         copiesDraftExcerpt(query)) {
       return { error: '原稿をコピーせず、照合に必要な短い検索語を指定してください' };
     }

@@ -103,4 +103,15 @@ describe('事実の指摘と取得した出典の照合', () => {
     await next.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ' });
     expect(calls).toBe(4);
   });
+
+  test('文体規範の全文や一節を検索語として外部へ送らない', async () => {
+    const styleGuide = '書き手が自分のために用意した公開しない文体の規範を適用する。';
+    let calls = 0;
+    const search = createFactSearch(blocks, async () => { calls++; return results(); }, styleGuide);
+    await search.tools[0]!.execute!({ block: 0, query: styleGuide });
+    await search.tools[0]!.execute!({ block: 0, query: `公式 ${styleGuide.slice(0, 25)}` });
+    expect(calls).toBe(0);
+    await search.tools[0]!.execute!({ block: 0, query: '東京タワー 高さ 公式' });
+    expect(calls).toBe(1);
+  });
 });

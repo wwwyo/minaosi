@@ -1,9 +1,11 @@
 import { storage } from '#imports';
 import type { ReviewMode, ReviewProvider } from './review/providers';
+import type { SavedStyleGuide } from './style-guide';
 /** BYOKのキーを拡張のオプションで登録し、ローカルに保持する。 */
 export const apiKeyItem = storage.defineItem<string>('local:apiKey', { fallback: '' });
 export const modelItem = storage.defineItem<string>('local:model', { fallback: 'claude-sonnet-5' });
 export const reviewModeItem = storage.defineItem<ReviewMode>('local:reviewMode', { fallback: 'default' });
+export const styleGuideItem = storage.defineItem<SavedStyleGuide | null>('local:styleGuide', { fallback: null });
 
 export const providerItem = storage.defineItem<ReviewProvider>('local:provider', { fallback: 'anthropic' });
 export const openaiKeyItem = storage.defineItem<string>('local:openaiKey', { fallback: '' });

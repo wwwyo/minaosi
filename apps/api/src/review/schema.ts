@@ -1,4 +1,7 @@
-export const FINDING_KINDS = ['typo', 'fact', 'rule'] as const;
+import { applyStyleExceptions } from './style-guide';
+import type { ReviewBlock } from './input';
+
+export const FINDING_KINDS = ['typo', 'fact', 'rule', 'style'] as const;
 export type FindingKind = typeof FINDING_KINDS[number];
 export type { ReviewBlock, ReviewMode, ReviewProvider, ProviderReviewInput, ReviewInput } from './input';
 export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -39,10 +42,10 @@ export interface ReviewResult {
 }
 
 /** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
-export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
+export function validateReport(input: unknown, context: { styleGuide?: string; blocks?: ReviewBlock[] } = {}): ReviewedFinding[] | { error: string } {
   const raw = input && typeof input === 'object' ? (input as { findings?: unknown }).findings : undefined;
   if (!Array.isArray(raw)) return { error: '校閲結果の形式が不正です' };
-  return raw.filter(
+  const findings = raw.filter(
     (f): f is ReviewedFinding =>
       !!f &&
       typeof f === 'object' &&
@@ -57,4 +60,5 @@ export function validateReport(input: unknown): ReviewedFinding[] | { error: str
           typeof f.source.excerpt === 'string' &&
           f.source.excerpt.length > 0)),
   );
+  return applyStyleExceptions(findings, context.styleGuide, context.blocks);
 }
