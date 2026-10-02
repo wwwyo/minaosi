@@ -67,7 +67,6 @@ test('POST /reviewはトークン・rate limit・siteverifyの順で入口を通
   let rateLimited = false;
   let verified = false;
   const env: Env = {
-    LOCAL_OPENCODE_BYOK: 'true',
     TURNSTILE_SECRET_KEY: 'real-secret',
     REVIEW_RATE_LIMIT: { limit: async () => { rateLimited = true; return { success: true }; } },
   };
@@ -76,7 +75,7 @@ test('POST /reviewはトークン・rate limit・siteverifyの順で入口を通
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify({ mode: 'default', blocks: [{ index: 0, text: 'こんにちは' }] }),
-    }), env, undefined, undefined, undefined, verifier);
+    }), env, undefined, undefined, verifier);
 
   // トークンなし: 形式チェックで403。rate limit・siteverify のどちらも消費しない
   expect((await post({})).status).toBe(403);
@@ -94,7 +93,7 @@ test('POST /reviewはトークン・rate limit・siteverifyの順で入口を通
     method: 'POST',
     headers: { 'content-type': 'application/json', 'cf-turnstile-response': 'x' },
     body: JSON.stringify({ mode: 'default', blocks: [{ index: 0, text: 'こんにちは' }] }),
-  }), { ...env, REVIEW_RATE_LIMIT: { limit: async () => ({ success: false }) } }, undefined, undefined, undefined,
+  }), { ...env, REVIEW_RATE_LIMIT: { limit: async () => ({ success: false }) } }, undefined, undefined,
     async () => { verified = true; return { ok: true }; });
   expect(limited.status).toBe(429);
   expect(verified).toBe(false);

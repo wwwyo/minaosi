@@ -2,7 +2,7 @@
 
 標準モードは、拡張の background → minaosi の校閲サーバー → Workers AI binding（`env.AI`）の順で通信する。BYOKモードは、校閲サーバー → Cloudflare AI Gateway → 選んだ AI プロバイダーの順で通信する。校閲サーバーは TanStack AI で検索・tool calling を実行し、指摘を共通形式へ検証して返す。拡張側の UI と本文への適用は従来どおり。
 
-AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`apps/api/src/review/providers/workers-ai.ts` は標準モードの `env.AI` binding経路（`createCloudflareText`）、`apps/api/src/review/providers/gateway.ts` はBYOKのGateway経由の校閲、`apps/api/src/review/providers/opencode.ts` はローカル試用のOpenAI互換経路を担当する。`apps/api/src/review/providers/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
+AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプロバイダー差分は残る。`apps/api/src/review/providers/workers-ai.ts` は標準モードの `env.AI` binding経路（`createCloudflareText`）、`apps/api/src/review/providers/gateway.ts` はBYOKのGateway経由の校閲を担当する。`apps/api/src/review/providers/anthropic.ts` は固定したTanStack Anthropic adapterで失われる `pause_turn` の継続を補う。独立したAnthropic SDK呼び出し経路ではない。校閲ループの共通処理には重複が残っており、完全に一本化した構成ではない。
 
 ## 標準モードとBYOK
 
@@ -47,7 +47,7 @@ mise exec -- bun run dev
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
-開発時の実AI呼び出しはプロジェクト規約に従いOpenCodeを使う。developmentモードだけ、OpenCode Goの `space-bunny-free` をTanStack AIのChat Completions adapterから呼ぶBYOK経路を有効にする。オプションで「自分のAPIキー」と「Space Bunny Free」を選び、miseで管理した `OPENCODE_API_KEY` を登録する。この経路はCloudflare設定を要求せず、ローカルWorkerからOpenCode Goへ接続する。Gateway設定がなくてもローカル試用は動くため、起動時のGateway用secret未設定の警告はこの用途では問題ない。Web検索を使えないため誤字・日本語表現だけを指摘し、事実の指摘は返さない。通常ビルドではこの経路を無効にし、仮にdevelopmentモードの設定を使ってもループバック以外のリクエストは拒否する。Anthropic / OpenAIの実キーを開発QAに使わない。
+開発時のBYOK試用は、拡張のオプション画面でプロバイダーのキーを登録して行う（Gateway接続が必要）。Anthropic / OpenAIの実キーを開発QAに使わない。
 
 ## Worker の公開設定
 

@@ -10,12 +10,12 @@ export const openaiKeyItem = storage.defineItem<string>('local:openaiKey', { fal
 export const openaiModelItem = storage.defineItem<string>('local:openaiModel', { fallback: '' });
 export const deepseekKeyItem = storage.defineItem<string>('local:deepseekKey', { fallback: '' });
 export const deepseekModelItem = storage.defineItem<string>('local:deepseekModel', { fallback: 'deepseek-flash' });
-export const opencodeKeyItem = storage.defineItem<string>('local:opencodeKey', { fallback: '' });
-export const opencodeModelItem = storage.defineItem<string>('local:opencodeModel', { fallback: 'space-bunny-free' });
 
 export const PROVIDER_SETTINGS = {
   anthropic: { key: apiKeyItem, model: modelItem },
   openai: { key: openaiKeyItem, model: openaiModelItem },
   deepseek: { key: deepseekKeyItem, model: deepseekModelItem },
-  'opencode-go': { key: opencodeKeyItem, model: opencodeModelItem },
 };
+
+// 廃止したローカル試用経路（opencode-go）の保存値を消す。残すと利用者のキーがstorageに残り続ける。
+void storage.removeItems(['local:opencodeKey', 'local:opencodeModel']);

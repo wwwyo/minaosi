@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ReviewProviderSchema = z.enum(['anthropic', 'openai', 'deepseek', 'opencode-go']);
+export const ReviewProviderSchema = z.enum(['anthropic', 'openai', 'deepseek']);
 export const ReviewModeSchema = z.enum(['default', 'byok']);
 export const ModelSchema = z.string().regex(/^[@a-zA-Z0-9._:/-]{1,120}$/).refine(value => !value.includes('..'));
 

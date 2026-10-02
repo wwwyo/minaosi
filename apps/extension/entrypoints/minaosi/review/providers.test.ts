@@ -48,12 +48,11 @@ test('検索失敗の部分結果を指摘とともに返し、不正な確認�
 });
 
 
-test('providerは対応する4値だけを受け付け、継承プロパティを拒否する', () => {
+test('providerは対応する3値だけを受け付け、継承プロパティを拒否する', () => {
   expect(isReviewProvider('anthropic')).toBe(true);
   expect(isReviewProvider('openai')).toBe(true);
   expect(isReviewProvider('deepseek')).toBe(true);
-  expect(isReviewProvider('opencode-go')).toBe(true);
-  for (const value of ['__proto__', 'constructor', 'toString', null, undefined, {}]) {
+  for (const value of ['__proto__', 'constructor', 'toString', 'opencode-go', null, undefined, {}]) {
     expect(isReviewProvider(value)).toBe(false);
   }
 });
