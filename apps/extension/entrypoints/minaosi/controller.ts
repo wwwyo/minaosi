@@ -8,7 +8,7 @@ import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
 import { renderFab, type PanelState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
-import type { PanelCommand } from './panel-messages';
+import type { PanelCommand, TurnstileProof } from './panel-messages';
 import { PanelToggle } from './panel-toggle';
 
 interface ReviewReply {
@@ -91,7 +91,7 @@ export class Controller {
 
   handleCommand(command: PanelCommand) {
     switch (command.action) {
-      case 'run': void this.run(); return;
+      case 'run': void this.run(command.turnstile); return;
       case 'filter': this.s.filter = command.filter; break;
       case 'select': this.select(command.id); return;
       case 'apply': this.applyFinding(command.id); return;
@@ -196,8 +196,14 @@ export class Controller {
 
   /* ---- 見直す ---- */
 
-  async run() {
+  async run(turnstile?: TurnstileProof) {
     if (this.s.phase === 'running' || this.s.connectionLoading) return;
+    if (turnstile?.error) {
+      this.s.phase = 'error';
+      this.s.error = turnstile.error;
+      this.render();
+      return;
+    }
     if (this.config.mode === 'byok' && (!this.config.apiKey || !this.config.model)) {
       this.s.phase = 'error';
       this.s.error = '拡張機能のオプションでAPIキーとモデルを登録してください';
@@ -215,6 +221,7 @@ export class Controller {
       const msg: ReviewRequest = this.config.mode === 'default'
         ? { type: 'minaosi:review', mode: 'default', blocks: draft }
         : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
+      msg.turnstileToken = turnstile?.token;
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');

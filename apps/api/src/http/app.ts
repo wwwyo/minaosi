@@ -6,6 +6,7 @@ import { INVALID_TOOL_INPUT } from '../review/errors';
 import { ModelSchema, ReviewInputSchema } from '../review/input';
 import type { AiBinding, ProviderReviewInput, ReviewBlock, ReviewedFinding, ReviewResult } from '../review/schema';
 import { readBoundedBody } from './body';
+import { readTurnstileToken, turnstilePage, TURNSTILE_REJECT_MESSAGE, type TurnstileVerifier } from './turnstile';
 
 export interface ConcurrencyService {
   acquire(): Promise<string | null>;
@@ -22,6 +23,8 @@ interface ReviewBindings {
   LOCAL_OPENCODE_BYOK?: string;
   REVIEW_RATE_LIMIT?: { limit(input: { key: string }): Promise<{ success: boolean }> };
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
 }
 interface RpcEnv {
   Bindings: {
@@ -29,16 +32,26 @@ interface RpcEnv {
     reviewer: (input: ProviderReviewInput, key: string, env: ReviewBindings) => Promise<ReviewedFinding[]>;
     opencodeReviewer: (input: ProviderReviewInput, key: string) => Promise<ReviewedFinding[]>;
     standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewResult>;
+    turnstileVerifier: TurnstileVerifier;
   };
 }
 
 const reviewBoundary = createMiddleware<RpcEnv>(async (c, next) => {
   const request = c.req.raw;
   const env = c.env.bindings;
+  // siteverify 呼出しは rate limit より後に置く。先に呼ぶと、偽トークンの連打が
+  // 外部への subrequest 増幅になる。有無と形式の確認だけでは送信しない。
+  const turnstileToken = readTurnstileToken(request);
+  if (!turnstileToken) return c.json({ error: TURNSTILE_REJECT_MESSAGE }, 403);
   if (!request.headers.get('content-type')?.startsWith('application/json')) return c.json({ error: 'JSON 形式で送信してください' }, 415);
   if (env.REVIEW_RATE_LIMIT && !(await env.REVIEW_RATE_LIMIT.limit({ key: request.headers.get('cf-connecting-ip') ?? 'local' })).success) {
     return c.json({ error: '校閲の実行間隔を空けてください' }, 429);
   }
+  const turnstile = await c.env.turnstileVerifier(
+    { token: turnstileToken, remoteip: request.headers.get('cf-connecting-ip'), hostname: new URL(request.url).hostname },
+    env,
+  );
+  if (!turnstile.ok) return c.json({ error: turnstile.error }, turnstile.status);
   try {
     const body = await readBoundedBody(request);
     // サイズ確認で元の本文を消費するため、validatorへ同じ本文を再供給する。
@@ -72,9 +85,21 @@ export const app = new Hono<RpcEnv>()
     const env = c.env.bindings;
     return c.json({ ok: true, configured: !!env.AI, byokConfigured: !!(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_AI_GATEWAY_ID && env.CF_AIG_TOKEN) }, 200);
   })
+  .get('/turnstile', c => {
+    const sitekey = c.env.bindings.TURNSTILE_SITE_KEY;
+    if (!sitekey) return c.json({ error: '人間性の確認の設定がまだ完了していません' }, 503);
+    const nonce = crypto.randomUUID();
+    c.header(
+      'content-security-policy',
+      // frame-ancestors で拡張以外の埋め込みを禁じる。任意サイトへ埋められると
+      // widget の hostname がこのオリジンになる正当トークンを量産できるため。
+      `default-src 'none'; script-src 'nonce-${nonce}' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src https://challenges.cloudflare.com; img-src https://challenges.cloudflare.com data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors chrome-extension: moz-extension: safari-web-extension:`,
+    );
+    return c.html(turnstilePage(sitekey, nonce));
+  })
   .options('/review', c => {
     c.header('access-control-allow-methods', 'POST');
-    c.header('access-control-allow-headers', 'content-type,x-minaosi-api-key');
+    c.header('access-control-allow-headers', 'content-type,x-minaosi-api-key,cf-turnstile-response');
     return c.body(null, 204);
   })
   .post('/review', reviewBoundary, reviewInput, async c => {
