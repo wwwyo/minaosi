@@ -90,13 +90,14 @@ Locked design system。この repo の視覚値の正本。product-design skill�
    1px の --color-line-strong で境界を示し、影は付けない。
    hover でも色・境界・影・位置を変えない。クリックで pane を開閉する */
 /* .card-finding = 指摘カード。区切り線で分け、選択時は左に墨バー。
-   状態バッジは置かない（タブ位置と右上アクションで表す） */
+   対応済みは薄く表示し、適用済み・削除のラベルと復元操作を付ける */
 /* .mark / .suggest = 本文上の指摘印。選択中は修正範囲だけを 1.5px の
    --color-ring リングで囲う。段落・文全体は囲わない。下線による状態表現は禁止 */
 /* .suggest-del（前）= --color-strike の取り消し線 / .suggest-ins（後）=
    --color-accent-ink 文字＋--color-accent-tint 背景。ボタン化しない */
 /* .brand = logo mark + wordmark + 畳みシェブロンの単一クリックボタン */
-/* .filter-tab = 未対応/対応済み の2タブ。対応済みには適用済み・削除をまとめる */
+/* 未対応は常に上へ並べる。対応済みは対応順で下へ積み、灰色見出しと eye で表示切替。
+   既定は非表示、表示設定は拡張 pane の localStorage に保存する */
 /* 状態件数の行は表示しない */
 /* 適用 tooltip は白背景・墨色・1px の --color-line-strong。
    ホバーした候補の表示行の中央・直上に出し、影は付けない */
@@ -107,7 +108,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 ## Icons
 
 - **Lucide**（ISC license）— 24px grid、stroke 2、round caps/joins。inline SVG として使い、小サイズ（11–14px 表示）はそのまま縮小する
-- 現行対応: 適用 `check`、削除 `trash-2`、undo/復元 `undo-2`、畳み `chevrons-right`、見直す `sparkles`、FAB `list-checks`
+- 現行対応: 適用 `check`、削除 `trash-2`、undo/復元 `undo-2`、対応済み表示 `eye` / `eye-off`、畳み `chevrons-right`、見直す `sparkles`、FAB `list-checks`
 - 例外: **logo mark だけは lucide ではない**（独自の square-cap 幾何形）。外部サービス公式ロゴも例外
 - アイコン系統の混在は禁止 — lucide に無い形が必要になったら lucide の grid/stroke に揃えて手書きする
 
@@ -129,8 +130,9 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 
 ## Motion
 
-- silent — 装飾的な動きは持たない。`--ease-out` + `--dur-fast/med` で hover・tooltip・選択遷移のみ
-- `prefers-reduced-motion` では transition を無効化する
+- `--ease-out` + `--dur-fast/med` で追加は fade + slide-up、対応・削除は fade-out、一覧の移動は位置補間。選択詳細は slide-up で開く
+- カード操作ボタンは上端から 20px（従来より 4px 下）
+- `prefers-reduced-motion` では animation と transition を無効化する
 
 ## Exports
 

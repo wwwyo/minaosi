@@ -35,7 +35,7 @@ function fixture() {
 }
 
 const readyState: NonNullable<PanelUpdate['state']> = {
-  phase: 'idle', view: 'list', filter: 'open', selectedId: null,
+  phase: 'idle', view: 'list', selectedId: null,
   findings: [], connectionLoading: false,
 };
 

@@ -24,6 +24,8 @@ export class Controller {
   private fabRoot: HTMLElement;
   private deco: Decorations;
   private staleRaf = 0;
+  private handledSequence = 0;
+  private reviewSequence = 0;
   private providerLoad = 0;
   private unwatch: (() => void)[] = [];
   private stopPanelWatch: (() => void) | null = null;
@@ -32,7 +34,6 @@ export class Controller {
   private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
     view: 'list',
-    filter: 'open',
     selectedId: null,
     findings: [],
     connectionLoading: true,
@@ -92,13 +93,12 @@ export class Controller {
   handleCommand(command: PanelCommand) {
     switch (command.action) {
       case 'run': void this.run(command.turnstile); return;
-      case 'filter': this.s.filter = command.filter; break;
       case 'select': this.select(command.id); return;
       case 'apply': this.applyFinding(command.id); return;
       case 'delete': {
         const f = this.byId(command.id);
         if (!f) return;
-        f.state = 'deleted';
+        this.setFindingState(f, 'deleted');
         this.s.selectedId = null;
         break;
       }
@@ -229,7 +229,6 @@ export class Controller {
       this.s.findings = this.normalize(reply.findings, blocks);
       this.s.factCheck = reply.factCheck;
       this.s.phase = 'done';
-      this.s.filter = 'open';
       this.s.selectedId = null;
     } catch (e) {
       this.s.phase = 'error';
@@ -247,6 +246,7 @@ export class Controller {
   private normalize(raw: ReviewedFinding[], blocks: DraftBlock[]): Finding[] {
     const byIndex = new Map(blocks.map((b) => [b.index, b]));
     const out: Finding[] = [];
+    const review = ++this.reviewSequence;
     for (const [i, rf] of raw.entries()) {
       const block = typeof rf.block === 'number' ? byIndex.get(rf.block) : undefined;
       const matches: MatchSite[] = [];
@@ -278,7 +278,7 @@ export class Controller {
         }
       }
       out.push({
-        id: `f${i}`,
+        id: `r${review}-f${i}`,
         kind: rf.kind,
         block: block ? block.index : -1,
         blockEl: block?.element,
@@ -392,9 +392,15 @@ export class Controller {
     this.render();
   }
 
+  private setFindingState(f: Finding, state: Finding['state']) {
+    if (f.state === state) return;
+    f.state = state;
+    f.handledOrder = state === 'open' ? undefined : ++this.handledSequence;
+  }
+
   private syncResolved(f: Finding) {
     const allApplied = f.matches.length > 0 && f.matches.every((m) => m.applied);
-    f.state = allApplied ? 'resolved' : 'open';
+    this.setFindingState(f, allApplied ? 'resolved' : 'open');
   }
 
   /** 適用済み → 各箇所を原文へ戻す（それぞれ1編集操作）。削除 → 未対応へ復元 */
@@ -402,7 +408,7 @@ export class Controller {
     const f = this.byId(fid);
     if (!f) return;
     if (f.state === 'deleted') {
-      f.state = 'open';
+      this.setFindingState(f, 'open');
       this.s.selectedId = null;
       this.render();
       return;
