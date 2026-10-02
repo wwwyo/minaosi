@@ -87,6 +87,32 @@ describe('Workers AI bindingの標準校閲', () => {
     expect(await reviewWithWorkersAi(request, { AI }, fetcher)).toEqual({ findings: [finding], factCheck: { status: 'unavailable', sourceCheckedBlocks: [] } });
   });
 
+  test('検索3回と本文取得6回を順に使っても最後に校閲結果を返す', async () => {
+    const urls = Array.from({ length: 6 }, (_, index) => `https://official.example.com/source/${index}`);
+    const { AI, calls } = bindingFixture([
+      ...Array.from({ length: 3 }, (_, index) => deepseekTool('web_search', { block: 0, query: `東京タワー 高さ 公式 ${index}` })),
+      ...urls.map(url => deepseekTool('read_source', { block: 0, url })),
+      deepseekReport(),
+    ]);
+    let searches = 0;
+    let reads = 0;
+    const fetcher = async (input: RequestInfo | URL) => {
+      let body: string;
+      if (String(input).includes('duckduckgo.com')) {
+        body = urls.slice(searches * 2, searches * 2 + 2).map(url => `<a class="result__a" href="${url}">公式</a>`).join('');
+        searches++;
+      } else {
+        reads++;
+        body = '<body><p>東京タワーの高さは333メートルです。試験用の一次情報です。</p></body>';
+      }
+      return new Response(body, { headers: { 'content-type': 'text/html' } });
+    };
+    expect(await reviewWithWorkersAi(request, { AI }, fetcher)).toEqual({ findings: [finding], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
+    expect(calls).toHaveLength(10);
+    expect(searches).toBe(3);
+    expect(reads).toBe(6);
+  });
+
   test('reportなしで終わった応答は成功にしない', async () => {
     const text = new Response('data: ' + JSON.stringify({ id: 'fixture', object: 'chat.completion.chunk', model: request.model, choices: [{ index: 0, delta: { content: '完了' }, finish_reason: 'stop' }] }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
     await expect(reviewWithWorkersAi(request, { AI: bindingFixture([text]).AI })).rejects.toThrow('校閲結果が返りませんでした');

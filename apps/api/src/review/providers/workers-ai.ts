@@ -56,7 +56,8 @@ export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: Wo
     tools: [...search.tools, report],
     // deepseek-v4-flashのreasoning既定はhigh。reasoning_contentも出力枠を消費するため余裕を持たせる。
     modelOptions: { max_tokens: 16_384 },
-    agentLoopStrategy: ({ iterationCount }) => findings === undefined && iterationCount < 8,
+    // 検索3回・本文取得6回を順に使うと、8ターンでは最後のreportまで到達できない。
+    agentLoopStrategy: ({ iterationCount }) => findings === undefined && iterationCount < 12,
     abortController,
     debug: false,
   });
