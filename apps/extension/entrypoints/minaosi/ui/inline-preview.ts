@@ -1,4 +1,5 @@
 import { blockText, indexOfRange, rangeAt } from '../surfaces/resolve';
+import { planInlineChanges } from './inline-preview-layout';
 
 export interface InlineSite {
   fid: string;
@@ -13,10 +14,20 @@ interface Preview {
   source: HTMLElement;
   element: HTMLElement;
   sites: Map<InlineSite, HTMLElement>;
+  width: number;
 }
 
-const TEXT_ELEMENTS = /^(P|H[1-6]|BLOCKQUOTE|SPAN|STRONG|B|EM|I|S|U|A|CODE|BR)$/;
-const TEXT_STYLE = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant', 'letter-spacing', 'line-height', 'text-align', 'text-transform', 'text-decoration', 'white-space', 'word-break', 'overflow-wrap', 'direction', 'color'];
+const REPLACED_ELEMENTS = 'img,video,audio,iframe,hr,svg,math,object,embed,script,style,input,textarea,button,select';
+const TEXT_STYLE = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant', 'letter-spacing', 'line-height', 'text-align', 'text-indent', 'text-transform', 'text-decoration', 'white-space', 'word-break', 'overflow-wrap', 'direction', 'color', 'vertical-align', 'padding', 'border', 'box-sizing', 'display', 'margin', 'list-style'];
+
+/** 原稿に識別属性を追加しないよう、既存IDかDOM上の位置で高さの規則を限定する。 */
+function selectorFor(element: HTMLElement): string {
+  if (element.id) return `#${CSS.escape(element.id)}`;
+  const parent = element.parentElement;
+  if (!parent) return element.tagName.toLowerCase();
+  const index = [...parent.children].indexOf(element) + 1;
+  return `${selectorFor(parent)} > ${element.tagName.toLowerCase()}:nth-child(${index})`;
+}
 
 /** 原稿のDOMを編集せず、校閲中だけ本文と候補を行内に組んだ表示を重ねる。 */
 export class InlinePreview {
@@ -39,12 +50,21 @@ export class InlinePreview {
     };
     const review = () => this.setEditing(false);
     document.addEventListener('focusin', edit);
+    document.addEventListener('beforeinput', edit);
+    document.addEventListener('keydown', edit);
     window.addEventListener('blur', review);
     this.root.addEventListener('pointerdown', event => this.enterEditor(event));
-    this.stops.push(() => document.removeEventListener('focusin', edit), () => window.removeEventListener('blur', review));
+    this.stops.push(
+      () => document.removeEventListener('focusin', edit),
+      () => document.removeEventListener('beforeinput', edit),
+      () => document.removeEventListener('keydown', edit),
+      () => window.removeEventListener('blur', review),
+    );
   }
 
-  setEditor(editor: HTMLElement) { this.editor = editor; this.revision = ''; }
+  setEditor(editor: HTMLElement) { this.clear(); this.editor = editor; this.revision = ''; }
+  showReview() { this.setEditing(false); }
+  invalidate() { this.revision = ''; this.root.hidden = true; }
 
   private setEditing(editing: boolean) {
     if (editing === this.editing) return;
@@ -56,8 +76,9 @@ export class InlinePreview {
 
   render(sites: InlineSite[], selectedId: string | null, dirty: boolean) {
     if (this.editing) return;
+    this.root.hidden = false;
     const revision = `${selectedId}:${sites.length}:${this.editor.getBoundingClientRect().width}`;
-    if (dirty || revision !== this.revision) {
+    if (dirty || revision !== this.revision || this.previews.some(p => p.source.getBoundingClientRect().width !== p.width)) {
       this.revision = revision;
       this.build(sites, selectedId);
     }
@@ -73,8 +94,7 @@ export class InlinePreview {
       if (!site.range || (site.kind !== 'suggest' && site.kind !== 'applied')) continue;
       let block = site.range.startContainer.parentElement;
       while (block && block.parentElement !== this.editor) block = block.parentElement;
-      if (!block || !block.id || !TEXT_ELEMENTS.test(block.tagName)
-        || [...block.querySelectorAll('*')].some(el => !TEXT_ELEMENTS.test(el.tagName))) continue;
+      if (!block || block.matches(REPLACED_ELEMENTS) || block.querySelector(REPLACED_ELEMENTS)) continue;
       const group = groups.get(block) ?? [];
       group.push(site);
       groups.set(block, group);
@@ -90,11 +110,12 @@ export class InlinePreview {
         for (const property of TEXT_STYLE) copy.style.setProperty(property, computed.getPropertyValue(property));
       });
       element.className = 'inline-preview';
-      Object.assign(element.style, { position: 'fixed', boxSizing: 'border-box', margin: '0', padding: '0', width: `${source.getBoundingClientRect().width}px` });
+      const width = source.getBoundingClientRect().width;
+      Object.assign(element.style, { position: 'fixed', boxSizing: 'border-box', margin: '0', width: `${width}px` });
       const drawn = new Map<InlineSite, HTMLElement>();
-      const placements = group.map(site => ({ site, start: indexOfRange(source, site.range!) }))
-        .filter((item): item is { site: InlineSite; start: number } => item.start !== null)
-        .sort((a, b) => b.start - a.start);
+      const positions = group.map(site => ({ site, fid: site.fid, start: indexOfRange(source, site.range!), length: site.range!.toString().length }))
+        .filter((item): item is { site: InlineSite; fid: string; start: number; length: number } => item.start !== null);
+      const placements = planInlineChanges(positions, selectedId);
       let boundary = blockText(source).length;
       for (const { site, start } of placements) {
         const length = site.range!.toString().length;
@@ -133,8 +154,12 @@ export class InlinePreview {
       const mask = document.createRange();
       mask.selectNodeContents(source);
       this.hidden.add(mask);
-      this.previews.push({ source, element, sites: drawn });
-      rules.push(`#${CSS.escape(source.id)} { min-height: ${element.getBoundingClientRect().height}px !important; }`);
+      this.previews.push({ source, element, sites: drawn, width });
+      const computed = getComputedStyle(source);
+      const edges = computed.boxSizing === 'border-box' ? 0
+        : ['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width']
+          .reduce((sum, name) => sum + (parseFloat(computed.getPropertyValue(name)) || 0), 0);
+      rules.push(`${selectorFor(source)} { min-height: ${Math.max(0, element.getBoundingClientRect().height - edges)}px !important; }`);
     }
     const css = rules.join('\n');
     if (this.style.textContent !== css) this.style.textContent = css;
@@ -158,7 +183,10 @@ export class InlinePreview {
   candidate(site: InlineSite): HTMLElement | undefined {
     for (const preview of this.previews) {
       const change = preview.sites.get(site);
-      if (change) return change.querySelector<HTMLElement>('.inline-after') ?? undefined;
+      if (change) {
+        const after = change.querySelector<HTMLElement>('.inline-after');
+        return after?.textContent ? after : change.querySelector<HTMLElement>('.inline-before') ?? undefined;
+      }
     }
   }
 
@@ -167,7 +195,9 @@ export class InlinePreview {
     if (target.closest('[data-fid]')) { event.preventDefault(); return; }
     const preview = this.previews.find(item => item.element.contains(target));
     if (!preview) return;
-      const caret = document.caretPositionFromPoint(event.clientX, event.clientY, { shadowRoots: [this.shadow] });
+    const caret = typeof document.caretPositionFromPoint === 'function'
+      ? document.caretPositionFromPoint(event.clientX, event.clientY, { shadowRoots: [this.shadow] })
+      : null;
     if (!caret || !preview.element.contains(caret.offsetNode)) return;
     let offset = 0;
     const walker = document.createTreeWalker(preview.element, NodeFilter.SHOW_TEXT);
@@ -201,4 +231,5 @@ export class InlinePreview {
   }
 
   get element() { return this.root; }
+  get isEditing() { return this.editing; }
 }

@@ -152,6 +152,7 @@ export class Decorations {
   }
 
   render(findings: Finding[], selectedId: string | null) {
+    if (findings !== this.findings || selectedId !== this.selectedId) this.inline?.showReview();
     this.findings = findings;
     this.selectedId = selectedId;
     this.dirty = true;
@@ -169,6 +170,7 @@ export class Decorations {
   }
 
   private deferLayout() {
+    this.inline?.invalidate();
     this.geometry.invalidate();
     // resize中は古い折り返し座標で本文を覆わず、全文計測は操作が止まってから一度行う。
     this.ovl.hidden = true;
@@ -285,6 +287,7 @@ export class Decorations {
         if (s.kind === 'suggest') this.candidates.set(`${s.fid}:${s.matchIndex}`, lineBoxes(this.textRects(inlineCandidate)));
         continue;
       }
+      if (this.inline?.isEditing) continue;
       if (s.kind === 'suggest' && s.range) {
         if (!this.delHl) {
           for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
