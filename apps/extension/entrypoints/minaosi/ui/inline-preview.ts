@@ -190,6 +190,10 @@ export class InlinePreview {
     }
   }
 
+  covers(site: InlineSite): boolean {
+    return !!site.range && this.previews.some(preview => preview.source.contains(site.range!.startContainer));
+  }
+
   private enterEditor(event: PointerEvent) {
     const target = event.target as HTMLElement;
     if (target.closest('[data-fid]')) { event.preventDefault(); return; }
@@ -199,10 +203,12 @@ export class InlinePreview {
       ? document.caretPositionFromPoint(event.clientX, event.clientY, { shadowRoots: [this.shadow] })
       : null;
     if (!caret || !preview.element.contains(caret.offsetNode)) return;
+    const boundary = document.createRange();
+    boundary.setStart(preview.element, 0);
+    boundary.setEnd(caret.offsetNode, caret.offset);
     let offset = 0;
-    const walker = document.createTreeWalker(preview.element, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(boundary.cloneContents(), NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      if (node === caret.offsetNode) { offset += caret.offset; break; }
       if (!node.parentElement?.closest('[data-insert]')) offset += node.textContent?.length ?? 0;
     }
     event.preventDefault();

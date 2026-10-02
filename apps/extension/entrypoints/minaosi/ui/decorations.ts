@@ -292,9 +292,9 @@ export class Decorations {
         if (!this.delHl) {
           for (const r of s.rects) this.el('strike-line', r.left, r.top + r.height / 2, r.width, 0);
         }
-        if (!this.inline && s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s, typography.get(s)!), s, del: false });
+        if (!this.inline?.covers(s) && s.rects.length) chips.push({ el: this.chip('sug-ins', s.to ?? '', s, typography.get(s)!), s, del: false });
       }
-      if (!this.inline && s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
+      if (!this.inline?.covers(s) && s.kind === 'applied' && s.range && s.rects.length && s.from !== undefined) {
         chips.push({ el: this.chip('sug-del', s.from, s, typography.get(s)!), s, del: true });
       }
       if (s.kind === 'suggest' && s.range) {
