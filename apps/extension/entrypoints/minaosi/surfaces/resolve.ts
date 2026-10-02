@@ -89,7 +89,7 @@ export function rangeAt(block: HTMLElement, start: number, length: number): Rang
   let startOff = 0;
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
     const len = n.data.length;
-    if (!startNode && start < acc + len) {
+    if (!startNode && (start < acc + len || (length === 0 && start === acc + len))) {
       startNode = n;
       startOff = start - acc;
     }
