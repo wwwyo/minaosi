@@ -18,7 +18,7 @@ export function publicUrl(input: string): URL {
 }
 
 /** 宣言サイズを信用せず、受信した本文にも上限を設ける。 */
-async function boundedText(response: Response): Promise<string> {
+export async function boundedText(response: Response): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('本文がありません');
   const decoder = new TextDecoder();
@@ -50,7 +50,7 @@ export async function fetchPage(input: string, fetcher: HttpFetch, init?: Reques
       const location = response.headers.get('location');
       if (!location || hop === 3) throw new Error('リダイレクトを取得できません');
       url = publicUrl(new URL(location, url).href);
-      // POSTの検索語をリダイレクト先へ再送しない。
+      // 取得元に指定されたヘッダーをリダイレクト先へ引き継がない。
       init = undefined;
       continue;
     }
