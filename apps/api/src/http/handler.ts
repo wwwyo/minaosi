@@ -1,7 +1,6 @@
 import { app, type ConcurrencyService } from './app';
 export type { ConcurrencyService } from './app';
 import { reviewThroughGateway, type GatewayEnv } from '../review/providers/gateway';
-import { reviewWithOpenCode } from '../review/providers/opencode';
 import { reviewWithWorkersAi } from '../review/providers/workers-ai';
 import { verifyTurnstile, type TurnstileVerifier } from './turnstile';
 import type { InferEnv, UnwrapConfig } from 'cf/config';
@@ -19,14 +18,13 @@ export async function handleRequest(
   request: Request,
   env: Env,
   reviewer: Reviewer = reviewThroughGateway,
-  opencodeReviewer = reviewWithOpenCode,
   standardReviewer: StandardReviewer = reviewWithWorkersAi,
   turnstileVerifier: TurnstileVerifier = verifyTurnstile,
 ): Promise<Response> {
   const started = performance.now();
   let response: Response;
   try {
-    response = await app.fetch(request, { bindings: env, reviewer, opencodeReviewer, standardReviewer, turnstileVerifier });
+    response = await app.fetch(request, { bindings: env, reviewer, standardReviewer, turnstileVerifier });
   } catch {
     // bindingの例外も原稿・認証情報を含む可能性があるため、生の例外を記録しない。
     const headers = new Headers({ 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', vary: 'Origin' });

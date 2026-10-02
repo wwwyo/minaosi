@@ -20,7 +20,6 @@ interface ReviewBindings {
   ALLOWED_ORIGINS?: string;
   DEFAULT_REVIEW_MODEL?: string;
   REVIEW_GATEWAY_ID?: string;
-  LOCAL_OPENCODE_BYOK?: string;
   REVIEW_RATE_LIMIT?: { limit(input: { key: string }): Promise<{ success: boolean }> };
   REVIEW_CONCURRENCY?: { getByName(name: string): ConcurrencyService };
   TURNSTILE_SITE_KEY?: string;
@@ -30,7 +29,6 @@ interface RpcEnv {
   Bindings: {
     bindings: ReviewBindings;
     reviewer: (input: ProviderReviewInput, key: string, env: ReviewBindings) => Promise<ReviewedFinding[]>;
-    opencodeReviewer: (input: ProviderReviewInput, key: string) => Promise<ReviewedFinding[]>;
     standardReviewer: (input: { model: string; blocks: ReviewBlock[] }, env: ReviewBindings) => Promise<ReviewResult>;
     turnstileVerifier: TurnstileVerifier;
   };
@@ -104,8 +102,7 @@ export const app = new Hono<RpcEnv>()
   })
   .post('/review', reviewBoundary, reviewInput, async c => {
     const request = c.req.raw;
-    const url = new URL(request.url);
-    const { bindings: env, reviewer, opencodeReviewer, standardReviewer } = c.env;
+    const { bindings: env, reviewer, standardReviewer } = c.env;
     const input = c.req.valid('json');
     let standard: { model: string; blocks: ReviewBlock[] } | undefined;
     let selected: ProviderReviewInput | undefined;
@@ -122,12 +119,7 @@ export const app = new Hono<RpcEnv>()
       selected = { provider: input.provider, model: input.model, blocks: input.blocks };
     }
 
-    const loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-    const localOpenCode = selected?.provider === 'opencode-go' && loopback && env.LOCAL_OPENCODE_BYOK === 'true';
-    if (selected?.provider === 'opencode-go' && !localOpenCode) {
-      return c.json({ error: 'OpenCode Goの試用経路はローカルBYOKで利用できます' }, 503);
-    }
-    if (selected && !localOpenCode && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
+    if (selected && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {
       return c.json({ error: 'Cloudflare AI Gateway の接続設定がまだ完了していません' }, 503);
     }
     let concurrency: ConcurrencyService | undefined;
@@ -139,9 +131,7 @@ export const app = new Hono<RpcEnv>()
       if (!lease) return c.json({ error: '校閲が混み合っています。少し待ってからお試しください' }, 429);
     }
     try {
-      const result = standard
-        ? await standardReviewer(standard, env)
-        : { findings: localOpenCode ? await opencodeReviewer(selected!, apiKey) : await reviewer(selected!, apiKey, env) };
+      const result = standard ? await standardReviewer(standard, env) : { findings: await reviewer(selected!, apiKey, env) };
       return c.json(result, 200);
     } catch (error) {
       // upstream のエラー本文に原稿や認証情報が含まれる可能性があるため返送・記録しない。

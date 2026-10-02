@@ -20,7 +20,6 @@ const drafts: Record<ReviewProvider, { key: string; model: string }> = {
   anthropic: { key: '', model: 'claude-sonnet-5' },
   openai: { key: '', model: 'gpt-5.4-mini' },
   deepseek: { key: '', model: 'deepseek-flash' },
-  'opencode-go': { key: '', model: 'space-bunny-free' },
 };
 let provider: ReviewProvider = 'anthropic';
 let saving = false;
@@ -36,17 +35,15 @@ function stash() { drafts[provider] = { key: key.value, model: model.value }; di
 function loadDraft() { key.value = drafts[provider].key; model.value = drafts[provider].model; }
 
 try {
-  const [savedMode, savedProvider, anthropicKey, anthropicModel, openaiKey, openaiModel, deepseekKey, deepseekModel, opencodeKey, opencodeModel] = await Promise.all([
+  const [savedMode, savedProvider, anthropicKey, anthropicModel, openaiKey, openaiModel, deepseekKey, deepseekModel] = await Promise.all([
     reviewModeItem.getValue(), providerItem.getValue(), PROVIDER_SETTINGS.anthropic.key.getValue(),
     PROVIDER_SETTINGS.anthropic.model.getValue(), PROVIDER_SETTINGS.openai.key.getValue(), PROVIDER_SETTINGS.openai.model.getValue(),
     PROVIDER_SETTINGS.deepseek.key.getValue(), PROVIDER_SETTINGS.deepseek.model.getValue(),
-    PROVIDER_SETTINGS['opencode-go'].key.getValue(), PROVIDER_SETTINGS['opencode-go'].model.getValue(),
   ]);
   provider = isReviewProvider(savedProvider) ? savedProvider : 'anthropic';
   drafts.anthropic = { key: anthropicKey, model: anthropicModel || 'claude-sonnet-5' };
   drafts.openai = { key: openaiKey, model: openaiModel || 'gpt-5.4-mini' };
   drafts.deepseek = { key: deepseekKey, model: deepseekModel || 'deepseek-flash' };
-  drafts['opencode-go'] = { key: opencodeKey, model: opencodeModel || 'space-bunny-free' };
   loadDraft();
   for (const radio of radios) { radio.checked = radio.value === (savedMode === 'byok' ? 'byok' : 'default'); radio.disabled = false; }
   save.disabled = false;
