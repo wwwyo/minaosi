@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     observability: {
       enabled: true,
       logs: { enabled: true, invocationLogs: false, headSamplingRate: 1 },
-      traces: { enabled: false },
+      traces: { enabled: true, headSamplingRate: 1 },
     },
     env: {
       CLOUDFLARE_ACCOUNT_ID: bindings.secret(),
