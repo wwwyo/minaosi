@@ -113,7 +113,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 
 ## Logo
 
-- Mark: **二人の筆跡 m** — 書き手と編集者が同じ原稿を見る二つの山。24px grid、stroke 2.4、square caps、miter joins、`currentColor` 単色
+- Logomark: **二人の筆跡 m** — 書き手と編集者が同じ原稿を見る二つの山。24px grid、stroke 2.4、square caps、miter joins、`currentColor` 単色
 
 ```svg
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
@@ -122,7 +122,7 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 </svg>
 ```
 
-- Wordmark: `minaosi` — lowercase、weight 800、`--font-size-brand`。オプション画面ではmarkの透明余白を除き、文字と見た目の中央を揃える（マークを1px下げる）。間隔は `--space-1`、ワードマークの字間は0、行高は1
+- Wordmark: `minaosi` の全7文字を mark と同じ stroke 2.4、square caps、miter joins で構築する。先頭の m が mark を兼ね、全字の肩の高さとベースラインを SVG 内で揃える。正本は `apps/extension/assets/wordmark.svg`（`viewBox="0 -2 104 24"`）。オプション画面では SVG の高さを `--font-size-brand`（14px）とし、幅は縦横比から決める。フォントや文字ごとの位置補正には依存しない
 - 配置: サイドpaneの名前とアイコンはブラウザの標準ヘッダーに委ね、pane内では重複させない。開閉はブラウザの操作に委ね、paneの背景は透明にする
 - Assets: 拡張アイコン（16/48/128px）はこの mark をそのままスケール。mono バリアント（`currentColor`）のみで、accent 入りのバリアントは作らない
 - Clearspace: mark の高さの 1/4 を最小余白とする
@@ -142,5 +142,6 @@ Locked design system。この repo の視覚値の正本。product-design skill�
 
 - Font: **system stack** を採用。理由: chrome は surface（執筆サイト）の書体に馴染ませたい — webfont を同梱して独自の顔を作るより、各 OS の system UI 書体に任せる方がホスト面に溶ける。候補だった Noto Sans JP / IBM Plex Sans JP / Zen Kaku Gothic New は「独自顔の主張が chrome に要らない」として棄却
 - Logo: codex（gpt-6-sol）による発散から「二人の筆跡」を採用。棄却: 行+チェック（凡庸）、キャレット、ペン先、用紙+✓、nib（いずれも「ダサい」評）、brackets / 重なり枠 / 軌跡 / 欄外（m2 より固有性が弱い評）
+- Wordmark: 先頭の文字版と全体版を比較し、全7文字を構築する全体版を採用。単体の logomark と名前全体の wordmark を使い分ける
 - Icons: 手書き混在（stroke 1.1〜1.9 で散らかっていた）から Lucide へ統一
 - Accent: 藍（hue 264）から緑（hue 155）へ — 「編集者の緑ペン」
