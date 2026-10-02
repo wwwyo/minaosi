@@ -104,9 +104,9 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 ### 本番キー
 
-本番 widget（`minaosi-review`、invisible）は `minaosi-review.mix-mix.workers.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。別環境で作り直す場合の手順:
+本番 widget（`minaosi-review`、invisible）は `minaoshi.syokan.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。Worker の公開入口は custom domain に絞り、`workersDev` と `previewUrls` は無効化している。別環境で作り直す場合の手順:
 
-1. `cf turnstile widgets create --body '{"name":"<widget名>","domains":["<公開ホスト名>"],"mode":"invisible"}'` で widget を作成する（`mode` は生成されたフラグに無いため `--body` で渡す）。invisible は常時は表示されず、対話が必要な判定のときだけ challenge が表示される。hostname には Worker の公開ホスト名（`minaosi-review.<アカウント>.workers.dev` またはカスタムドメイン）を登録する。
+1. `cf turnstile widgets create --body '{"name":"<widget名>","domains":["<公開ホスト名>"],"mode":"invisible"}'` で widget を作成する（`mode` は生成されたフラグに無いため `--body` で渡す）。invisible は常時は表示されず、対話が必要な判定のときだけ challenge が表示される。hostname には Worker の公開ホスト名（`minaoshi.syokan.dev` のようなカスタムドメイン）を登録する。
 2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
 3. secret key を Worker へ登録する（上記の `cf workers secrets bulk` と同じ手順）。
 
