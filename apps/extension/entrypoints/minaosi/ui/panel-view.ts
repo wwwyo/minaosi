@@ -84,7 +84,12 @@ export function updatePanel(root: HTMLElement, state: PanelState, showHandled = 
   if (focused && list.contains(focused)) focused.focus({ preventScroll: true });
   else if (focusedAction === 'toggle-handled') list.querySelector<HTMLElement>('[data-act="toggle-handled"]')?.focus({ preventScroll: true });
   else if (focusedId) {
-    const card = cards(list).find((el) => el.dataset.fid === focusedId);
+    let card = cards(list).find((el) => el.dataset.fid === focusedId);
+    if (oldCards.get(focusedId)?.handled === false && !card?.classList.contains('is-open')) {
+      const pending = cards(list.querySelector('.open-findings')!);
+      const previousPending = [...oldCards].filter(([, old]) => !old.handled).map(([id]) => id);
+      card = pending[Math.min(previousPending.indexOf(focusedId), pending.length - 1)] ?? card;
+    }
     (card?.querySelector<HTMLElement>(`[data-act="${focusedAction}"]`) ?? card
       ?? list.querySelector<HTMLElement>('[data-act="toggle-handled"]'))?.focus({ preventScroll: true });
   }
