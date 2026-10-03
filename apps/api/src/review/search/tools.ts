@@ -1,10 +1,10 @@
 import { toolDefinition } from '@tanstack/ai';
-import type { FactCheckSummary, HttpFetch, ReviewBlock, ReviewedFinding } from '../schema';
-import { searchTavily } from './tavily';
+import type { AiBinding, FactCheckSummary, HttpFetch, ReviewBlock, ReviewedFinding } from '../schema';
+import { searchGateway } from './gateway';
 import { fetchPage, normalizeText, pageText, publicUrl } from './web';
 
 /** 取得済みの出典だけを採用するため、検索と本文の記録を校閲リクエスト内に閉じる。 */
-export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetch, styleGuide = '' }: { apiKey?: string; fetcher?: HttpFetch; styleGuide?: string } = {}) {
+export function createFactSearch(blocks: ReviewBlock[], { AI, gatewayId, fetcher = fetch, styleGuide = '' }: { AI?: Pick<AiBinding, 'websearch'>; gatewayId?: string; fetcher?: HttpFetch; styleGuide?: string } = {}) {
   const candidates = new Map<number, Set<string>>();
   const sources = new Map<string, { url: string; text: string }>();
   const checked = new Set<number>();
@@ -31,7 +31,7 @@ export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetc
   };
   const webSearch = toolDefinition({
     name: 'web_search',
-    description: '指定したブロックの主張を照合する検索語でTavilyを検索する。原稿・文体規範の全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
+    description: '指定したブロックの主張を照合する検索語でWeb Search APIを検索する。原稿・文体規範の全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
     inputSchema: { type: 'object', required: ['block', 'query'], properties: { block: { type: 'integer' }, query: { type: 'string', maxLength: 160 } } },
   }).server(async (args) => {
     const input = args as { block?: unknown; query?: unknown } | null;
@@ -44,7 +44,7 @@ export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetc
     }
     if (searches++ >= 3) return { error: '検索回数の上限です。未確認の主張は指摘しないでください' };
     try {
-      const results = await searchTavily(query, apiKey, fetcher);
+      const results = await searchGateway(query, AI, gatewayId);
       const urls = candidates.get(input.block) ?? new Set<string>();
       for (const result of results) urls.add(result.url);
       candidates.set(input.block, urls);

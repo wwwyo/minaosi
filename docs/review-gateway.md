@@ -10,9 +10,13 @@ AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプ�
 
 自分のキーを使う場合は、ブラウザの拡張機能メニューから「オプション」を開き、「自分のAPIキー」を選ぶ。モデルのコンボボックスとAPIキーを入力し保存する。接続先はモデルID（Claude / GPT / o系 / DeepSeek）から判定する。拡張はキーを接続先ごとにローカルに保存し、校閲ごとに `x-minaosi-api-key` ヘッダーでサーバーへ渡す。サーバーはそのリクエストの間だけキーを使い、アカウント・Cookie・Gatewayへのキー登録は要求しない。本番ではプロバイダーへの直接接続へのフォールバックはない。
 
-標準モデルには組み込み検索がないため、校閲サーバーが `web_search`（Tavily Basic Search API）と `read_source`（検索結果にあるページの本文取得）をfunction toolとして提供する。検索には運営者の `TAVILY_API_KEY` を使い、利用者に検索キーを求めない。Basic Search（1回1クレジット）に固定し、自動パラメーター・回答生成・本文抽出は使わない。無料プランは月1,000クレジットで、上限到達時は事実確認を未確認として扱う。有料プランや従量課金への切り替えは自動で行わない。検索は最大3回、本文取得は最大6回で、個々の取得を12秒・512KiBまでに制限する。各リダイレクト先も公開HTTPSのURLか検証し、認証付きURLや内部アドレスのリテラルは拒否する。原稿全文・校閲結果をTavilyへ送らず、短い検索語だけを送る。
+標準モデルには組み込み検索がないため、校閲サーバーが `web_search`（AI Gateway Web Search API）と `read_source`（検索結果にあるページの本文取得）をfunction toolとして提供する。検索は既存の `AI.websearch()` bindingから `CLOUDFLARE_AI_GATEWAY_ID` のGatewayへ送り、`provider: 'ceramic'`、`limit: 3` に固定する。別の検索キーをWorkerへ登録する必要はない。検索は最大3回、本文取得は最大6回で、受信量をそれぞれ512KiBまでに制限する。検索の待機上限は本文受信を含め12秒。bindingはAbortSignalを受け取らないため、タイムアウト後も上流検索は続行し得るが、遅れて届いた応答は破棄する。本文取得も12秒までに制限し、各リダイレクト先が公開HTTPSか検証する。認証付きURLや内部アドレスのリテラルは拒否する。
 
-事実の指摘は、同じ校閲で取得した参照先と本文内の引用が照合できた場合だけ採用する。出典の一次性や主張との関係はモデルが判定するため、引用の一致だけで事実の正しさを保証するものではない。検索結果の抜粋のみ、未取得のURL、本文に存在しない引用は根拠にしない。PDFなど非対応の形式や検索のアクセス制限は未確認として扱い、誤字・日本語ルールの校閲を続ける。応答の `factCheck` は参照先を取得したブロックを示すもので、原稿全体の確認完了を意味しない。原稿・検索語の送信先と学習への利用は拡張の設定画面に表示する。Tavilyの[プライバシーポリシー](https://www.tavily.com/privacy)は検索語のサービス改善への利用を認め、[利用規約](https://www.tavily.com/terms)にはAI機能への入力の学習利用条項がある。検索語の学習不使用を保証しない。料金とAPI仕様は[公式クレジット説明](https://docs.tavily.com/documentation/api-credits)・[Search API](https://docs.tavily.com/documentation/api-reference/endpoint/search)を参照。
+料金はCeramic.aiの$0.25／1,000検索で、1校閲あたり最大$0.00075（推論料金は別）。GatewayにCeramic.aiの`default`キーがあればそのキーを使い、なければAI Gatewayクレジットから支払う。アプリはクレジットの購入・自動補充・別プロバイダーへの切り替えを行わない。Gateway未設定・binding非対応・認証失敗・残高不足などの検索失敗は未確認として扱い、検索を必要としない校閲は続ける。Web Search APIはopen beta。仕様と料金は[公式API仕様](https://developers.cloudflare.com/web-search/how-to-use/)・[プロバイダー一覧](https://developers.cloudflare.com/web-search/providers/)を参照。
+
+事実の指摘は、同じ校閲で取得した参照先と本文内の引用が照合できた場合だけ採用する。出典の一次性や主張との関係はモデルが判定するため、引用の一致だけで事実の正しさを保証するものではない。検索結果の抜粋のみ、未取得のURL、本文に存在しない引用は根拠にしない。PDFなど非対応の形式や検索のアクセス制限は未確認として扱い、誤字・日本語ルールの校閲を続ける。応答の `factCheck` は参照先を取得したブロックを示すもので、原稿全体の確認完了を意味しない。
+
+検索へ送るのは照合に必要な短い検索語だけで、原稿全文・文体規範・校閲結果は送らない。原稿・検索語の送信先とデータ利用条件は拡張の設定画面に表示する。Cloudflareのプロバイダー一覧ではCeramic.aiはZero Data Retention対応とされているが、Gatewayのログ保存は別の設定である。検索bindingはリクエスト単位の本文ログ抑制・キャッシュ無効化を指定できないため、運営者は検索先Gatewayの `collect_logs: false`、`cache_ttl: 0` を確認してから利用する。
 
 BYOKのDeepSeekはTanStackの `OpenAIChatCompletionsTextAdapter` でGatewayの `/deepseek/chat/completions` を呼び、OpenAIのResponses APIと内蔵検索toolは送らない。通常endpointでは `strict: false` のfunction toolを使い、`thinking: { type: 'disabled' }` を明示する。thinkingを有効にするとtoolの継続時に `reasoning_content` の完全な再送が必要になるため、現adapterのまま既定のthinkingを使わず、事実指摘は除外する。Claude / GPTのBYOKでは各提供元の検索による事実確認を引き続き利用できる。[DeepSeekのモデルID](https://api-docs.deepseek.com/quick_start/pricing)、[thinkingの仕様](https://api-docs.deepseek.com/guides/thinking_mode)、[Gatewayの検索対応](https://developers.cloudflare.com/ai-gateway/usage/web-search/)。
 
@@ -30,15 +34,14 @@ mise exec -- bun run api:dev
 mise exec -- bun run dev
 ```
 
-`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。Gateway用secretは標準モードでは不要。
+`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。標準モードの推論はGateway用secretなしで動くが、検索にはGateway IDが必要。
 
-次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードはAI bindingだけで動き、Gateway接続の3変数はBYOKにだけ必要。
+次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードの推論にはAI binding、検索にはGateway IDを使う。GatewayのアカウントIDとトークンはBYOKに必要。
 
 | 変数 | 用途 |
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | BYOKで使うGatewayを所有するアカウント |
-| `CLOUDFLARE_AI_GATEWAY_ID` | BYOKで使うGateway |
-| `TAVILY_API_KEY` | 標準モードの検索用キー。運営者がmise + ageとWorker secretに登録する。未設定・認証失敗・利用枠超過時も誤字・日本語ルール・文体規範の校閲は継続する |
+| `CLOUDFLARE_AI_GATEWAY_ID` | 標準モードの検索とBYOKで使うGateway。検索先の本文ログ・キャッシュを無効にし、クレジットまたはCeramic.aiのキーを設定する |
 | `CF_AIG_TOKEN` | BYOKのGateway接続用トークン（AI Gateway Run権限）。標準モードには不要 |
 | `DEFAULT_REVIEW_MODEL` | 標準モードの固定モデルID。configの既定値は `@cf/deepseek-ai/deepseek-v4-flash-0731` |
 | `REVIEW_GATEWAY_ID` | 標準モードの推論をGateway経由でログへ残す場合だけ設定する。未設定ならGatewayを通らない |
@@ -71,7 +74,7 @@ cd apps/api
 mise exec -- cf workers secrets bulk --worker minaosi-review --file /dev/stdin
 ```
 
-stdinにはcfのJSON Merge Patch形式（`{"secrets":{"SECRET_NAME":{"name":"SECRET_NAME","type":"secret_text","text":"…"}}}`）のJSONを、秘密管理ツールから渡す。登録後は `cf workers secrets list --worker minaosi-review` で名前の反映を確認する。実値をコマンド引数・履歴・trackedファイルに置かない。Workerがまだ存在しない初回 deploy では `secrets bulk` が使えないため、`cf deploy --secrets-file <path>` で secret を一緒に渡す。secrets-file は `SECRET_NAME=value` を1行ずつ書いた .env 形式で通った実績がある（JSON 形式も可）。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードはこれらのsecretなしで動き、AI bindingがない場合だけ503を返す。
+stdinにはcfのJSON Merge Patch形式（`{"secrets":{"SECRET_NAME":{"name":"SECRET_NAME","type":"secret_text","text":"…"}}}`）のJSONを、秘密管理ツールから渡す。登録後は `cf workers secrets list --worker minaosi-review` で名前の反映を確認する。実値をコマンド引数・履歴・trackedファイルに置かない。Workerがまだ存在しない初回 deploy では `secrets bulk` が使えないため、`cf deploy --secrets-file <path>` で secret を一緒に渡す。secrets-file は `SECRET_NAME=value` を1行ずつ書いた .env 形式で通った実績がある（JSON 形式も可）。接続用の `CF_AIG_TOKEN` と、デプロイ・設定更新用の `CLOUDFLARE_API_TOKEN` は用途を分ける。Gateway接続設定がない場合、BYOKの校閲APIは503を返して外部送信しない。標準モードの推論はこれらのsecretなしで動き、AI bindingがない場合は503を返す。Gateway ID未設定では検索が未確認になり、検索を必要としない校閲は続く。
 
 cfはNode.jsで実行する。`cf/config` をBunで読み込むことはサポートされないため、miseでNode.jsも管理する。cfは `1.0.0-beta.6` にexact固定し、2026-10-01のユーザー承認で、この依存追加だけ7日cooldownの例外とした。`bunfig.toml` の7日待機設定は維持する。
 

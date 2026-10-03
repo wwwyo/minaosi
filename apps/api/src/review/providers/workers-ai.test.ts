@@ -26,7 +26,7 @@ function bindingFixture(responses: Response[]) {
       if (!response) throw new Error('想定外の追加リクエスト');
       return response;
     },
-  } as unknown as import("../schema").AiBinding;
+  } satisfies import("../schema").AiBinding;
   return { AI, calls };
 }
 
@@ -84,20 +84,19 @@ describe('Workers AI bindingの標準校閲', () => {
       deepseekTool('read_source', { block: 0, url: source.url }),
       deepseekReport([finding, valid, invented]),
     ]);
-    const fetcher = async (input: RequestInfo | URL) => new URL(String(input)).hostname === 'api.tavily.com'
-      ? Response.json({ results: [{ url: source.url, title: '公式' }] })
-      : new Response(`<html><body><p>${excerpt}</p></body></html>`, { headers: { 'content-type': 'text/html' } });
-    expect(await reviewWithWorkersAi(request, { AI, TAVILY_API_KEY: 'fixture-key' }, fetcher)).toEqual({ findings: [finding, valid], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
+    const searchAI = { ...AI, websearch: async () => Response.json({ items: [{ url: source.url, title: '公式' }] }) };
+    const fetcher = async () => new Response(`<html><body><p>${excerpt}</p></body></html>`, { headers: { 'content-type': 'text/html' } });
+    expect(await reviewWithWorkersAi(request, { AI: searchAI, CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway' }, fetcher)).toEqual({ findings: [finding, valid], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
     expect(calls).toHaveLength(3);
     expect(JSON.stringify(calls[2]!.inputs.messages)).toContain(excerpt);
   });
 
-  test('Tavilyが利用枠超過を返しても誤字の指摘は失わない', async () => {
+  test('Web Search APIが利用枠超過を返しても誤字の指摘は失わない', async () => {
     const { AI } = bindingFixture([
       deepseekTool('web_search', { block: 0, query: '東京タワー 高さ' }), deepseekReport(),
     ]);
-    const fetcher = async () => Response.json({ detail: { error: 'usage limit exceeded' } }, { status: 432 });
-    expect(await reviewWithWorkersAi(request, { AI, TAVILY_API_KEY: 'fixture-key' }, fetcher)).toEqual({ findings: [finding], factCheck: { status: 'unavailable', sourceCheckedBlocks: [] } });
+    const searchAI = { ...AI, websearch: async () => Response.json({ error: 'usage limit exceeded' }, { status: 402 }) };
+    expect(await reviewWithWorkersAi(request, { AI: searchAI, CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway' })).toEqual({ findings: [finding], factCheck: { status: 'unavailable', sourceCheckedBlocks: [] } });
   });
 
   test('検索3回と本文取得6回を順に使っても最後に校閲結果を返す', async () => {
@@ -109,19 +108,16 @@ describe('Workers AI bindingの標準校閲', () => {
     ]);
     let searches = 0;
     let reads = 0;
-    const fetcher = async (input: RequestInfo | URL) => {
-      let body: string;
-      if (new URL(String(input)).hostname === 'api.tavily.com') {
-        const results = urls.slice(searches * 2, searches * 2 + 2).map(url => ({ url, title: '公式' }));
-        searches++;
-        return Response.json({ results });
-      } else {
-        reads++;
-        body = '<body><p>東京タワーの高さは333メートルです。試験用の一次情報です。</p></body>';
-      }
-      return new Response(body, { headers: { 'content-type': 'text/html' } });
+    const searchAI = { ...AI, websearch: async () => {
+      const items = urls.slice(searches * 2, searches * 2 + 2).map(url => ({ url, title: '公式' }));
+      searches++;
+      return Response.json({ items });
+    } };
+    const fetcher = async () => {
+      reads++;
+      return new Response('<body><p>東京タワーの高さは333メートルです。試験用の一次情報です。</p></body>', { headers: { 'content-type': 'text/html' } });
     };
-    expect(await reviewWithWorkersAi(request, { AI, TAVILY_API_KEY: 'fixture-key' }, fetcher)).toEqual({ findings: [finding], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
+    expect(await reviewWithWorkersAi(request, { AI: searchAI, CLOUDFLARE_AI_GATEWAY_ID: 'fixture-gateway' }, fetcher)).toEqual({ findings: [finding], factCheck: { status: 'partial', sourceCheckedBlocks: [0] } });
     expect(calls).toHaveLength(10);
     expect(searches).toBe(3);
     expect(reads).toBe(6);

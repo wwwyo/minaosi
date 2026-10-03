@@ -7,7 +7,7 @@ import { createFactSearch } from '../search/tools';
 
 export interface WorkersAiEnv {
   AI?: AiBinding;
-  TAVILY_API_KEY?: string;
+  CLOUDFLARE_AI_GATEWAY_ID?: string;
   // BYOK用のGateway IDとは別に、標準経路へGatewayログを載せる場合だけ設定する。
   // binding経路ではpayload抑制ヘッダーを送れないため、本文非保存はGateway側設定に依存する。
   REVIEW_GATEWAY_ID?: string;
@@ -26,7 +26,7 @@ const REVIEW_TIMEOUT_MS = 210_000;
 export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: WorkersAiEnv, fetcher: HttpFetch = fetch): Promise<ReviewResult> {
   if (!env.AI) throw new Error('Workers AI の binding が設定されていません');
   const schema = structuredClone(REPORT_TOOL.input_schema);
-  const search = createFactSearch(request.blocks, { apiKey: env.TAVILY_API_KEY, fetcher, styleGuide: request.styleGuide });
+  const search = createFactSearch(request.blocks, { AI: env.AI, gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID, fetcher, styleGuide: request.styleGuide });
   let findings: ReviewedFinding[] | undefined;
   let reportError: string | undefined;
   const report = toolDefinition({ name: REPORT_TOOL.name, description: REPORT_TOOL.description, inputSchema: schema }).server((input) => {
