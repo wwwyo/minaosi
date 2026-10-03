@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => ({
       CLOUDFLARE_ACCOUNT_ID: bindings.secret(),
       CLOUDFLARE_AI_GATEWAY_ID: bindings.secret(),
       CF_AIG_TOKEN: bindings.secret(),
+      TAVILY_API_KEY: bindings.secret(),
       DEFAULT_REVIEW_MODEL: bindings.text<string>('@cf/deepseek-ai/deepseek-v4-flash-0731'),
       // 標準経路をGatewayログへ流す場合だけ設定する。binding経路はpayload抑制ヘッダーを送れないため、本文非保存はGateway側の設定に依存する。
       REVIEW_GATEWAY_ID: bindings.text<string>(''),

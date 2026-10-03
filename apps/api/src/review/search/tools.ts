@@ -1,17 +1,18 @@
 import { toolDefinition } from '@tanstack/ai';
 import type { FactCheckSummary, HttpFetch, ReviewBlock, ReviewedFinding } from '../schema';
-import { searchDuckDuckGo } from './duckduckgo';
+import { searchTavily } from './tavily';
 import { fetchPage, normalizeText, pageText, publicUrl } from './web';
 
 /** 取得済みの出典だけを採用するため、検索と本文の記録を校閲リクエスト内に閉じる。 */
-export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fetch, styleGuide = '') {
+export function createFactSearch(blocks: ReviewBlock[], { apiKey, fetcher = fetch, styleGuide = '' }: { apiKey?: string; fetcher?: HttpFetch; styleGuide?: string } = {}) {
   const candidates = new Map<number, Set<string>>();
   const sources = new Map<string, { url: string; text: string }>();
   const checked = new Set<number>();
   let searches = 0;
   let reads = 0;
   const blockExists = (index: number) => blocks.some(block => block.index === index && block.text.trim());
-  const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizeText(styleGuide)];
+  const normalizedStyleGuide = normalizeText(styleGuide);
+  const draftTexts = [...blocks.map(block => normalizeText(block.text)), normalizedStyleGuide];
   const styleRules = styleGuide.split(/[。！？\r\n]+/u)
     .filter(line => !/^\s*#{1,6}\s/.test(line))
     .flatMap(line => {
@@ -21,6 +22,7 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
     .filter(Boolean);
   const copiesDraftExcerpt = (query: string) => {
     const text = normalizeText(query);
+    if (normalizedStyleGuide.includes(text)) return true;
     if (styleRules.some(rule => text.includes(rule))) return true;
     for (let offset = 0; offset + 20 <= text.length; offset++) {
       if (draftTexts.some(draft => draft.includes(text.slice(offset, offset + 20)))) return true;
@@ -29,7 +31,7 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
   };
   const webSearch = toolDefinition({
     name: 'web_search',
-    description: '指定したブロックの主張を照合する検索語でDuckDuckGoを検索する。原稿・文体規範の全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
+    description: '指定したブロックの主張を照合する検索語でTavilyを検索する。原稿・文体規範の全文や文章のコピーは送らず、必要な語句に絞る。最大3回。検索結果の抜粋は出典に使えない。',
     inputSchema: { type: 'object', required: ['block', 'query'], properties: { block: { type: 'integer' }, query: { type: 'string', maxLength: 160 } } },
   }).server(async (args) => {
     const input = args as { block?: unknown; query?: unknown } | null;
@@ -42,7 +44,7 @@ export function createFactSearch(blocks: ReviewBlock[], fetcher: HttpFetch = fet
     }
     if (searches++ >= 3) return { error: '検索回数の上限です。未確認の主張は指摘しないでください' };
     try {
-      const results = await searchDuckDuckGo(query, fetcher);
+      const results = await searchTavily(query, apiKey, fetcher);
       const urls = candidates.get(input.block) ?? new Set<string>();
       for (const result of results) urls.add(result.url);
       candidates.set(input.block, urls);
