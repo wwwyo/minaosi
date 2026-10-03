@@ -18,16 +18,20 @@ export function publicUrl(input: string): URL {
 }
 
 /** 宣言サイズを信用せず、受信した本文にも上限を設ける。 */
-export async function boundedText(response: Response): Promise<string> {
+export async function boundedText(response: Response, signal?: AbortSignal): Promise<string> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('本文がありません');
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancel, { once: true });
   const decoder = new TextDecoder();
   let bytes = 0;
   let text = '';
   try {
+    signal?.throwIfAborted();
     if (Number(response.headers.get('content-length')) > MAX_PAGE_BYTES) throw new Error('本文が大きすぎます');
     while (true) {
       const chunk = await reader.read();
+      signal?.throwIfAborted();
       if (chunk.done) break;
       bytes += chunk.value.byteLength;
       if (bytes > MAX_PAGE_BYTES) throw new Error('本文が大きすぎます');
@@ -35,6 +39,7 @@ export async function boundedText(response: Response): Promise<string> {
     }
     return text + decoder.decode();
   } finally {
+    signal?.removeEventListener('abort', cancel);
     await reader.cancel();
   }
 }

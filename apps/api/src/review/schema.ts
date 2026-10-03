@@ -9,6 +9,7 @@ export type HttpFetch = (input: RequestInfo | URL, init?: RequestInit) => Promis
 /** env.AI の最小形。Workers固有の Ai 型を拡張側の型チェックへ持ち込まないため構造的に定義する。 */
 export interface AiBinding {
   run(model: string, inputs: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>;
+  websearch?(options: { gatewayId: string; query: string; provider: 'ceramic'; limit: number }): Promise<Response>;
 }
 
 /** LLM が返す wire 形式。content 側の Finding への正規化は controller が行う。 */

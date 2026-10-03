@@ -60,8 +60,8 @@
         <h2>原稿の送信と学習への利用</h2>
         <div id="standard-data-use">
           <p class="help">原稿と設定した文体規範は校閲サーバーを経由してCloudflare Workers AIへ送信します。minaosiとWorkers AIは、原稿・文体規範・校閲結果をAIモデルの学習に利用しません。</p>
-          <p class="help">事実確認では、原稿から作る短い検索語をTavilyへ送信し、参照先のページを取得します。原稿全文と校閲結果はTavilyへ送りません。Tavilyは検索語をサービス改善に利用でき、AI機能の入力には学習利用の条項があります。検索語の学習不使用は保証されません。</p>
-          <p class="help"><a href="https://developers.cloudflare.com/workers-ai/platform/data-usage/" target="_blank" rel="noopener noreferrer">Workers AIのデータ利用方針</a> · <a href="https://www.tavily.com/privacy" target="_blank" rel="noopener noreferrer">Tavilyのプライバシーポリシー</a> · <a href="https://www.tavily.com/terms" target="_blank" rel="noopener noreferrer">Tavilyの利用規約</a></p>
+          <p class="help">事実確認では、原稿から作る短い検索語をCloudflare AI Gateway経由でCeramic.aiへ送信し、参照先のページを取得します。原稿全文・文体規範・校閲結果は検索へ送りません。Cloudflareの公式資料では、Ceramic.aiは検索データを保持しないZero Data Retentionに対応しています。Gateway側のログ保存は運営者の設定に従います。</p>
+          <p class="help"><a href="https://developers.cloudflare.com/workers-ai/platform/data-usage/" target="_blank" rel="noopener noreferrer">Workers AIのデータ利用方針</a> · <a href="https://developers.cloudflare.com/web-search/providers/" target="_blank" rel="noopener noreferrer">Web Search APIのデータ保持条件</a> · <a href="https://www.ceramic.ai/terms-of-service" target="_blank" rel="noopener noreferrer">Ceramic.aiの利用規約</a></p>
         </div>
         <div id="byok-data-use" hidden>
           <p class="help">原稿・設定した文体規範・登録したAPIキーを校閲サーバーへ送り、選択したモデルの提供元へ中継します。minaosiは原稿・文体規範・校閲結果をAIモデルの学習に利用しません。提供元による学習への利用・保存は、提供元の利用条件とあなたのアカウント設定に従います。</p>
