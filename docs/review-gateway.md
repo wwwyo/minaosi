@@ -18,6 +18,8 @@ AI呼び出しのSDKはTanStack AIに統一しているが、接続経路とプ�
 
 検索へ送るのは照合に必要な短い検索語だけで、原稿全文・文体規範・校閲結果は送らない。原稿・検索語の送信先とデータ利用条件は拡張の設定画面に表示する。Cloudflareのプロバイダー一覧ではCeramic.aiはZero Data Retention対応とされているが、Gatewayのログ保存は別の設定である。検索bindingはリクエスト単位の本文ログ抑制・キャッシュ無効化を指定できないため、運営者は検索先Gatewayの `collect_logs: false`、`cache_ttl: 0` を確認してから利用する。
 
+GatewayをBYOKと共有する場合も、検索用の既定ログ設定は無効にする。BYOKはリクエスト単位でログを有効にし、本文保存とキャッシュは無効にする。[ログ設定の優先順位](https://developers.cloudflare.com/ai-gateway/observability/logging/)ではリクエストの指定がGatewayの既定値を上書きするため、BYOKのメタデータログと検索のログ無効化を両立できる。旧検索キーの無効化・削除は、新しい検索経路の実通信と本番切替を確認してから行う。
+
 BYOKのDeepSeekはTanStackの `OpenAIChatCompletionsTextAdapter` でGatewayの `/deepseek/chat/completions` を呼び、OpenAIのResponses APIと内蔵検索toolは送らない。通常endpointでは `strict: false` のfunction toolを使い、`thinking: { type: 'disabled' }` を明示する。thinkingを有効にするとtoolの継続時に `reasoning_content` の完全な再送が必要になるため、現adapterのまま既定のthinkingを使わず、事実指摘は除外する。Claude / GPTのBYOKでは各提供元の検索による事実確認を引き続き利用できる。[DeepSeekのモデルID](https://api-docs.deepseek.com/quick_start/pricing)、[thinkingの仕様](https://api-docs.deepseek.com/guides/thinking_mode)、[Gatewayの検索対応](https://developers.cloudflare.com/ai-gateway/usage/web-search/)。
 
 BYOKモードで利用者のキーがないリクエストは必ず拒否し、標準モード（運営者課金）への自動切り替えはしない。Gateway の認証トークンはBYOK用にサーバーだけに置き、拡張には含めない。BYOKのGatewayリクエストではキャッシュと本文ログをリクエスト単位で無効化する。Workerには本文・キーを含めない実行結果のログだけを残す。AI プロバイダー側のデータ保持は各社の契約・設定に従う。

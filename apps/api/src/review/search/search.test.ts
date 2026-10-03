@@ -11,7 +11,7 @@ const blocks = [{ index: 0, text: '東京タワーは高さが100メートルだ
 describe('Web Search API検索', () => {
   test('重複・内部URL・不正な結果を除き、最大3件の参照先だけを返す', () => {
     expect(parseSearchResults({ items: [
-      { url, title: '  一次情報\n ', content: '抜粋' }, { url: url + '#section', title: '重複' },
+      { url, title: '  一次情報\n ', description: '抜粋'.repeat(4000) }, { url: url + '#section', title: '重複' },
       { url: 'https://localhost/source', title: '内部' }, null, { url: 1, title: '不正' },
       ...Array.from({ length: 5 }, (_, i) => ({ url: `${url}/${i}`, title: '公式' })),
     ] })).toEqual([{ url, title: '一次情報' }, { url: url + '/0', title: '公式' }, { url: url + '/1', title: '公式' }]);
