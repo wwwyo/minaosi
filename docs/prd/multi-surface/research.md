@@ -10,7 +10,7 @@
 - 通常のcontenteditableについて、本文を示すラベル・属性か、タイトル欄と保存・公開操作のある執筆領域を根拠に検知する。本文と明示された領域内の複数編集欄も文書順で扱う。
 - コメント・返信・検索・チャット・問い合わせ・タイトルなどの用途が明確なら除外する。文字数・面積・フォーカスで競合を解消せず、本文が決まらない場合は「無効な画面です」とする。
 - 校閲と適用の直前にも本文を再確認する。編集領域の差し替えやSPA遷移では、以前の指摘を破棄し、破棄したcontrollerの遅延応答を表示しない。
-- 初版ではtextarea、CodeMirror等の仮想化エディタ、Shadow DOM内を未対応として無効にする。iframe内は合意どおり対象外である。Notionを含む各サービスの現在の実画面での動作は、別途検証が必要。
+- 初版ではtextarea、CodeMirror等の仮想化エディタ、Shadow DOM内、document.designModeを未対応として無効にする。iframe内は合意どおり対象外である。Notionを含む各サービスの現在の実画面での動作は、別途検証が必要。
 
 検証用コマンドは `mise exec -- bun run --cwd apps/extension test:surfaces`。表示されたローカルURLをブラウザで開くと、DOMの継承・可視性・コメント除外・候補競合・全文取得・候補表示時のHTML・適用とundoを合成画面で検証する。既存の単体テストは `mise exec -- bun test apps/extension`、型チェックとビルドはextensionの `check`／`build` を使う。実AI・note等の認証済み編集画面・各サービスの保存と再読込・Firefoxの実操作はこの検証に含まれない。
 

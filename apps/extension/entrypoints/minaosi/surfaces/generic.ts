@@ -108,6 +108,15 @@ function createDetection(doc: Document) {
     return null;
   }
 
+  function editableRoots(editor: HTMLElement): HTMLElement[] {
+    return editor.isContentEditable ? [editor] : inputs().filter(input => editor.contains(input));
+  }
+
+  function hasExcludedEditable(root: HTMLElement): boolean {
+    return [...root.querySelectorAll<HTMLElement>('*')]
+      .some(element => element.isContentEditable && excluded(element));
+  }
+
   /** 用途を確定できる原稿だけを選ぶ。長さ・面積・フォーカスでは競合を解消しない。 */
   function findEditor(): HTMLElement | null {
     if (doc.defaultView && doc.defaultView.top !== doc.defaultView) return null;
@@ -123,11 +132,13 @@ function createDetection(doc: Document) {
     if (editor instanceof HTMLTextAreaElement) return null;
     // textareaのvalueや仮想化modelをDOMのRangeで扱うと、見えていない本文を誤って校閲する。
     if (editor.closest(VIRTUAL_EDITOR) || editor.querySelector(`${VIRTUAL_EDITOR}, textarea`)) return null;
+    // 同じ編集host内で用途が混在すると、部分抽出とRangeの位置がずれるため無効にする。
+    if (editableRoots(editor).some(hasExcludedEditable)) return null;
     return editor;
   }
 
   function editableBlocks(root: HTMLElement): HTMLElement[] {
-    if (!root.isContentEditable) return [];
+    if (!root.isContentEditable || hasExcludedEditable(root)) return [];
     const children = [...root.children].filter((element): element is HTMLElement => element instanceof HTMLElement);
     const blocks = children.filter(child => child.isContentEditable && !excluded(child));
     const hasBlocks = blocks.some(child => child.matches('p, div, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, figure'));
@@ -137,7 +148,7 @@ function createDetection(doc: Document) {
   }
 
   function extractBlocks(editor: HTMLElement) {
-    const roots = editor.isContentEditable ? [editor] : inputs().filter(input => editor.contains(input));
+    const roots = editableRoots(editor);
     return roots.flatMap(editableBlocks).map((element, index) => ({ index, element, text: blockText(element) }));
   }
   return { findEditor, extractBlocks };

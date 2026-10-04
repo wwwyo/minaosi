@@ -26,6 +26,12 @@ export async function runSurfaceChecks() {
   });
   await test('コメント用contenteditableだけなら無効', '<form id="comments"><div contenteditable="true" aria-label="本文">コメント</div></form>', none);
   await test('入力欄自身がコメント用classなら本文ラベルより除外を優先', '<div class="commentComposer" contenteditable="true" aria-label="本文">コメント。</div>', none);
+  await test('直接テキストとコメントが同じ編集hostに混在したら無効', '<div id="draft" contenteditable="true" aria-label="本文">導入文。<div aria-label="コメント">コメント文</div></div>', () => {
+    none();
+    assert(genericAdapter.extractBlocks(element('draft')).length === 0, 'mixed comment was extracted');
+  });
+  await test('本文host内のタイトルだけを本文として扱わない', '<div id="draft" contenteditable="true" aria-label="本文"><div aria-label="タイトル">記事タイトル</div></div>', none);
+  await test('段落の深い子孫にある返信欄も本文に混ぜない', '<div id="draft" contenteditable="true" aria-label="本文"><p>本文。<span><span aria-label="返信">返信文</span></span></p></div>', none);
   await test('返信・検索・チャット・問い合わせを除外', '<div contenteditable="true" aria-label="返信本文">返信</div><form role="search"><div contenteditable="true" aria-label="本文">検索</div></form><div class="chat"><div contenteditable="true" name="content">チャット</div></div><form aria-label="お問い合わせ"><div contenteditable="true" name="body">問い合わせ</div></form>', none);
   await test('フォーカスと文字数だけでは本文にしない', '<div id="unknown" contenteditable="true">' + '本文らしい長文。'.repeat(100) + '</div>', () => { element('unknown').focus(); none(); });
   await test('本文候補が競合したら長さやフォーカスで決めない', '<div id="one" contenteditable="true" aria-label="本文">短文。</div><div id="two" contenteditable="true" aria-label="本文">' + '長文。'.repeat(50) + '</div>', () => { element('two').focus(); none(); });

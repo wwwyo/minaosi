@@ -62,7 +62,6 @@ export class InlinePreview {
     );
   }
 
-  setEditor(editor: HTMLElement) { this.clear(); this.editor = editor; this.revision = ''; }
   showReview() { this.setEditing(false); }
   invalidate() { this.revision = ''; this.root.hidden = true; }
 
