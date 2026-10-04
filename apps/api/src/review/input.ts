@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { MAX_STYLE_GUIDE_LENGTH } from './style-guide';
 
 export const ReviewProviderSchema = z.enum(['anthropic', 'openai', 'deepseek']);
 export const ReviewModeSchema = z.enum(['default', 'byok']);
@@ -23,12 +22,11 @@ export const ProviderReviewInputSchema = z.object({
   provider: ReviewProviderSchema,
   model: ModelSchema,
   blocks: BlocksSchema,
-  styleGuide: z.string().max(MAX_STYLE_GUIDE_LENGTH).optional(),
 });
 
 export const ReviewInputSchema = z.union([
   ProviderReviewInputSchema.extend({ mode: z.literal('byok').optional() }),
-  z.object({ mode: z.literal('default'), blocks: BlocksSchema, styleGuide: z.string().max(MAX_STYLE_GUIDE_LENGTH).optional() }),
+  z.object({ mode: z.literal('default'), blocks: BlocksSchema }),
 ]);
 
 export type ReviewBlock = z.infer<typeof ReviewBlockSchema>;

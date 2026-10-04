@@ -112,12 +112,12 @@ export const app = new Hono<RpcEnv>()
       const model = ModelSchema.safeParse(env.DEFAULT_REVIEW_MODEL);
       if (!model.success) return c.json({ error: 'minaosiの標準サービスはまだ準備中です' }, 503);
       if (!env.AI) return c.json({ error: '標準校閲のAI接続がまだ準備できていません' }, 503);
-      standard = { model: model.data, blocks: input.blocks, ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}) };
+      standard = { model: model.data, blocks: input.blocks };
     } else {
       apiKey = request.headers.get('x-minaosi-api-key')?.trim() ?? '';
       // BYOKでキーを忘れても、運営者の課金へ切り替えない。
       if (!apiKey || apiKey.length > 4096) return c.json({ error: 'あなたの API key が必要です' }, 401);
-      selected = { provider: input.provider, model: input.model, blocks: input.blocks, ...(input.styleGuide !== undefined ? { styleGuide: input.styleGuide } : {}) };
+      selected = { provider: input.provider, model: input.model, blocks: input.blocks };
     }
 
     if (selected && (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_AI_GATEWAY_ID || !env.CF_AIG_TOKEN)) {

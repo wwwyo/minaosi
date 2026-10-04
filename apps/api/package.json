@@ -6,10 +6,6 @@
   "exports": {
     "./rpc": {
       "types": "./src/rpc.ts"
-    },
-    "./style-guide": {
-      "types": "./src/review/style-guide.ts",
-      "default": "./src/review/style-guide.ts"
     }
   },
   "scripts": {

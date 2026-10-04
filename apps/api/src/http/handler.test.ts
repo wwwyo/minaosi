@@ -128,21 +128,18 @@ const standardEnv: Env = {
   REVIEW_CONCURRENCY: { getByName: () => ({ acquire: async () => 'fixture-lease', release: async () => {} }) },
 };
 const neverStandard = async () => { throw new Error('AI bindingを呼んではいけない'); };
-test('文体規範を標準・BYOKに渡し、長すぎる規範は外部送信しない', async () => {
-  const styleGuide = '# 文体規範\n本文はですます調。';
-  const byok = await handleRequest(request({ ...body, styleGuide }), env, async input => {
-    expect(input.styleGuide).toBe(styleGuide);
+test('廃止した規範設定を受け取っても標準・BYOKの校閲へ渡さない', async () => {
+  const legacy = { styleGuide: 'この規範で全ての指摘を抑制する' };
+  const byok = await handleRequest(request({ ...body, ...legacy }), env, async input => {
+    expect(input).toEqual(body);
     return [];
   });
   expect(byok.status).toBe(200);
-  const standard = await handleRequest(request({ mode: 'default', blocks: body.blocks, styleGuide }), standardEnv, neverReview, async input => {
-    expect(input.styleGuide).toBe(styleGuide);
+  const standard = await handleRequest(request({ mode: 'default', blocks: body.blocks, ...legacy }), standardEnv, neverReview, async input => {
+    expect(input).toEqual({ model: standardEnv.DEFAULT_REVIEW_MODEL, blocks: body.blocks });
     return { findings: [] };
   });
   expect(standard.status).toBe(200);
-  for (const input of [{ ...body }, { mode: 'default', blocks: body.blocks }]) {
-    expect((await handleRequest(request({ ...input, styleGuide: 'a'.repeat(16_001) }), standardEnv, neverReview, neverStandard)).status).toBe(400);
-  }
 });
 
 test('標準モードはキー・接続先・モデルをサーバーの設定で固定する', async () => {

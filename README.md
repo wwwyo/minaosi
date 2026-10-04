@@ -20,7 +20,7 @@ bun run dev
 
 校閲サーバーも起動する必要がある。接続設定・秘密の管理・Workerのビルド手順は[校閲サーバーの設定](docs/review-gateway.md)を参照。
 
-標準モデルはCloudflareのWorkers AI上のDeepSeek V4 Flash（`@cf/deepseek-ai/deepseek-v4-flash-0731`）。標準モードは、誤字・日本語表現の校閲に加えて、AI GatewayのWeb Search API（Ceramic.ai）で一次情報を探して事実を照合する。既存のAI bindingと運営者のGatewayを使うため、利用者による検索キーの用意は不要。検索には原稿全文・文体規範・校閲結果を送らず、照合に必要な短い検索語だけを送る。取得した参照先の本文に引用が存在する事実の指摘だけを返し、検索や出典取得に失敗しても他の校閲は続ける。
+標準モデルはCloudflareのWorkers AI上のDeepSeek V4 Flash（`@cf/deepseek-ai/deepseek-v4-flash-0731`）。標準モードは、誤字・日本語表現の校閲に加えて、AI GatewayのWeb Search API（Ceramic.ai）で一次情報を探して事実を照合する。既存のAI bindingと運営者のGatewayを使うため、利用者による検索キーの用意は不要。検索には原稿全文・校閲結果を送らず、照合に必要な短い検索語だけを送る。取得した参照先の本文に引用が存在する事実の指摘だけを返し、検索や出典取得に失敗しても他の校閲は続ける。
 
 1回の校閲で検索は最大3回、参照先の取得は最大6回。Ceramic.aiは$0.25／1,000検索（最大3回で$0.00075／校閲、推論料金は別）。Gatewayに同プロバイダーの`default`キーがあればそのキーを使い、なければAI Gatewayクレジットで支払う。クレジットの購入や自動補充はこのアプリから行わない。HTMLとプレーンテキストを取得でき、PDF・アクセス制限・取得上限を超える本文は未確認とする。[公式のプロバイダー一覧](https://developers.cloudflare.com/web-search/providers/)ではCeramic.aiはZero Data Retention対応とされている。Gateway側でも本文ログとキャッシュを無効にしてから利用する。送信先とデータ利用条件は設定画面で確認できる。
 

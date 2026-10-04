@@ -36,8 +36,8 @@ export async function review(
   });
   const response = await client.review.$post({
     json: request.mode === 'default'
-      ? { mode: 'default', blocks: request.blocks, ...(request.styleGuide !== undefined ? { styleGuide: request.styleGuide } : {}) }
-      : { provider: request.provider, model: request.model, blocks: request.blocks, ...(request.styleGuide !== undefined ? { styleGuide: request.styleGuide } : {}) },
+      ? { mode: 'default', blocks: request.blocks }
+      : { provider: request.provider, model: request.model, blocks: request.blocks },
   });
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {

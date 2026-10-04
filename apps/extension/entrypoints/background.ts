@@ -1,6 +1,6 @@
 import { browser } from '#imports';
 import { isReviewProvider, review, type ReviewRequest } from './minaosi/review/providers';
-import { PROVIDER_SETTINGS, styleGuideItem } from './minaosi/store';
+import { PROVIDER_SETTINGS } from './minaosi/store';
 
 /**
  * 原稿の外部送信は background で行う（content script からの fetch は
@@ -56,8 +56,7 @@ export default defineBackground(() => {
         const endpoint = import.meta.env.WXT_REVIEW_API_URL;
         if (!endpoint) throw new Error('校閲サーバーの接続先が設定されていません');
         if (request.mode !== 'default' && !apiKey) throw new Error('拡張機能のオプションでAPIキーを登録してください');
-        const styleGuide = await styleGuideItem.getValue();
-        const result = await review({ ...request, styleGuide: styleGuide?.content }, apiKey, endpoint);
+        const result = await review(request, apiKey, endpoint);
         sendResponse({ ok: true, ...result });
       } catch (e) {
         sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });

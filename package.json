@@ -10,15 +10,22 @@
     "dev": "bun run --cwd apps/extension dev",
     "build": "bun run --cwd apps/extension build",
     "zip": "bun run --cwd apps/extension zip",
-    "check": "bun run --cwd apps/api check && bun run --cwd apps/extension check",
+    "check": "bun run --cwd apps/api check && bun run --cwd apps/extension check && bun run check:e2e",
+    "check:e2e": "tsc --project tsconfig.e2e.json",
     "test": "bun test apps",
+    "test:e2e": "bun run build && E2E_TELEMETRY_DISABLED=1 e2e run",
     "api:dev": "bun run --cwd apps/api dev",
     "api:build": "bun run --cwd apps/api build",
     "api:deploy": "bun run --cwd apps/api deploy",
     "api:worker:dev": "bun run --cwd apps/api dev:gateway"
   },
   "devDependencies": {
+    "@ai-sdk/openai-compatible": "3.0.62",
+    "@e2e-dev/web": "0.11.2",
     "@types/bun": "1.4.2",
+    "ai": "7.0.127",
+    "e2e": "0.16.0",
+    "playwright": "1.63.0",
     "typescript": "7.0.2"
   }
 }

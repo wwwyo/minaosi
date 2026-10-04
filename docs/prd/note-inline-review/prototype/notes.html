@@ -206,7 +206,7 @@
 <div id="stage"></div>
 
 <script>
-const KINDS = { typo:'誤字', fact:'事実', rule:'日本語ルール', style:'文体規範' };
+const KINDS = { typo:'誤字', fact:'事実', rule:'日本語ルール', style:'文体' };
 const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 const ARTICLE = [
@@ -261,7 +261,7 @@ const FINDINGS = [
     reason:'同一段落内で語尾「わけ」が3回連続しています。修正案のうち2箇所を適用してください。' },
   { id:7, kind:'rule', block:8, suppressed:true,
     title:'です・ます調と常体の混在',
-    reason:'敬体（「です」「ありません」）と常体（「ないでしょう」「あるんや」）が段落内で混在しています。あなたの文体規範では混在を許容しているため、この指摘は抑制され UI には表示されません。' },
+    reason:'敬体（「です」「ありません」）と常体（「ないでしょう」「あるんや」）が段落内で混在しています。会話部分の口語は原稿の文脈に沿っているため、この指摘は UI には表示されません。' },
   { id:8, kind:'style', block:22, span:'ということで', fix:{from:'ということで',to:'つまり'},
     title:'接続詞「ということで」の多用',
     reason:'この記事内で3回目です。作者の過去記事でも多用傾向にあります。意図的な口癖なら残しても良いですが、1箇所は「つまり」への置き換えや削除を検討してください。' },

@@ -15,4 +15,3 @@ html, body { margin: 0; background: transparent; }
 .options [hidden] { display: none; }
 #status { color: var(--color-ink-sub); min-height: 1.6em; }
 .options summary { cursor: pointer; }
-#style-guide-preview { max-height: 16em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; padding: var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-sm); }
