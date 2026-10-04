@@ -37,34 +37,18 @@
             <div class="help">この拡張に保存し、校閲時に使用します。</div>
           </div>
         </fieldset>
-        <fieldset id="style-guide-fields" disabled>
-          <legend>文体規範</legend>
-          <p class="help">このブラウザでminaosiを使うすべての記事に、同じ規範を使います。未設定でも誤字・事実・日本語ルールを校閲します。</p>
-          <div class="fld">
-            <label for="style-guide-file">規範ファイル</label>
-            <input id="style-guide-file" type="file" accept=".md,.txt,text/plain,text/markdown" />
-            <p id="style-guide-name" class="help">未設定</p>
-          </div>
-          <details id="style-guide-details" hidden>
-            <summary>読み込んだ内容を見る</summary>
-            <pre id="style-guide-preview"></pre>
-          </details>
-          <p class="help">例外は「ただし会話部分は口語を許容」のように明記するか、「## 例外」の下に箇条書きで記載してください。規範も原稿と一緒にAIへ送信します。</p>
-          <button id="clear-style-guide" type="button" class="btn btn-ghost" disabled>規範を解除する</button>
-          <p class="help">ファイルの選択・解除は「保存する」で反映します。</p>
-        </fieldset>
         <button type="submit" class="run-btn" disabled>保存する</button>
         <p id="status" role="status" aria-live="polite">読み込み中…</p>
       </form>
       <section aria-label="原稿の送信と学習への利用">
         <h2>原稿の送信と学習への利用</h2>
         <div id="standard-data-use">
-          <p class="help">原稿と設定した文体規範は校閲サーバーを経由してCloudflare Workers AIへ送信します。minaosiとWorkers AIは、原稿・文体規範・校閲結果をAIモデルの学習に利用しません。</p>
-          <p class="help">事実確認では、原稿から作る短い検索語をCloudflare AI Gateway経由でCeramic.aiへ送信し、参照先のページを取得します。原稿全文・文体規範・校閲結果は検索へ送りません。Cloudflareの公式資料では、Ceramic.aiは検索データを保持しないZero Data Retentionに対応しています。Gateway側のログ保存は運営者の設定に従います。</p>
+          <p class="help">原稿は校閲サーバーを経由してCloudflare Workers AIへ送信します。minaosiとWorkers AIは、原稿・校閲結果をAIモデルの学習に利用しません。</p>
+          <p class="help">事実確認では、原稿から作る短い検索語をCloudflare AI Gateway経由でCeramic.aiへ送信し、参照先のページを取得します。原稿全文・校閲結果は検索へ送りません。Cloudflareの公式資料では、Ceramic.aiは検索データを保持しないZero Data Retentionに対応しています。Gateway側のログ保存は運営者の設定に従います。</p>
           <p class="help"><a href="https://developers.cloudflare.com/workers-ai/platform/data-usage/" target="_blank" rel="noopener noreferrer">Workers AIのデータ利用方針</a> · <a href="https://developers.cloudflare.com/web-search/providers/" target="_blank" rel="noopener noreferrer">Web Search APIのデータ保持条件</a> · <a href="https://www.ceramic.ai/terms-of-service" target="_blank" rel="noopener noreferrer">Ceramic.aiの利用規約</a></p>
         </div>
         <div id="byok-data-use" hidden>
-          <p class="help">原稿・設定した文体規範・登録したAPIキーを校閲サーバーへ送り、選択したモデルの提供元へ中継します。minaosiは原稿・文体規範・校閲結果をAIモデルの学習に利用しません。提供元による学習への利用・保存は、提供元の利用条件とあなたのアカウント設定に従います。</p>
+          <p class="help">原稿・登録したAPIキーを校閲サーバーへ送り、選択したモデルの提供元へ中継します。minaosiは原稿・校閲結果をAIモデルの学習に利用しません。提供元による学習への利用・保存は、提供元の利用条件とあなたのアカウント設定に従います。</p>
         </div>
       </section>
     </main>

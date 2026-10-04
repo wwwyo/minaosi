@@ -33,7 +33,8 @@ export async function reviewThroughGateway(
   });
   const factChecking = request.provider !== 'deepseek';
   const reportSchema = structuredClone(REPORT_TOOL.input_schema);
-  if (!factChecking) reportSchema.properties.findings.items.properties.kind.enum = request.styleGuide?.trim() ? ['typo', 'rule', 'style'] : ['typo', 'rule'];
+  const kindSchema = reportSchema.properties.findings.items.properties.kind;
+  if (!factChecking) kindSchema.enum = kindSchema.enum.filter(kind => kind !== 'fact');
   let findings: ReviewedFinding[] | undefined;
   let reportError: string | undefined;
   const report = toolDefinition({
@@ -41,7 +42,7 @@ export async function reviewThroughGateway(
     description: REPORT_TOOL.description,
     inputSchema: reportSchema,
   }).server((input) => {
-    const parsed = validateReport(input, request);
+    const parsed = validateReport(input);
     if (!Array.isArray(parsed)) {
       reportError = parsed.error;
       return { error: parsed.error };
@@ -74,8 +75,8 @@ export async function reviewThroughGateway(
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), 210_000);
   const common = {
-    messages: [{ role: 'user' as const, content: userPrompt(request.blocks, request.styleGuide) }],
-    systemPrompts: [systemPrompt(LANGUAGE_RULES, factChecking, request.styleGuide)],
+    messages: [{ role: 'user' as const, content: userPrompt(request.blocks) }],
+    systemPrompts: [systemPrompt(LANGUAGE_RULES, factChecking)],
     abortController,
     agentLoopStrategy: ({ iterationCount }: { iterationCount: number }) => findings === undefined && iterationCount < 5,
     debug: false as const,

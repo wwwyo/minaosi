@@ -17,3 +17,5 @@ mise.local.toml
 
 .cloudflare/
 worker-configuration.d.ts
+
+.e2e/

@@ -62,7 +62,7 @@ describe('TanStack AI via Cloudflare', () => {
       name: 'report_findings', description: expect.any(String), strict: false, parameters: expect.any(Object),
     } }]);
     expect(call.body.tools).toMatchObject([{ function: { parameters: {
-      properties: { findings: { items: { properties: { kind: { enum: ['typo', 'rule'] } } } } },
+      properties: { findings: { items: { properties: { kind: { enum: ['typo', 'rule', 'style'] } } } } },
     } } }]);
     expect(JSON.stringify(call.body.messages)).toContain('事実の正誤に関する指摘は出さない');
   });

@@ -12,9 +12,9 @@
 - 校閲と適用の直前にも本文を再確認する。編集領域の差し替えやSPA遷移では、以前の指摘を破棄し、破棄したcontrollerの遅延応答を表示しない。
 - 初版ではtextarea、CodeMirror等の仮想化エディタ、Shadow DOM内、document.designModeを未対応として無効にする。iframe内は合意どおり対象外である。Notionを含む各サービスの現在の実画面での動作は、別途検証が必要。
 
-検証用コマンドは `mise exec -- bun run --cwd apps/extension test:surfaces`。表示されたローカルURLをブラウザで開くと、DOMの継承・可視性・コメント除外・候補競合・全文取得・候補表示時のHTML・適用とundoを合成画面で検証する。既存の単体テストは `mise exec -- bun test apps/extension`、型チェックとビルドはextensionの `check`／`build` を使う。実AI・note等の認証済み編集画面・各サービスの保存と再読込・Firefoxの実操作はこの検証に含まれない。
+過去のQAで作成した合成DOMの検証は廃止した。現在のE2Eは `mise exec -- bun run test:e2e` で実行し、ビルドした拡張の設定画面とローカルの合成執筆画面を操作する。対象要件と未確認範囲は [E2Eの検証範囲](../../../tests/README.md) を参照する。既存の単体テストは `mise exec -- bun test apps/extension`、型チェックとビルドはextensionの `check`／`build` を使う。
 
-2026-10-04の確認結果: Orca内蔵ブラウザの合成画面29ケース成功、`bun test apps` は143件成功、全体の `bun run check` とChrome／Firefox向けビルド成功。ブラウザ結果は `.agent/qa/runs/multi-surface-20261004/browser-results.json` に保存した。実ブラウザのDOM検証と、拡張をロードした状態での操作は区別する。後者は未実施。独立したlintコマンドは設定されていない。Firefoxビルドには、既存のデータ収集宣言・拡張IDに関する警告が残る。
+現在のE2Eは合成の執筆画面で拡張の起動ボタンの表示を確認する。実サービスでの本文取得・校閲・適用・保存・再読込や、Firefoxの実操作は未確認である。起動ボタンの表示だけでは、各サービスへの対応完了とは判断しない。
 
 ## 個人ブログにも届く検知の単位
 

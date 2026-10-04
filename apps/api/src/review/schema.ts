@@ -1,5 +1,3 @@
-import { applyStyleExceptions } from './style-guide';
-import type { ReviewBlock } from './input';
 
 export const FINDING_KINDS = ['typo', 'fact', 'rule', 'style'] as const;
 export type FindingKind = typeof FINDING_KINDS[number];
@@ -43,7 +41,7 @@ export interface ReviewResult {
 }
 
 /** プロバイダーの応答形式に依存せず、指摘の必須項目と一次出典を検証する。 */
-export function validateReport(input: unknown, context: { styleGuide?: string; blocks?: ReviewBlock[] } = {}): ReviewedFinding[] | { error: string } {
+export function validateReport(input: unknown): ReviewedFinding[] | { error: string } {
   const raw = input && typeof input === 'object' ? (input as { findings?: unknown }).findings : undefined;
   if (!Array.isArray(raw)) return { error: '校閲結果の形式が不正です' };
   const findings = raw.filter(
@@ -61,5 +59,5 @@ export function validateReport(input: unknown, context: { styleGuide?: string; b
           typeof f.source.excerpt === 'string' &&
           f.source.excerpt.length > 0)),
   );
-  return applyStyleExceptions(findings, context.styleGuide, context.blocks);
+  return findings;
 }

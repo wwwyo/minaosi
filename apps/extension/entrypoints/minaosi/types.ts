@@ -9,7 +9,7 @@ export const KIND_LABEL: Record<FindingKind, string> = {
   typo: '誤字',
   fact: '事実',
   rule: '日本語ルール',
-  style: '文体規範',
+  style: '文体',
 };
 
 export interface Source {
