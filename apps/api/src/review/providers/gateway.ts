@@ -33,7 +33,8 @@ export async function reviewThroughGateway(
   });
   const factChecking = request.provider !== 'deepseek';
   const reportSchema = structuredClone(REPORT_TOOL.input_schema);
-  if (!factChecking) reportSchema.properties.findings.items.properties.kind.enum = ['typo', 'rule', 'style'];
+  const kindSchema = reportSchema.properties.findings.items.properties.kind;
+  if (!factChecking) kindSchema.enum = kindSchema.enum.filter(kind => kind !== 'fact');
   let findings: ReviewedFinding[] | undefined;
   let reportError: string | undefined;
   const report = toolDefinition({

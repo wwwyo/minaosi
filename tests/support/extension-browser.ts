@@ -20,6 +20,7 @@ export function extensionBrowser(): BrowserProvider {
           headless: true,
           handleSIGINT: false,
           handleSIGTERM: false,
+          // ブラウザへモデルのAPIキーやage復号キーを継承しない。
           env: { PATH: request.env.PATH ?? '', HOME: request.env.HOME ?? '' },
           args: [
             `--disable-extensions-except=${extension}`,
@@ -31,6 +32,7 @@ export function extensionBrowser(): BrowserProvider {
         const worker = context.serviceWorkers()[0]
           ?? await context.waitForEvent('serviceworker', { timeout: 15_000 });
         const extensionId = new URL(worker.url()).hostname;
+        // この受け渡しはe2e.config.tsのworkers: 1を前提とする。
         process.env.MINAOSI_E2E_OPTIONS_URL = `chrome-extension://${extensionId}/options.html`;
         const page = context.pages()[0] ?? await context.newPage();
         await page.goto(process.env.MINAOSI_E2E_OPTIONS_URL);
@@ -40,7 +42,7 @@ export function extensionBrowser(): BrowserProvider {
         contexts.set(profile, context);
         request.log('Loaded minaosi in an isolated Chromium profile.');
         const endpoint = `http://127.0.0.1:${port}`;
-        return { id: profile, cdpEndpoint: endpoint, reconnectEndpoint: endpoint };
+        return { id: profile, cdpEndpoint: endpoint };
       } catch (error) {
         try {
           await context?.close();
