@@ -49,6 +49,9 @@ function createDetection(doc: Document) {
   function visible(element: HTMLElement): boolean {
     if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (element.ownerDocument.defaultView?.getComputedStyle(parent).opacity === '0') return false;
+    }
     return [...element.getClientRects()].some(rect => rect.width > 0 && rect.height > 0)
       && style?.visibility === 'visible' && style.display !== 'none' && style.opacity !== '0';
   }

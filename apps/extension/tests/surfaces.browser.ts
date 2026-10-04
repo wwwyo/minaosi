@@ -52,6 +52,7 @@ export async function runSurfaceChecks() {
   });
   await test('非表示・inert・編集不可・無効を除外', '<div hidden><div contenteditable="true" aria-label="本文">hidden</div></div><div inert><div contenteditable="true" aria-label="本文">inert</div></div><div contenteditable="false" aria-label="本文">readonly</div><div contenteditable="true" aria-disabled="true" aria-label="本文">disabled</div><div style="visibility:hidden" contenteditable="true" aria-label="本文">invisible</div>', none);
   await test('透明・ゼロサイズ・aria-readonlyの入力欄も無効', '<div style="opacity:0" contenteditable="true" aria-label="本文">透明。</div><div style="width:0;height:0;overflow:hidden" contenteditable="true" aria-label="本文">ゼロ。</div><div contenteditable="true" aria-label="本文" aria-readonly="true">readonly</div>', none);
+  await test('透明な祖先の内側にある本文も無効', '<section style="opacity:0"><div contenteditable="true" aria-label="本文">透明。</div></section>', none);
   await test('タイトルと保存操作のある執筆フォーム', '<form><input aria-label="タイトル"><div id="draft" contenteditable="true"><p>本文。</p></div><button type="button">下書き保存</button></form>', () => is('draft'));
   await test('ツールバーだけでは本文にしない', '<section><div role="toolbar"><button>太字</button></div><div contenteditable="true">文章。</div></section>', none);
   await test('タイトル欄は保存操作があっても除外', '<form><input aria-label="タイトル"><div contenteditable="true" aria-label="タイトル">記事タイトル</div><button>公開する</button></form>', none);
@@ -82,6 +83,12 @@ export async function runSurfaceChecks() {
     none();
     assert(frame.contentDocument?.querySelector('[contenteditable="true"]'), 'iframe fixture did not load');
     assert(findDraftEditor(frame.contentDocument!) === null, 'iframe was accepted');
+  });
+  await test('本文から除いたscriptとstyleを置換範囲に含めない', '<div contenteditable="true" aria-label="本文"><p id="paragraph">前<style>.unused{color:red}</style><script type="application/json">{}</script>後</p></div>', () => {
+    const paragraph = element('paragraph');
+    assert(blockText(paragraph) === '前後', 'non-draft element text leaked');
+    assert(rangeAt(paragraph, 0, 2) === null, 'replacement crossed omitted elements');
+    assert(rangeAt(paragraph, 1, 1)?.toString() === '後', 'valid range missing');
   });
   await test('本文中の埋め込みiframeだけなら対象外にしない', '<div id="draft" contenteditable="true" aria-label="本文"><p>原稿。</p><iframe src="about:blank" contenteditable="false"></iframe></div>', () => is('draft'));
   await test('候補表示中の保存用HTMLは元の本文のまま', '<div id="draft" contenteditable="true" aria-label="本文"><p id="paragraph">明日は晴れれです。</p></div>', () => {

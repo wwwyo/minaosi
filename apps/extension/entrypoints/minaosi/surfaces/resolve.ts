@@ -8,6 +8,7 @@ export type ResolveResult =
   | { status: 'ambiguous' };
 
 const CTX = 32;
+const EXCLUDED_CONTENT = '[contenteditable="false"], button, input, textarea, select, script, style';
 const graphemes = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 
 /** 共通の前後を除き、文字の途中を切らない最小の置換と原文からの位置差を返す。 */
@@ -42,12 +43,11 @@ export function blockText(el: HTMLElement): string {
 
 /** 編集不可のカードや操作部品を、送信本文とRangeの文字位置の双方から除く。 */
 function textWalker(block: HTMLElement): TreeWalker {
-  const excluded = '[contenteditable="false"], button, input, textarea, select, script, style';
-  const rootExcluded = block.matches(excluded);
+  const rootExcluded = block.matches(EXCLUDED_CONTENT);
   return block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       if (rootExcluded) return NodeFilter.FILTER_REJECT;
-      if (node instanceof Element) return node.matches(excluded) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+      if (node instanceof Element) return node.matches(EXCLUDED_CONTENT) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -110,11 +110,11 @@ export function rangeAt(block: HTMLElement, start: number, length: number): Rang
       startOff = start - acc;
     }
     if (startNode && start + length <= acc + len) {
-      const r = document.createRange();
+      const r = block.ownerDocument.createRange();
       r.setStart(startNode, startOff);
       r.setEnd(n, start + length - acc);
       // 文字列が連続して見えても、間の編集不可カードまで置換してはならない。
-      if (r.cloneContents().querySelector('[contenteditable="false"], button, input, textarea, select')) return null;
+      if (r.cloneContents().querySelector(EXCLUDED_CONTENT)) return null;
       return r;
     }
     acc += len;
