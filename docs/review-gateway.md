@@ -36,7 +36,7 @@ mise exec -- bun run api:dev
 mise exec -- bun run dev
 ```
 
-`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。標準モードの推論はGateway用secretなしで動くが、検索にはGateway IDが必要。
+`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。AI binding にはローカルシミュレーションがなく、`dev.remote` を外す（または `false` にする）と binding が機能せず呼び出しはエラーになる（エラー文は toolchain 依存で、`Connection error.` や `Binding AI needs to be run remotely` を実測）。標準モードの推論はGateway用secretなしで動くが、検索にはGateway IDが必要。
 
 次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードの推論にはAI binding、検索にはGateway IDを使う。GatewayのアカウントIDとトークンはBYOKに必要。
 
@@ -102,6 +102,10 @@ BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用�
 
 標準モードとBYOKの両方に適用する。BYOKの推論料金は利用者のキーに発生するが、Worker の invocation や枠管理は共有インフラであり、BYOK だけ検証を外すとエンドポイント自体への連打の抜け道が残るため。
 
+トークンの単回性は Turnstile 側に依存しない前提で考える。公式は siteverify が `timeout-or-duplicate` で再利用を弾く仕様だが、2026-10-02 に本番 widget のトークンで `/review` が同一トークン連続 3 回 200 を返すことを実測した。有効期間（300秒）内のリプレイは通り得るため、厳密な単回化が必要になったら使用済みトークンの hash を KV/DO に記録する自前管理が要る。現状は rate limit と DO 同時枠が実効の歯止め。
+
+エッジ側の防御（WAF custom rule・Bot Fight Mode・Rate Limiting Rules）は zone 単位の機能で、Workers 側の設定やプランとは別系統。workers.dev の入口には載らない。WAF custom rule と Rate Limiting Rules はそれぞれの expression に一致するリクエストだけに作用し、`http.host` 条件で `minaosi.syokan.dev` に絞れる（Rate Limiting Rules で使えるフィールドはプランに依存）。Bot Fight Mode は expression を持たない zone 全体のトグルで、subdomain 単位には切れない。
+
 ### widget の置き場所
 
 widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の side panel がそのページを隠し iframe で開く。「見直す」のたびに side panel が postMessage で実行を依頼し、トークンを受け取って `run` コマンドに載せる。対話が必要な判定になったときだけ widget を pane 内に表示する。拡張の document は MV3 の CSP で remote script（`challenges.cloudflare.com` の api.js）を読めず、content script からページ DOM へ埋めると surface 側の frame-src CSP に遮られるため、この構成にした。API オリジンに置くことで surface ごとの CSP 差を吸収し、multi-surface にもそのまま使える。トークンは実行を依頼した親オリジンにだけ返す。
@@ -128,9 +132,9 @@ BYOKのGatewayへのリクエストには `cf-aig-collect-log: true` と `cf-aig
 
 標準モードは `REVIEW_GATEWAY_ID` を設定した場合だけGatewayを通り、binding経路の `gateway` オプションに `collectLog: true` と `skipCache: true` を渡す。BYOK用の `CLOUDFLARE_AI_GATEWAY_ID` があっても標準経路へは流用しない — binding経路ではリクエスト単位のpayload抑制ヘッダー（`cf-aig-collect-log-payload`）を送れず、BYOK用Gatewayのpayload保存設定をそのまま共有できないため、専用のopt-in変数に分けた。`REVIEW_GATEWAY_ID` を設定する場合は、先にそのGatewayでログのpayload保存を無効にする。ローカルOpenCode Go経路はGatewayを通らないため、このログの対象外。
 
-`POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。URLなどを自動記録するinvocation logsとtracesも無効にしている。
+`POST /review` ごとに、`event`、ランダムな `requestId`、HTTP `status`、`durationMs` を構造化ログに記録する。5xxはerror、それ以外は通常のログにする。原稿・APIキー・リクエストURL・上流エラー本文は記録しない。Workers の observability（invocation logs・traces）は request/response の本文を拾わず、載るのはメタデータ・console 出力・例外メッセージまでのため両方とも有効にしている。本文を載せない保証は、Worker側の構造化ログが何を出力するかと例外メッセージの内容に依存する。
 
-ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `apps/api/cloudflare.config.ts` の `observability.logs` にあり、サンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。
+ローカルではOrcaのサーバーターミナルに表示される。公開WorkerではCloudflareのWorkers Logsに保存され、WorkerのObservability画面で検索できる。2026-10-01確認時点で、Freeは1日20万件・3日保存、Paidは月2,000万件込み・7日保存、超過は100万件あたり$0.60。Workersプランの基本料金・AI利用料は別。設定は `apps/api/cloudflare.config.ts` の `observability` にあり、logs・traces のサンプリング率は現在100%。保存ログは監査台帳や長期保存には使わない。
 
 型チェックでは `cf workers types` でbinding・runtimeの型を生成し、Worker用の `apps/api/src/tsconfig.json` と拡張用の型チェックを分ける。Workersの型をブラウザ側へ混ぜるとDOMの型と衝突するため、生成物は拡張用の対象から除外する。
 
