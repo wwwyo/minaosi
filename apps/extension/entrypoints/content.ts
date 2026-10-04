@@ -1,9 +1,10 @@
-import { noteAdapter } from './minaosi/surfaces/note';
+import { genericAdapter } from './minaosi/surfaces/generic';
 import { Controller } from './minaosi/controller';
 import { PANEL_PORT, type PanelCommand, type PanelUpdate } from './minaosi/panel-messages';
 
 export default defineContentScript({
-  matches: ['*://editor.note.com/*'],
+  matches: ['http://*/*', 'https://*/*'],
+  allFrames: false,
   runAt: 'document_idle',
   main(ctx) {
     let ctrl: Controller | null = null;
@@ -14,15 +15,13 @@ export default defineContentScript({
     };
 
     const check = () => {
-      const found = noteAdapter.findEditor(document);
-      if (found && !ctrl) {
+      const found = genericAdapter.findEditor(document);
+      if (found && (!ctrl || found !== editor)) {
+        // 同じblock indexでも別の原稿を指しうるため、指摘を新しいrootへ引き継がない。
+        ctrl?.dispose();
         editor = found;
-        ctrl = new Controller(noteAdapter, found, publish);
+        ctrl = new Controller(genericAdapter, found, publish);
         void ctrl.init();
-      } else if (found && found !== editor) {
-        // SPA 遷移やエディタの再描画で root が入れ替わった場合は監視対象だけ差し替える
-        editor = found;
-        ctrl?.setEditor(found);
       } else if (!found && ctrl) {
         ctrl.dispose();
         ctrl = null;
@@ -34,7 +33,11 @@ export default defineContentScript({
     const onConnect = (port: Browser.runtime.Port) => {
       if (port.name !== PANEL_PORT || port.sender?.id !== browser.runtime.id) return;
       ports.add(port);
-      port.onMessage.addListener((command: PanelCommand) => ctrl?.handleCommand(command));
+      port.onMessage.addListener((command: PanelCommand) => {
+        const current = ctrl;
+        check();
+        if (current && current === ctrl) current.handleCommand(command);
+      });
       port.onDisconnect.addListener(() => ports.delete(port));
       port.postMessage({ type: 'state', state: ctrl?.snapshot() ?? null } satisfies PanelUpdate);
     };
@@ -43,9 +46,15 @@ export default defineContentScript({
     check();
     // 先行接続したpaneにはonConnectが届かないため、登録完了後に接続し直してもらう。
     void browser.runtime.sendMessage({ type: 'minaosi:content-ready' }).catch(() => {});
-    // エディタの遅延描画・SPA 遷移を拾う。見つかってからも軽い querySelectorAll を定期実行するだけ
+    // 属性や周辺操作の変化も再判定するため、検出したrootだけの監視には限定しない。
     ctx.setInterval(check, 3000);
-    ctx.addEventListener(window, 'wxt:locationchange', check);
+    ctx.addEventListener(window, 'wxt:locationchange', () => {
+      ctrl?.dispose();
+      ctrl = null;
+      editor = null;
+      publish(null);
+      check();
+    });
     ctx.onInvalidated(() => {
       ctrl?.dispose();
       ctrl = null;

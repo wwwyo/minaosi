@@ -27,6 +27,7 @@ export class Controller {
   private handledSequence = 0;
   private reviewSequence = 0;
   private providerLoad = 0;
+  private disposed = false;
   private unwatch: (() => void)[] = [];
   private stopPanelWatch: (() => void) | null = null;
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
@@ -91,6 +92,7 @@ export class Controller {
   }
 
   handleCommand(command: PanelCommand) {
+    if (this.disposed) return;
     switch (command.action) {
       case 'run': void this.run(command.turnstile); return;
       case 'select': this.select(command.id); return;
@@ -112,6 +114,7 @@ export class Controller {
   }
 
   async init() {
+    if (this.disposed) return;
     const reload = () => { void this.loadProvider(); };
     this.unwatch = [reviewModeItem.watch(reload), providerItem.watch(reload),
       ...Object.values(PROVIDER_SETTINGS).flatMap((settings) => [settings.key.watch(reload), settings.model.watch(reload)]),
@@ -127,25 +130,10 @@ export class Controller {
     const provider = isReviewProvider(storedProvider) ? storedProvider : 'anthropic';
     const settings = PROVIDER_SETTINGS[provider];
     const [apiKey, model] = await Promise.all([settings.key.getValue(), settings.model.getValue()]);
-    if (generation !== this.providerLoad) return;
+    if (this.disposed || generation !== this.providerLoad) return;
     this.config = { mode: mode === 'byok' ? 'byok' : 'default', provider, apiKey, model };
     this.s.connectionLoading = false;
     this.render();
-  }
-
-  setEditor(editor: HTMLElement) {
-    if (editor === this.editor) return;
-    this.editor = editor;
-    this.deco.setEditor(editor);
-    if (this.s.findings.length) {
-      // SPA 遷移等でエディタ DOM が差し替わった場合、ブロック index で再アンカーを試みる
-      const blocks = this.adapter.extractBlocks(editor);
-      for (const f of this.s.findings) {
-        const b = f.block >= 0 ? blocks[f.block] : undefined;
-        f.blockEl = b?.index === f.block ? b.element : undefined;
-      }
-      this.render();
-    }
   }
 
   private byId(fid: string) {
@@ -153,6 +141,7 @@ export class Controller {
   }
 
   private render() {
+    if (this.disposed) return;
     this.publish(this.snapshot());
     this.deco.render(this.s.findings, this.s.selectedId);
   }
@@ -197,7 +186,8 @@ export class Controller {
   /* ---- 見直す ---- */
 
   async run(turnstile?: TurnstileProof) {
-    if (this.s.phase === 'running' || this.s.connectionLoading) return;
+    if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
+    if (this.adapter.findEditor(document) !== this.editor) return;
     if (turnstile?.error) {
       this.s.phase = 'error';
       this.s.error = turnstile.error;
@@ -223,6 +213,8 @@ export class Controller {
         : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
       msg.turnstileToken = turnstile?.token;
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
+      if (this.disposed) return;
+      if (this.adapter.findEditor(document) !== this.editor) throw new Error('無効な画面です');
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
@@ -303,6 +295,7 @@ export class Controller {
   }
 
   private applyMatchCore(fid: string, idx: number) {
+    if (this.disposed || this.adapter.findEditor(document) !== this.editor) return;
     const f = this.byId(fid);
     const m = f?.matches[idx];
     if (!f || !m || !f.blockEl || m.applied || m.to === undefined) return;
@@ -405,6 +398,7 @@ export class Controller {
 
   /** 適用済み → 各箇所を原文へ戻す（それぞれ1編集操作）。削除 → 未対応へ復元 */
   private revert(fid: string) {
+    if (this.disposed || this.adapter.findEditor(document) !== this.editor) return;
     const f = this.byId(fid);
     if (!f) return;
     if (f.state === 'deleted') {
@@ -444,6 +438,9 @@ export class Controller {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    cancelAnimationFrame(this.staleRaf);
     this.stopPanelWatch?.();
     ++this.providerLoad;
     for (const unwatch of this.unwatch) unwatch();

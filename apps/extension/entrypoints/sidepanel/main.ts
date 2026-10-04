@@ -61,7 +61,7 @@ async function runReview() {
 
 function showUnavailable() {
   root.dataset.view = '';
-  root.innerHTML = '<div class="mn"><div class="empty">noteの原稿編集画面を開いてください</div></div>';
+  root.innerHTML = '<div class="mn"><div class="empty">無効な画面です</div></div>';
 }
 
 wirePanel(root, {

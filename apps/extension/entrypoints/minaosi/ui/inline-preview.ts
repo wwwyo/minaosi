@@ -17,7 +17,7 @@ interface Preview {
   width: number;
 }
 
-const REPLACED_ELEMENTS = 'img,video,audio,iframe,hr,svg,math,object,embed,script,style,input,textarea,button,select';
+const REPLACED_ELEMENTS = 'img,video,audio,iframe,hr,svg,math,object,embed,script,style,input,textarea,button,select,[contenteditable="false"]';
 const TEXT_STYLE = ['font-family', 'font-size', 'font-weight', 'font-style', 'font-variant', 'letter-spacing', 'line-height', 'text-align', 'text-indent', 'text-transform', 'text-decoration', 'white-space', 'word-break', 'overflow-wrap', 'direction', 'color', 'vertical-align', 'padding', 'border', 'box-sizing', 'display', 'margin', 'list-style'];
 
 /** 原稿に識別属性を追加しないよう、既存IDかDOM上の位置で高さの規則を限定する。 */
@@ -93,7 +93,10 @@ export class InlinePreview {
     for (const site of sites) {
       if (!site.range || (site.kind !== 'suggest' && site.kind !== 'applied')) continue;
       let block = site.range.startContainer.parentElement;
-      while (block && block.parentElement !== this.editor) block = block.parentElement;
+      let root = block;
+      while (root?.parentElement?.isContentEditable && this.editor.contains(root.parentElement)) root = root.parentElement;
+      if (!root?.isContentEditable || !this.editor.contains(root)) continue;
+      while (block && block !== root && block.parentElement !== root) block = block.parentElement;
       if (!block || block.matches(REPLACED_ELEMENTS) || block.querySelector(REPLACED_ELEMENTS)) continue;
       const group = groups.get(block) ?? [];
       group.push(site);
