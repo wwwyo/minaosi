@@ -46,7 +46,7 @@ bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 ## 技術スタック
 
 - TypeScript / Bun / WXT（Manifest V3、multi-browser 対応の拡張 FW）
-- 初期ターゲット surface: note（editor.note.com の content script）。Zenn/Qiita 等への横展開を見据え、surface ごとの差分は adapter として隔離する
+- HTTP／HTTPSページの執筆画面をヒューリスティックで検知する。初版は通常のcontenteditableのみ。本文を確定できない場合は無効とし、入力方式ごとの差分はadapterへ隔離する（範囲と検証は `docs/prd/multi-surface/research.md`）
 
 ## 設計の軸
 

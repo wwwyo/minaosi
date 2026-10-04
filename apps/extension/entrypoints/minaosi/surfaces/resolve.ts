@@ -8,6 +8,7 @@ export type ResolveResult =
   | { status: 'ambiguous' };
 
 const CTX = 32;
+const EXCLUDED_CONTENT = '[contenteditable="false"], button, input, textarea, select, script, style';
 const graphemes = new Intl.Segmenter('ja', { granularity: 'grapheme' });
 
 /** 共通の前後を除き、文字の途中を切らない最小の置換と原文からの位置差を返す。 */
@@ -34,7 +35,22 @@ export function minimalReplacement(from: string, to: string): { from: string; to
 }
 
 export function blockText(el: HTMLElement): string {
-  return (el.textContent ?? '').replace(/\u00a0/g, ' ');
+  const walker = textWalker(el);
+  let text = '';
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) text += node.textContent ?? '';
+  return text.replace(/\u00a0/g, ' ');
+}
+
+/** 編集不可のカードや操作部品を、送信本文とRangeの文字位置の双方から除く。 */
+function textWalker(block: HTMLElement): TreeWalker {
+  const rootExcluded = block.matches(EXCLUDED_CONTENT);
+  return block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (rootExcluded) return NodeFilter.FILTER_REJECT;
+      if (node instanceof Element) return node.matches(EXCLUDED_CONTENT) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
 }
 
 export function occurrences(text: string, needle: string): number[] {
@@ -83,7 +99,7 @@ export function seamIndex(text: string, before: string, after: string): number |
 }
 
 export function rangeAt(block: HTMLElement, start: number, length: number): Range | null {
-  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  const walker = textWalker(block);
   let acc = 0;
   let startNode: Text | null = null;
   let startOff = 0;
@@ -94,9 +110,11 @@ export function rangeAt(block: HTMLElement, start: number, length: number): Rang
       startOff = start - acc;
     }
     if (startNode && start + length <= acc + len) {
-      const r = document.createRange();
+      const r = block.ownerDocument.createRange();
       r.setStart(startNode, startOff);
       r.setEnd(n, start + length - acc);
+      // 文字列が連続して見えても、間の編集不可カードまで置換してはならない。
+      if (r.cloneContents().querySelector(EXCLUDED_CONTENT)) return null;
       return r;
     }
     acc += len;
@@ -134,7 +152,7 @@ export function undoSite(m: MatchSite): { from: string; before: string; after: s
 
 /** Range の開始位置をブロック本文中の文字 index に戻す（適用後の undo 文脈採取用） */
 export function indexOfRange(block: HTMLElement, range: Range): number | null {
-  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+  const walker = textWalker(block);
   let acc = 0;
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
     if (n === range.startContainer) return acc + range.startOffset;

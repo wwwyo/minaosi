@@ -139,18 +139,6 @@ export class Decorations {
     );
   }
 
-  setEditor(editor: HTMLElement) {
-    if (editor === this.editor) return;
-    this.editor = editor;
-    this.inline?.setEditor(editor);
-    this.mo?.disconnect();
-    this.mo?.observe(editor, MO_OPTS);
-    this.ro.disconnect();
-    this.ro.observe(editor);
-    this.dirty = true;
-    this.schedule();
-  }
-
   render(findings: Finding[], selectedId: string | null) {
     if (findings !== this.findings || selectedId !== this.selectedId) this.inline?.showReview();
     this.findings = findings;

@@ -8,7 +8,8 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "check": "wxt prepare && tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "test:surfaces": "bun tests/surfaces-server.ts"
   },
   "dependencies": {
     "@minaosi/api": "workspace:*",
