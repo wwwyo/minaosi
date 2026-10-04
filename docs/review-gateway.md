@@ -36,7 +36,7 @@ mise exec -- bun run api:dev
 mise exec -- bun run dev
 ```
 
-`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。`dev.remote` を外してもローカル推論にフォールバックせず、呼び出しは `Connection error.` で失敗する。標準モードの推論はGateway用secretなしで動くが、検索にはGateway IDが必要。
+`api:dev` は `cf dev --mode development` でWorkersのローカルシミュレーターを `http://127.0.0.1:8787` に起動する。開発用拡張の接続先は既定で `/review`。Bunの別サーバーは使わない。`GET /health` の `configured` はAI bindingの有無だけを返し、AIを呼び出さない。ローカルのAI bindingは `cloudflare.config.ts` の `dev.remote` でCloudflareのAPIへ転送するため、標準モードの実モデル実行にはCloudflareの認証（cf auth）とWorkers Paidプランが必要。AI binding にはローカルシミュレーションがなく、`dev.remote` を外す（または `false` にする）と binding が機能せず呼び出しはエラーになる（エラー文は toolchain 依存で、`Connection error.` や `Binding AI needs to be run remotely` を実測）。標準モードの推論はGateway用secretなしで動くが、検索にはGateway IDが必要。
 
 次の環境変数を mise から注入する。秘密は secret-env skill の mise + age の手順で管理し、平文の `.env` や `.dev.vars` は作らない。標準モードの推論にはAI binding、検索にはGateway IDを使う。GatewayのアカウントIDとトークンはBYOKに必要。
 
@@ -104,7 +104,7 @@ BYOKは運営者負担の枠を使わず、既存のIPレート制限を適用�
 
 トークンの単回性は Turnstile 側に依存しない前提で考える。公式は siteverify が `timeout-or-duplicate` で再利用を弾く仕様だが、2026-10-02 に本番 widget のトークンで `/review` が同一トークン連続 3 回 200 を返すことを実測した。有効期間（300秒）内のリプレイは通り得るため、厳密な単回化が必要になったら使用済みトークンの hash を KV/DO に記録する自前管理が要る。現状は rate limit と DO 同時枠が実効の歯止め。
 
-エッジ側の防御（WAF custom rule・Bot Fight Mode・Rate Limiting Rules）は zone 単位の機能で、Workers 側の設定やプランとは別系統。workers.dev の入口には載らず、有効化すると `syokan.dev` zone 全体に適用される。`minaosi.syokan.dev` だけに絞るには WAF custom rule で host 条件を書く必要があり、Bot Fight Mode は zone 全体のトグルで subdomain 単位に切れない。
+エッジ側の防御（WAF custom rule・Bot Fight Mode・Rate Limiting Rules）は zone 単位の機能で、Workers 側の設定やプランとは別系統。workers.dev の入口には載らない。WAF custom rule と Rate Limiting Rules はそれぞれの expression に一致するリクエストだけに作用し、`http.host` 条件で `minaosi.syokan.dev` に絞れる（Rate Limiting Rules で使えるフィールドはプランに依存）。Bot Fight Mode は expression を持たない zone 全体のトグルで、subdomain 単位には切れない。
 
 ### widget の置き場所
 
