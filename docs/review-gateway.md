@@ -114,13 +114,15 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 ### 本番キー
 
-本番 widget（`minaosi-review`、invisible）は `minaosi.syokan.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。Worker の公開入口は custom domain に絞り、`workersDev` と `previewUrls` は無効化している。別環境で作り直す場合の手順:
+本番 widget（`minaosi-review`、invisible）は `minaosi.syokan.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。本番の公開入口は custom domain に絞り、`workersDev` は無効化している。`previewUrls` は有効で、Worker のプレビュー専用 Cloudflare Access により Cloudflare アカウントのメンバーだけにアクセスを許可する。別環境で作り直す場合の手順:
 
 1. `cf turnstile widgets create --body '{"name":"<widget名>","domains":["<公開ホスト名>"],"mode":"invisible"}'` で widget を作成する（`mode` は生成されたフラグに無いため `--body` で渡す）。invisible は常時は表示されず、対話が必要な判定のときだけ challenge が表示される。hostname には Worker の公開ホスト名（`minaosi.syokan.dev` のようなカスタムドメイン）を登録する。
 2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
 3. secret key を Worker へ登録する（上記の `cf workers secrets bulk` と同じ手順）。
 
 `TURNSTILE_SECRET_KEY` が無く sitekey もテストキー以外なら `/review` は503を返す（fail closed）。本番で必ず実キーを設定する。テスト用の鍵ペアの一覧は [Testing](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) を参照。
+
+プレビューで拡張から校閲を実行するには、プレビューの hostname に対応した Turnstile 設定と Access 認証を送れる接続方式が必要。現在の拡張は `credentials: 'omit'` で API を呼ぶため、ブラウザで Access にログインするだけでは `/review` を呼べない。
 
 Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処理と、Workers固有のDOクラスをここでexportする。DOクラスはWorker用の型チェックで検証し、BunのHTTP処理テストにはWorkersのruntime moduleを読み込ませない。
 
