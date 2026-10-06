@@ -97,11 +97,21 @@ function createDetection(doc: Document) {
     if (!context) return false;
     const title = [...context.querySelectorAll<HTMLElement>('input, textarea, [contenteditable]')]
       .some(input => input !== element && visible(input) && TITLE.test(purpose(input)));
-    const publish = [...context.querySelectorAll<HTMLElement>('button, [role="button"], input[type="submit"]')]
+    if (!title) return false;
+    const regions = [context];
+    if (context.matches('main, [role="main"]')) {
+      const siblings = [...(context.parentElement?.children ?? [])];
+      // 複数の執筆領域がある画面では、外側の保存操作を特定の原稿へ結び付けられない。
+      if (siblings.filter(sibling => sibling.matches('main, [role="main"]')).length === 1) {
+        regions.push(...siblings.filter((sibling): sibling is HTMLElement => sibling instanceof HTMLElement
+          && sibling.matches('header, [role="banner"]') && visible(sibling) && !excluded(sibling)));
+      }
+    }
+    const publish = regions.some(region => [...region.querySelectorAll<HTMLElement>('button, [role="button"], input[type="submit"]')]
       .some(button => visible(button) && PUBLISH.test((button.getAttribute('aria-label')
-        || (button instanceof HTMLInputElement ? button.value : button.textContent) || '').trim()));
+        || (button instanceof HTMLInputElement ? button.value : button.textContent) || '').trim())));
     // 装飾ツールバーはコメント欄にもあるので、タイトルと保存・公開の関係まで要求する。
-    return title && publish;
+    return publish;
   }
 
   function bodyGroup(element: HTMLElement): HTMLElement | null {
