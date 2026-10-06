@@ -6,10 +6,10 @@ export default defineConfig(({ mode }) => ({
     entrypoint: 'src/index.ts',
     compatibilityDate: '2026-09-22',
     compatibilityFlags: ['nodejs_compat'],
-    // 公開入口は custom domain（minaosi.syokan.dev）だけに絞る。workers.dev と preview URL は残すと
-    // 別 hostname で Turnstile widget の domain 登録を広げる必要があり、管理面を増やすだけになる。
+    // 本番の workers.dev は閉じる。プレビューは Worker の previews 専用 Access policy で保護し、
+    // 本番デプロイでプレビューURLを再び無効化しないよう、ここでも有効にする。
     workersDev: false,
-    previewUrls: false,
+    previewUrls: true,
     exports: { ReviewConcurrency: exports.durableObject({ storage: 'sqlite' }) },
     observability: {
       enabled: true,
