@@ -11,6 +11,7 @@ function createDetection(doc: Document) {
   const purposes = new WeakMap<HTMLElement, string>();
   const exclusions = new WeakMap<HTMLElement, boolean>();
   let labels: Map<string, string[]> | undefined;
+  let collectedInputs: HTMLElement[] | undefined;
 
   /** 入力中の本文そのものを用途判定に使わず、対応するラベルと属性を読む。 */
   function purpose(element: HTMLElement): string {
@@ -78,7 +79,7 @@ function createDetection(doc: Document) {
   }
 
   function inputs(): HTMLElement[] {
-    return [...doc.querySelectorAll<HTMLElement>(INPUTS)].filter(element => {
+    return collectedInputs ??= [...doc.querySelectorAll<HTMLElement>(INPUTS)].filter(element => {
       if (!(element instanceof HTMLTextAreaElement)) {
         if (!element.isContentEditable || element.parentElement?.isContentEditable) return false;
       }
@@ -112,14 +113,15 @@ function createDetection(doc: Document) {
     if (doc.defaultView && doc.defaultView.top !== doc.defaultView) return { status: 'none' };
     const roots = [...new Set(inputs().map(input => bodyGroup(input) ?? input))];
     if (!roots.length) return { status: 'none' };
-    const candidates = roots.filter(usable);
-    const unknown: EditorDetection = { status: 'unknown', candidates };
-    const named = roots.filter(root => BODY.test(purpose(root)));
-    if (named.length > 1) return unknown;
-    const ranked = (named.length ? named : roots).map(editor => {
+    const ranked = roots.map(editor => {
       const rect = editor.getBoundingClientRect();
       return { editor, area: rect.width * Math.max(rect.height, editor.scrollHeight) };
     }).sort((a, b) => b.area - a.area);
+    const candidates = ranked.filter(({ editor }) => usable(editor)).map(({ editor }) => editor);
+    const unknown: EditorDetection = { status: 'unknown', candidates };
+    const named = roots.filter(root => BODY.test(purpose(root)));
+    if (named.length > 1) return unknown;
+    if (named.length === 1) return candidates.includes(named[0]!) ? { status: 'confirmed', editor: named[0]! } : unknown;
     const [first, second] = ranked;
     // 近い大きさの候補をDOM順で選ぶと、別の入力欄を自動校閲してしまう。
     if (!first || (second && first.area < second.area * 2) || !candidates.includes(first.editor)) return unknown;

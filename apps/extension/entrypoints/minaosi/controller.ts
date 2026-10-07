@@ -43,7 +43,7 @@ export class Controller {
   constructor(
     private adapter: SurfaceAdapter,
     private editor: HTMLElement,
-    private publish: (state: ReviewState) => void,
+    private publish: () => void,
   ) {
     this.host = document.createElement('div');
     this.host.id = 'minaosi-root';
@@ -142,7 +142,7 @@ export class Controller {
 
   private render() {
     if (this.disposed) return;
-    this.publish(this.snapshot());
+    this.publish();
     this.deco.render(this.s.findings, this.s.selectedId);
   }
 
@@ -188,7 +188,7 @@ export class Controller {
   }
 
   private canRun(trigger: ReviewTrigger): boolean {
-    return selectReviewEditor(this.adapter.detectEditor(document), trigger, this.editor) === this.editor;
+    return selectReviewEditor(this.adapter.detectEditor(document), trigger) === this.editor;
   }
 
   /* ---- 見直す ---- */

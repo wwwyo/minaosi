@@ -11,7 +11,6 @@ export default defineContentScript({
     let ctrl: Controller | null = null;
     let editor: HTMLElement | null = null;
     let editorId: string | null = null;
-    let manualEditor: HTMLElement | null = null;
     let detection: EditorDetection = { status: 'none' };
     const ports = new Set<Browser.runtime.Port>();
     const snapshot = (): NonNullable<PanelUpdate['state']> => ({
@@ -29,9 +28,9 @@ export default defineContentScript({
       const previousStatus = detection.status;
       const previousEditor = editor;
       detection = genericAdapter.detectEditor(document);
-      const found = selectReviewEditor(detection, 'manual', manualEditor);
+      const found = selectReviewEditor(detection, 'manual');
       if (found && (!ctrl || found !== editor)) {
-        // 別の原稿へ指摘を引き継がず、手動で選んでも未判定を自動校閲の許可に変えない。
+        // 別の原稿へ指摘を引き継がず、手動実行の候補を自動校閲の許可に変えない。
         ctrl?.dispose();
         editor = found;
         editorId = crypto.getRandomValues(new Uint32Array(4)).join('-');
@@ -45,16 +44,6 @@ export default defineContentScript({
       }
       if (previousStatus !== detection.status || previousEditor !== editor) publish();
     };
-
-    const rememberEditor = (event: Event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.closest('[contenteditable], textarea')) return;
-      const current = genericAdapter.detectEditor(document);
-      manualEditor = current.status === 'unknown' ? current.candidates.find(candidate => candidate.contains(target)) ?? null : null;
-      check();
-    };
-    ctx.addEventListener(document, 'focusin', rememberEditor);
-    ctx.addEventListener(document, 'pointerdown', rememberEditor);
 
     const onConnect = (port: Browser.runtime.Port) => {
       if (port.name !== PANEL_PORT || port.sender?.id !== browser.runtime.id) return;
@@ -79,7 +68,6 @@ export default defineContentScript({
       ctrl = null;
       editor = null;
       editorId = null;
-      manualEditor = null;
       check();
       publish();
     });

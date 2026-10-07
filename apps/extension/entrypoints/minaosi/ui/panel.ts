@@ -75,7 +75,7 @@ function listBody(s: PanelState, showHandled: boolean): string {
   }
   if (isEmptyState(s)) {
     const hint = s.editorStatus === 'unknown'
-      ? `<div class="empty">${s.canReview ? '本文かは未判定です。選んだ編集領域を見直せます。' : '本文かは未判定です。見直したい編集領域をクリックしてください。'}</div>` : '';
+      ? `<div class="empty">${s.canReview ? '本文かは未判定です。最大の編集領域を見直せます。' : '編集領域はありますが、この編集方式にはまだ対応していません。'}</div>` : '';
     return `<div class="empty-start">${hint}<button class="run-btn" data-act="run"${s.connectionLoading || !s.canReview ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
   if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
