@@ -1,4 +1,5 @@
 import { genericAdapter } from './minaosi/surfaces/generic';
+import { selectReviewEditor, type EditorDetection } from './minaosi/surfaces/types';
 import { Controller } from './minaosi/controller';
 import { PANEL_PORT, type PanelCommand, type PanelUpdate } from './minaosi/panel-messages';
 
@@ -9,25 +10,39 @@ export default defineContentScript({
   main(ctx) {
     let ctrl: Controller | null = null;
     let editor: HTMLElement | null = null;
+    let editorId: string | null = null;
+    let detection: EditorDetection = { status: 'none' };
     const ports = new Set<Browser.runtime.Port>();
-    const publish = (state: PanelUpdate['state']) => {
+    const snapshot = (): NonNullable<PanelUpdate['state']> => ({
+      ...(ctrl?.snapshot() ?? { phase: 'idle', view: 'list', selectedId: null, findings: [], connectionLoading: false }),
+      editorStatus: detection.status,
+      canReview: ctrl !== null,
+      editorId,
+    });
+    const publish = () => {
+      const state = snapshot();
       for (const port of ports) port.postMessage({ type: 'state', state } satisfies PanelUpdate);
     };
 
     const check = () => {
-      const found = genericAdapter.findEditor(document);
+      const previousStatus = detection.status;
+      const previousEditor = editor;
+      detection = genericAdapter.detectEditor(document);
+      const found = selectReviewEditor(detection, 'manual');
       if (found && (!ctrl || found !== editor)) {
-        // 同じblock indexでも別の原稿を指しうるため、指摘を新しいrootへ引き継がない。
+        // 別の原稿へ指摘を引き継がず、手動実行の候補を自動校閲の許可に変えない。
         ctrl?.dispose();
         editor = found;
+        editorId = crypto.getRandomValues(new Uint32Array(4)).join('-');
         ctrl = new Controller(genericAdapter, found, publish);
         void ctrl.init();
       } else if (!found && ctrl) {
         ctrl.dispose();
         ctrl = null;
         editor = null;
-        publish(null);
+        editorId = null;
       }
+      if (previousStatus !== detection.status || previousEditor !== editor) publish();
     };
 
     const onConnect = (port: Browser.runtime.Port) => {
@@ -36,24 +51,25 @@ export default defineContentScript({
       port.onMessage.addListener((command: PanelCommand) => {
         const current = ctrl;
         check();
+        if (command.action === 'run' && command.editorId !== editorId) return;
+        if (command.action === 'run' && command.trigger === 'automatic' && detection.status !== 'confirmed') return;
         if (current && current === ctrl) current.handleCommand(command);
       });
       port.onDisconnect.addListener(() => ports.delete(port));
-      port.postMessage({ type: 'state', state: ctrl?.snapshot() ?? null } satisfies PanelUpdate);
+      port.postMessage({ type: 'state', state: snapshot() } satisfies PanelUpdate);
     };
     browser.runtime.onConnect.addListener(onConnect);
 
     check();
-    // 先行接続したpaneにはonConnectが届かないため、登録完了後に接続し直してもらう。
     void browser.runtime.sendMessage({ type: 'minaosi:content-ready' }).catch(() => {});
-    // 属性や周辺操作の変化も再判定するため、検出したrootだけの監視には限定しない。
     ctx.setInterval(check, 3000);
     ctx.addEventListener(window, 'wxt:locationchange', () => {
       ctrl?.dispose();
       ctrl = null;
       editor = null;
-      publish(null);
+      editorId = null;
       check();
+      publish();
     });
     ctx.onInvalidated(() => {
       ctrl?.dispose();

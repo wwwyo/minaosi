@@ -18,7 +18,7 @@ const connection = new PanelConnection(
   (tabId, name) => browser.tabs.connect(tabId, { name }),
   (state) => {
     latestState = state;
-    if (!state) { selectedId = null; showUnavailable(); return; }
+    if (!state) { selectedId = null; showWaiting(); return; }
     updatePanel(root, state, showHandled);
     if (state.selectedId !== selectedId) {
       selectedId = state.selectedId;
@@ -35,33 +35,35 @@ const send = connection.send.bind(connection);
 const turnstile = TurnstileGate.fromReviewEndpoint(import.meta.env.WXT_REVIEW_API_URL ?? '');
 let runInFlight = false;
 async function runReview() {
+  if (!latestState?.canReview || !latestState.editorId) return;
+  const editorId = latestState.editorId;
   // トークン取得中の連打を無視する（run コマンド側の running 状態が立つのはトークン到着後）
   if (runInFlight) return;
   runInFlight = true;
   try {
     if (!turnstile) {
-      send({ action: 'run', turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
+      send({ action: 'run', trigger: 'manual', editorId, turnstile: { error: '校閲サーバーの接続先が設定されていません' } });
       return;
     }
     // 確認の応答待ちに別タブへ切り替わっていると、そのタブの原稿送信・エラー表示に化ける
     const tabAtStart = connection.activeTabId;
-    const switched = () => connection.activeTabId !== tabAtStart;
+    const switched = () => connection.activeTabId !== tabAtStart || latestState?.editorId !== editorId;
     try {
       const token = await turnstile.acquire();
       if (switched()) return;
-      send({ action: 'run', turnstile: { token } });
+      send({ action: 'run', trigger: 'manual', editorId, turnstile: { token } });
     } catch (e) {
       if (switched()) return;
-      send({ action: 'run', turnstile: { error: e instanceof Error ? e.message : String(e) } });
+      send({ action: 'run', trigger: 'manual', editorId, turnstile: { error: e instanceof Error ? e.message : String(e) } });
     }
   } finally {
     runInFlight = false;
   }
 }
 
-function showUnavailable() {
+function showWaiting() {
   root.dataset.view = '';
-  root.innerHTML = '<div class="mn"><div class="empty">無効な画面です</div></div>';
+  root.innerHTML = '<div class="mn"><div class="empty">編集領域を確認しています…</div></div>';
 }
 
 wirePanel(root, {

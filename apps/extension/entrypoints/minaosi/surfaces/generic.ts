@@ -1,18 +1,17 @@
-import type { SurfaceAdapter } from './types';
+import type { EditorDetection, SurfaceAdapter } from './types';
 import { blockText } from './resolve';
 
 const INPUTS = '[contenteditable], textarea';
 const VIRTUAL_EDITOR = '.cm-editor, .cm-content, .CodeMirror, .monaco-editor, .ace_editor';
 const NON_DRAFT = /(?:^|[\s_\-:./])(comments?|repl(?:y|ies)|search|chat|messages?|contact|inquiry|title|caption|excerpt|summary|tags?|slug|email|password|username|description)(?:$|[\s_\-:./])|コメント|返信|検索|チャット|問い合わせ|タイトル|題名|キャプション|要約|抜粋|タグ|メール|パスワード/i;
 const BODY = /(?:^|[\s_\-:./])(body|content|article|post)(?:$|[\s_\-:./])|本文|記事内容|記事の内容/i;
-const TITLE = /(?:^|[\s_\-:./])title(?:$|[\s_\-:./])|タイトル|題名/i;
-const PUBLISH = /^(公開(?:する)?|投稿(?:する)?|下書き(?:を)?保存|保存(?:する)?|publish(?: post| article)?|save(?: draft)?|update(?: post| article)?)$/i;
 
 function createDetection(doc: Document) {
   // ページのラベル変更を次の判定へ持ち越さないよう、キャッシュは1回の操作内に限定する。
   const purposes = new WeakMap<HTMLElement, string>();
   const exclusions = new WeakMap<HTMLElement, boolean>();
   let labels: Map<string, string[]> | undefined;
+  let collectedInputs: HTMLElement[] | undefined;
 
   /** 入力中の本文そのものを用途判定に使わず、対応するラベルと属性を読む。 */
   function purpose(element: HTMLElement): string {
@@ -80,38 +79,12 @@ function createDetection(doc: Document) {
   }
 
   function inputs(): HTMLElement[] {
-    return [...doc.querySelectorAll<HTMLElement>(INPUTS)].filter(element => {
+    return collectedInputs ??= [...doc.querySelectorAll<HTMLElement>(INPUTS)].filter(element => {
       if (!(element instanceof HTMLTextAreaElement)) {
         if (!element.isContentEditable || element.parentElement?.isContentEditable) return false;
       }
       return visible(element) && !excluded(element);
     });
-  }
-
-  function contextOf(element: HTMLElement): HTMLElement | null {
-    return element.parentElement?.closest<HTMLElement>('form, [role="form"], main, [role="main"], article, section') ?? null;
-  }
-
-  function editingContext(element: HTMLElement): boolean {
-    const context = contextOf(element);
-    if (!context) return false;
-    const title = [...context.querySelectorAll<HTMLElement>('input, textarea, [contenteditable]')]
-      .some(input => input !== element && visible(input) && TITLE.test(purpose(input)));
-    if (!title) return false;
-    const regions = [context];
-    if (context.matches('main, [role="main"]')) {
-      const siblings = [...(context.parentElement?.children ?? [])];
-      // 複数の執筆領域がある画面では、外側の保存操作を特定の原稿へ結び付けられない。
-      if (siblings.filter(sibling => sibling.matches('main, [role="main"]')).length === 1) {
-        regions.push(...siblings.filter((sibling): sibling is HTMLElement => sibling instanceof HTMLElement
-          && sibling.matches('header, [role="banner"]') && visible(sibling) && !excluded(sibling)));
-      }
-    }
-    const publish = regions.some(region => [...region.querySelectorAll<HTMLElement>('button, [role="button"], input[type="submit"]')]
-      .some(button => visible(button) && PUBLISH.test((button.getAttribute('aria-label')
-        || (button instanceof HTMLInputElement ? button.value : button.textContent) || '').trim())));
-    // 装飾ツールバーはコメント欄にもあるので、タイトルと保存・公開の関係まで要求する。
-    return publish;
   }
 
   function bodyGroup(element: HTMLElement): HTMLElement | null {
@@ -130,24 +103,29 @@ function createDetection(doc: Document) {
       .some(element => element.isContentEditable && excluded(element));
   }
 
-  /** 用途を確定できる原稿だけを選ぶ。長さ・面積・フォーカスでは競合を解消しない。 */
-  function findEditor(): HTMLElement | null {
-    if (doc.defaultView && doc.defaultView.top !== doc.defaultView) return null;
-    const candidates = inputs();
-    const drafts = new Set<HTMLElement>();
-    for (const candidate of candidates) {
-      const group = bodyGroup(candidate);
-      if (group) drafts.add(group);
-      else if (BODY.test(purpose(candidate)) || editingContext(candidate)) drafts.add(candidate);
-    }
-    if (drafts.size !== 1) return null;
-    const editor = [...drafts][0]!;
-    if (editor instanceof HTMLTextAreaElement) return null;
-    // textareaのvalueや仮想化modelをDOMのRangeで扱うと、見えていない本文を誤って校閲する。
-    if (editor.closest(VIRTUAL_EDITOR) || editor.querySelector(`${VIRTUAL_EDITOR}, textarea`)) return null;
-    // 同じ編集host内で用途が混在すると、部分抽出とRangeの位置がずれるため無効にする。
-    if (editableRoots(editor).some(hasExcludedEditable)) return null;
-    return editor;
+  function usable(editor: HTMLElement): boolean {
+    return !(editor instanceof HTMLTextAreaElement)
+      && !editor.closest(VIRTUAL_EDITOR) && !editor.querySelector(`${VIRTUAL_EDITOR}, textarea`)
+      && !editableRoots(editor).some(hasExcludedEditable);
+  }
+
+  function detectEditor(): EditorDetection {
+    if (doc.defaultView && doc.defaultView.top !== doc.defaultView) return { status: 'none' };
+    const roots = [...new Set(inputs().map(input => bodyGroup(input) ?? input))];
+    if (!roots.length) return { status: 'none' };
+    const ranked = roots.map(editor => {
+      const rect = editor.getBoundingClientRect();
+      return { editor, area: rect.width * Math.max(rect.height, editor.scrollHeight) };
+    }).sort((a, b) => b.area - a.area);
+    const candidates = ranked.filter(({ editor }) => usable(editor)).map(({ editor }) => editor);
+    const unknown: EditorDetection = { status: 'unknown', candidates };
+    const named = roots.filter(root => BODY.test(purpose(root)));
+    if (named.length > 1) return unknown;
+    if (named.length === 1) return candidates.includes(named[0]!) ? { status: 'confirmed', editor: named[0]! } : unknown;
+    const [first, second] = ranked;
+    // 近い大きさの候補をDOM順で選ぶと、別の入力欄を自動校閲してしまう。
+    if (!first || (second && first.area < second.area * 2) || !candidates.includes(first.editor)) return unknown;
+    return { status: 'confirmed', editor: first.editor };
   }
 
   function editableBlocks(root: HTMLElement): HTMLElement[] {
@@ -164,15 +142,15 @@ function createDetection(doc: Document) {
     const roots = editableRoots(editor);
     return roots.flatMap(editableBlocks).map((element, index) => ({ index, element, text: blockText(element) }));
   }
-  return { findEditor, extractBlocks };
+  return { detectEditor, extractBlocks };
 }
 
-export function findDraftEditor(doc: Document): HTMLElement | null {
-  return createDetection(doc).findEditor();
+export function detectDraftEditor(doc: Document): EditorDetection {
+  return createDetection(doc).detectEditor();
 }
 
 export const genericAdapter: SurfaceAdapter = {
   id: 'generic',
-  findEditor: findDraftEditor,
+  detectEditor: detectDraftEditor,
   extractBlocks: editor => createDetection(editor.ownerDocument).extractBlocks(editor),
 };

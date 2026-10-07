@@ -1,4 +1,5 @@
 import type { PanelState } from './ui/panel';
+import type { ReviewTrigger } from './surfaces/types';
 
 export const PANEL_PORT = 'minaosi:panel';
 
@@ -10,7 +11,7 @@ export interface TurnstileProof {
 }
 
 export type PanelCommand =
-  | { action: 'run'; turnstile?: TurnstileProof }
+  | { action: 'run'; trigger: ReviewTrigger; editorId: string; turnstile?: TurnstileProof }
   | { action: 'select'; id: string | null }
   | { action: 'apply' | 'delete' | 'revert'; id: string };
 

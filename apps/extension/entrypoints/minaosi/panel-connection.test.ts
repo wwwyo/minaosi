@@ -35,7 +35,7 @@ function fixture() {
 }
 
 const readyState: NonNullable<PanelUpdate['state']> = {
-  phase: 'idle', view: 'list', selectedId: null,
+  editorStatus: 'confirmed', canReview: true, editorId: 'test-editor', phase: 'idle', view: 'list', selectedId: null,
   findings: [], connectionLoading: false,
 };
 
@@ -48,8 +48,8 @@ describe('PanelConnection', () => {
     ports[1]!.onMessage.emit({ type: 'state', state: readyState });
     expect(opened).toEqual([{ tabId: 7, name: PANEL_PORT }, { tabId: 7, name: PANEL_PORT }]);
     expect(states.at(-1)).toEqual(readyState);
-    connection.send({ action: 'run' });
-    expect(ports[1]!.sent).toEqual([{ action: 'run' }]);
+    connection.send({ action: 'run', trigger: 'manual', editorId: 'test-editor' });
+    expect(ports[1]!.sent).toEqual([{ action: 'run', trigger: 'manual', editorId: 'test-editor' }]);
   });
 
   test('エディタの遅延描画による null state からの更新は接続を維持して受け取る', () => {
@@ -79,9 +79,9 @@ describe('PanelConnection', () => {
     expect(states.at(-1)).toEqual(readyState);
     expect(errorsConsumed()).toBe(2);
     expect(connection.activeTabId).toBe(8);
-    connection.send({ action: 'run' });
+    connection.send({ action: 'run', trigger: 'manual', editorId: 'test-editor' });
     expect(ports[0]!.sent).toEqual([]);
-    expect(ports[1]!.sent).toEqual([{ action: 'run' }]);
+    expect(ports[1]!.sent).toEqual([{ action: 'run', trigger: 'manual', editorId: 'test-editor' }]);
   });
 
   test('pane 終了後の通知と操作では再接続も state 更新も送信もしない', () => {
@@ -90,7 +90,7 @@ describe('PanelConnection', () => {
     connection.dispose();
     connection.contentReady(7);
     ports[0]!.onMessage.emit({ type: 'state', state: readyState });
-    connection.send({ action: 'run' });
+    connection.send({ action: 'run', trigger: 'manual', editorId: 'test-editor' });
     expect(connection.activeTabId).toBeUndefined();
     expect(opened).toHaveLength(1);
     expect(states).toEqual([null]);

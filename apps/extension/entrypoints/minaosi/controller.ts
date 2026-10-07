@@ -1,12 +1,12 @@
 import { browser } from '#imports';
 import type { DraftBlock, Finding, MatchSite } from './types';
-import type { SurfaceAdapter } from './surfaces/types';
+import { selectReviewEditor, type ReviewTrigger, type SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
-import { renderFab, type PanelState } from './ui/panel';
+import { renderFab, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand, TurnstileProof } from './panel-messages';
 import { PanelToggle } from './panel-toggle';
@@ -32,7 +32,7 @@ export class Controller {
   private stopPanelWatch: (() => void) | null = null;
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
 
-  private s: Omit<PanelState, 'findings'> & { findings: Finding[] } = {
+  private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
     view: 'list',
     selectedId: null,
@@ -43,7 +43,7 @@ export class Controller {
   constructor(
     private adapter: SurfaceAdapter,
     private editor: HTMLElement,
-    private publish: (state: PanelState) => void,
+    private publish: () => void,
   ) {
     this.host = document.createElement('div');
     this.host.id = 'minaosi-root';
@@ -94,7 +94,7 @@ export class Controller {
   handleCommand(command: PanelCommand) {
     if (this.disposed) return;
     switch (command.action) {
-      case 'run': void this.run(command.turnstile); return;
+      case 'run': void this.run(command.trigger, command.turnstile); return;
       case 'select': this.select(command.id); return;
       case 'apply': this.applyFinding(command.id); return;
       case 'delete': {
@@ -109,7 +109,7 @@ export class Controller {
     this.render();
   }
 
-  snapshot(): PanelState {
+  snapshot(): ReviewState {
     return { ...this.s, findings: this.s.findings.map(({ blockEl, ...finding }) => finding) };
   }
 
@@ -142,7 +142,7 @@ export class Controller {
 
   private render() {
     if (this.disposed) return;
-    this.publish(this.snapshot());
+    this.publish();
     this.deco.render(this.s.findings, this.s.selectedId);
   }
 
@@ -183,11 +183,19 @@ export class Controller {
     this.queueRender();
   }
 
+  private isCurrentEditor(): boolean {
+    return this.canRun('manual');
+  }
+
+  private canRun(trigger: ReviewTrigger): boolean {
+    return selectReviewEditor(this.adapter.detectEditor(document), trigger) === this.editor;
+  }
+
   /* ---- 見直す ---- */
 
-  async run(turnstile?: TurnstileProof) {
+  async run(trigger: ReviewTrigger, turnstile?: TurnstileProof) {
     if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
-    if (this.adapter.findEditor(document) !== this.editor) return;
+    if (!this.canRun(trigger)) return;
     if (turnstile?.error) {
       this.s.phase = 'error';
       this.s.error = turnstile.error;
@@ -214,7 +222,7 @@ export class Controller {
       msg.turnstileToken = turnstile?.token;
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
       if (this.disposed) return;
-      if (this.adapter.findEditor(document) !== this.editor) throw new Error('無効な画面です');
+      if (!this.canRun(trigger)) { this.s.phase = 'idle'; this.render(); return; }
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
@@ -295,7 +303,7 @@ export class Controller {
   }
 
   private applyMatchCore(fid: string, idx: number) {
-    if (this.disposed || this.adapter.findEditor(document) !== this.editor) return;
+    if (this.disposed || !this.isCurrentEditor()) return;
     const f = this.byId(fid);
     const m = f?.matches[idx];
     if (!f || !m || !f.blockEl || m.applied || m.to === undefined) return;
@@ -398,7 +406,7 @@ export class Controller {
 
   /** 適用済み → 各箇所を原文へ戻す（それぞれ1編集操作）。削除 → 未対応へ復元 */
   private revert(fid: string) {
-    if (this.disposed || this.adapter.findEditor(document) !== this.editor) return;
+    if (this.disposed || !this.isCurrentEditor()) return;
     const f = this.byId(fid);
     if (!f) return;
     if (f.state === 'deleted') {
