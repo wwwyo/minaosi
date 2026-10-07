@@ -1,5 +1,6 @@
 import { KIND_LABEL, type Finding } from '../types';
 import type { FactCheckSummary } from '@minaosi/api/rpc';
+import type { EditorStatus } from '../surfaces/types';
 import {
   LOGO_MARK, ICON_APPLY, ICON_TRASH, ICON_UNDO,
   ICON_SPARKLES, ICON_EYE, ICON_EYE_OFF,
@@ -10,6 +11,9 @@ export type View = 'list';
 export type PanelFinding = Omit<Finding, 'blockEl'>;
 
 export interface PanelState {
+  editorStatus: EditorStatus;
+  canReview: boolean;
+  editorId: string | null;
   phase: 'idle' | 'running' | 'done' | 'error';
   error?: string;
   factCheck?: FactCheckSummary;
@@ -18,6 +22,8 @@ export interface PanelState {
   findings: PanelFinding[];
   connectionLoading: boolean;
 }
+
+export type ReviewState = Omit<PanelState, 'editorStatus' | 'canReview' | 'editorId'>;
 
 export interface PanelHandlers {
   onRun(): void;
@@ -63,11 +69,14 @@ function isEmptyState(s: PanelState): boolean {
 }
 
 function listBody(s: PanelState, showHandled: boolean): string {
+  if (s.editorStatus === 'none') return '<div class="empty">編集領域はありません</div>';
   if (s.phase === 'error') {
     return `<div class="notice">見直しが完了しませんでした。<br>${esc(s.error ?? '不明なエラー')}</div>`;
   }
   if (isEmptyState(s)) {
-    return `<div class="empty-start"><button class="run-btn" data-act="run"${s.connectionLoading ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
+    const hint = s.editorStatus === 'unknown'
+      ? `<div class="empty">${s.canReview ? '本文かは未判定です。選んだ編集領域を見直せます。' : '本文かは未判定です。見直したい編集領域をクリックしてください。'}</div>` : '';
+    return `<div class="empty-start">${hint}<button class="run-btn" data-act="run"${s.connectionLoading || !s.canReview ? ' disabled' : ''}><span class="pre">${ICON_SPARKLES}</span>${s.connectionLoading ? '読込中…' : '見直す'}</button></div>`;
   }
   if (s.phase === 'running' && s.findings.length === 0) return '<div class="empty">原稿を見直しています…</div>';
   const open = s.findings.filter((f) => f.state === 'open');
