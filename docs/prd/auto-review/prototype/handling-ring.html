@@ -24,8 +24,6 @@
   .track { stroke: var(--line); stroke-width: 2; fill: none; }
   .fill { stroke: var(--ink); stroke-width: 2; fill: none; transform: rotate(-90deg); transform-origin: center; }
   .status { stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; fill: none; }
-  .tooltip { position: fixed; bottom: 80px; right: 24px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: white; font-size: 12px; pointer-events: none; display: none; }
-  .fab:hover + .tooltip, .fab:focus-visible + .tooltip { display: block; }
   .panel { position: fixed; top: 0; bottom: 92px; right: 0; width: min(340px, 90vw); padding: 24px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); background: white; font-size: 13px; overflow: auto; }
   .panel h2 { font-size: 14px; margin: 0 0 32px; }
   .panel p { line-height: 1.8; }
@@ -76,7 +74,6 @@
   </svg>
   <svg class="logo" viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 19V8l4.5-3L12 8v11"/><path d="M12 8l4.5-3L21 8v11"/></svg>
 </button>
-<div class="tooltip" id="tooltip"></div>
 <script>
   const cases = {
     initial: [0, 0, '初回のチェックを待っています'],
@@ -113,7 +110,6 @@
     el('status').setAttribute('d', path);
     const description = cases[state][2] + (hasRatio ? '。' + total + '件中' + handled + '件対応済み' : '');
     el('fab').setAttribute('aria-label', '指摘一覧を開閉する。' + description);
-    el('tooltip').textContent = description;
     el('detail').textContent = description;
     el('remaining').textContent = hasRatio ? (total - handled > 0 ? '未対応の指摘があります。採用するかは自分で判断します。' : 'この原稿の指摘は全て判断しました。文章の正しさを保証する表示ではありません。') : 'この状態では消化率を表示しません。';
     el('actions').hidden = !hasRatio || dim;
