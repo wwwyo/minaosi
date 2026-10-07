@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>minaosi — 消化率の状態見本</title>
+<style>
+  :root { color-scheme: light; --ink: oklch(24% .02 264); --mute: oklch(52% .02 264); --line: oklch(87% .008 264); }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: #fff; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif; }
+  .controls { padding: 18px 24px; border-bottom: 1px solid var(--line); background: #f8f8f9; font-size: 12px; }
+  .controls p { margin: 0 0 12px; color: var(--mute); }
+  .states { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .states button, .action { padding: 7px 10px; background: white; border: 1px solid var(--line); border-radius: 5px; }
+  .states button[aria-pressed="true"] { border-color: var(--ink); }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+  main { max-width: 760px; padding: 72px 36px; margin: auto; }
+  h1 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 60px; line-height: 1.5; }
+  .draft { font-size: 18px; line-height: 2; outline-offset: 12px; }
+  .draft p { margin: 0 0 28px; }
+  .fab { position: fixed; right: 24px; bottom: 24px; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: white; }
+  svg { width: 25px; height: 25px; overflow: visible; }
+  .track { stroke: var(--line); stroke-width: 2; fill: none; }
+  .fill { stroke: var(--ink); stroke-width: 2; fill: none; transform: rotate(-90deg); transform-origin: center; }
+  .status { stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; fill: none; }
+  .tooltip { position: fixed; bottom: 80px; right: 24px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: white; font-size: 12px; pointer-events: none; display: none; }
+  .fab:hover + .tooltip, .fab:focus-visible + .tooltip { display: block; }
+  .panel { position: fixed; top: 0; bottom: 92px; right: 0; width: min(340px, 90vw); padding: 24px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); background: white; font-size: 13px; overflow: auto; }
+  .panel h2 { font-size: 14px; margin: 0 0 32px; }
+  .panel p { line-height: 1.8; }
+  .panel .detail { color: var(--mute); }
+  .panel .action { margin-right: 8px; }
+  [hidden] { display: none !important; }
+</style>
+<div class="controls">
+  <p>PRDの状態見本。上の切替は見本用です。外部送信・校閲・原稿保存は行いません。右下を押しても消化率は変わりません。</p>
+  <div class="states" aria-label="見本の状態">
+    <button data-s="initial">初回待機</button>
+    <button data-s="unknown">未判定</button>
+    <button data-s="empty">指摘なし</button>
+    <button data-s="zero">0 / 5</button>
+    <button data-s="partial">3 / 5</button>
+    <button data-s="done">5 / 5</button>
+    <button data-s="added">新たに2件：3 / 7</button>
+    <button data-s="stale">更新待ち</button>
+    <button data-s="local">部分確認済み</button>
+    <button data-s="running">校閲中</button>
+    <button data-s="paused">一時停止</button>
+    <button data-s="failed">確認が必要</button>
+  </div>
+</div>
+<main>
+  <h1>書く時間を、書くことに使う。</h1>
+  <div class="draft" contenteditable="true" role="textbox" aria-label="見本の本文" aria-multiline="true" spellcheck="false">
+    <p>書き終えるたびに、もう一度ボタンを押す。小さな操作でも、考えていたことから意識が離れる。</p>
+    <p>校閲は文章の区切りで静かに始まる。指摘が届いても、この画面は動かない。</p>
+    <p>採用するか、今回は採用しないか。決めるのは書き手だ。右下の円は、その判断をどこまで進めたかだけを表す。</p>
+  </div>
+</main>
+<aside class="panel" id="panel" hidden aria-label="見本の指摘一覧">
+  <h2>minaosi</h2>
+  <p id="detail" class="detail"></p>
+  <p id="remaining"></p>
+  <div id="actions">
+    <button class="action" id="apply">1件を適用する</button>
+    <button class="action" id="delete">1件を削除する</button>
+    <button class="action" id="restore">1件を未対応へ戻す</button>
+  </div>
+</aside>
+<button class="fab" id="fab" aria-controls="panel" aria-expanded="false">
+  <svg viewBox="0 0 28 28" aria-hidden="true">
+    <circle id="track" class="track" cx="14" cy="14" r="10"></circle>
+    <circle id="fill" class="fill" cx="14" cy="14" r="10" pathLength="100"></circle>
+    <path id="status" class="status"></path>
+  </svg>
+</button>
+<div class="tooltip" id="tooltip"></div>
+<script>
+  const cases = {
+    initial: [0, 0, '初回のチェックを待っています'],
+    unknown: [0, 0, '本文は未判定です。自動チェックは始めません'],
+    empty: [0, 0, '指摘はありません'],
+    zero: [0, 5, '最新版'],
+    partial: [3, 5, '最新版'],
+    done: [5, 5, '最新版'],
+    added: [3, 7, '最新版'],
+    stale: [3, 5, '最新結果を待っています'],
+    local: [3, 5, '変更箇所は確認済みです。文書全体は更新待ちです'],
+    running: [3, 5, '校閲中です'],
+    paused: [3, 5, '自動チェックを一時停止しています'],
+    failed: [3, 5, '確認が必要です。パネルで原因を確認できます'],
+  };
+  let state = 'partial', handled = 3, total = 5;
+  const el = id => document.getElementById(id);
+  function render() {
+    const waiting = ['initial', 'stale', 'local', 'running'].includes(state);
+    const dim = ['stale', 'local', 'running', 'paused', 'failed'].includes(state);
+    const hasRatio = total > 0;
+    el('track').setAttribute('stroke-dasharray', state === 'unknown' ? '2 3' : '');
+    el('fill').hidden = false;
+    el('fill').style.display = hasRatio ? '' : 'none';
+    el('fill').setAttribute('stroke-dasharray', '100');
+    el('fill').setAttribute('stroke-dashoffset', String(100 * (1 - handled / (total || 1))));
+    el('fill').style.opacity = dim ? '.32' : '1';
+    let path = '';
+    if (waiting) path = 'M11 -1H17';
+    else if (state === 'empty') path = 'M11 14H17';
+    else if (state === 'paused') path = 'M12 11V17M16 11V17';
+    else if (state === 'failed') path = 'M11 17L17 11';
+    else if (hasRatio && handled === 0) path = 'M14 2V5';
+    el('status').setAttribute('d', path);
+    const description = cases[state][2] + (hasRatio ? '。' + total + '件中' + handled + '件対応済み' : '');
+    el('fab').setAttribute('aria-label', '指摘一覧を開閉する。' + description);
+    el('tooltip').textContent = description;
+    el('detail').textContent = description;
+    el('remaining').textContent = hasRatio ? (total - handled > 0 ? '未対応の指摘があります。採用するかは自分で判断します。' : 'この原稿の指摘は全て判断しました。文章の正しさを保証する表示ではありません。') : 'この状態では消化率を表示しません。';
+    el('actions').hidden = !hasRatio || dim;
+    el('apply').disabled = el('delete').disabled = handled === total;
+    el('restore').disabled = handled === 0;
+    document.querySelectorAll('[data-s]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === state)));
+  }
+  document.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => {
+    state = b.dataset.s; [handled, total] = cases[state]; render();
+  }));
+  el('fab').addEventListener('click', () => {
+    el('panel').hidden = !el('panel').hidden;
+    el('fab').setAttribute('aria-expanded', String(!el('panel').hidden));
+  });
+  el('apply').onclick = el('delete').onclick = () => { handled = Math.min(total, handled + 1); render(); };
+  el('restore').onclick = () => { handled = Math.max(0, handled - 1); render(); };
+  render();
+</script>
+</html>
