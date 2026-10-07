@@ -97,13 +97,12 @@
     const dim = ['stale', 'local', 'running', 'paused', 'failed'].includes(state);
     const hasRatio = total > 0;
     el('track').setAttribute('stroke-dasharray', state === 'unknown' ? '2 3' : '');
-    el('fill').hidden = false;
     el('fill').style.display = hasRatio ? '' : 'none';
     el('fill').setAttribute('stroke-dasharray', '100');
     el('fill').setAttribute('stroke-dashoffset', String(100 * (1 - handled / (total || 1))));
     el('fill').style.opacity = dim ? '.32' : '1';
     let path = '';
-    if (waiting) path = 'M11 -1H17';
+    if (waiting) path = 'M11 1H17';
     else if (state === 'empty') path = 'M11 14H17';
     else if (state === 'paused') path = 'M12 11V17M16 11V17';
     else if (state === 'failed') path = 'M11 17L17 11';
