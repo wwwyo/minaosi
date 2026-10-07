@@ -1,6 +1,7 @@
 import { browser } from '#imports';
 import { isReviewProvider, review, type ReviewRequest } from './minaosi/review/providers';
 import { PROVIDER_SETTINGS } from './minaosi/store';
+import { TurnstileGate, TurnstileInteractionRequired } from './minaosi/turnstile';
 
 /**
  * 原稿の外部送信は background で行う（content script からの fetch は
@@ -8,7 +9,66 @@ import { PROVIDER_SETTINGS } from './minaosi/store';
  * 校閲サーバーに置き、拡張には配布しない。
  */
 
+interface TurnstileAcquireReply {
+  token?: string;
+  /** widget が人の対話を要求した。呼び出し側は blocked 状態にして静かに待つ。 */
+  interactive?: boolean;
+  error?: string;
+}
+
+interface OffscreenApi {
+  createDocument(opts: { url: string; reasons: string[]; justification: string }): Promise<void>;
+}
+
 export default defineBackground(() => {
+  /**
+   * 自動校閲用の確認トークンを非表示で取る。DOM を持つ background(event page: Firefox)は
+   * 自身に widget の iframe を載せ、DOM を持たない service worker(Chrome)は offscreen
+   * document へ転送する。widget が対話を要求した場合は interactive を返す。
+   */
+  let hiddenGate: TurnstileGate | null = null;
+  let creatingOffscreen: Promise<void> | null = null;
+  const acquireTurnstile = async (): Promise<TurnstileAcquireReply> => {
+    const endpoint = import.meta.env.WXT_REVIEW_API_URL ?? '';
+    if (!endpoint) return { error: '校閲サーバーの接続先が設定されていません' };
+    hiddenGate ??= typeof document !== 'undefined' ? TurnstileGate.fromReviewEndpoint(endpoint, { interactive: false }) : null;
+    if (hiddenGate) {
+      try {
+        return { token: await hiddenGate.acquire() };
+      } catch (e) {
+        return e instanceof TurnstileInteractionRequired
+          ? { interactive: true }
+          : { error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+    const offscreen = (browser as unknown as { offscreen?: OffscreenApi }).offscreen;
+    const runtime = browser.runtime as typeof browser.runtime & {
+      getContexts?(filter: { contextTypes: string[] }): Promise<unknown[]>;
+    };
+    if (!offscreen || !runtime.getContexts) return { error: 'このブラウザでは自動校閲の確認を実行できません' };
+    try {
+      if ((await runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })).length === 0) {
+        creatingOffscreen ??= offscreen
+          .createDocument({
+            url: 'offscreen.html',
+            reasons: ['IFRAME_SCRIPTING'],
+            justification: '校閲サーバーの人間性の確認を非表示で実行するため',
+          })
+          .finally(() => { creatingOffscreen = null; });
+        await creatingOffscreen;
+      }
+      // offscreen 側の listener 登録が間に合わないことがあるため、無応答だけは限定的にやり直す
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const reply = await browser.runtime.sendMessage({ type: 'minaosi:offscreen-turnstile' }).catch(() => undefined);
+        if (reply) return reply as TurnstileAcquireReply;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+      return { error: '人間性の確認を実行できません' };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
   const sidebar = (browser as typeof browser & { sidebarAction: { toggle(): Promise<void> } }).sidebarAction;
   if (import.meta.env.BROWSER !== 'firefox') {
     void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -40,6 +100,16 @@ export default defineBackground(() => {
           ? browser.sidePanel.open({ windowId: sender.tab.windowId })
           : browser.sidePanel.close({ windowId: sender.tab.windowId });
       void toggling.then(() => sendResponse({ ok: true }), (error: Error) => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (msg?.type === 'minaosi:acquire-turnstile') {
+      // widget の応答待ちに service worker が idle 終了しないよう API call で生存を維持する
+      const keepalive = setInterval(() => {
+        void browser.runtime.getPlatformInfo();
+      }, 20_000);
+      void acquireTurnstile()
+        .then(sendResponse)
+        .finally(() => clearInterval(keepalive));
       return true;
     }
     if (!msg || msg.type !== 'minaosi:review') return undefined;

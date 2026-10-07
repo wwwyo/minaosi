@@ -10,6 +10,9 @@ export type View = 'list';
 
 export type PanelFinding = Omit<Finding, 'blockEl'>;
 
+/** 自動校閲の状態。blocked は人の確認が要るため一時止まっている状態。 */
+export type AutoReviewState = 'on' | 'paused' | 'blocked';
+
 export interface PanelState {
   editorStatus: EditorStatus;
   canReview: boolean;
@@ -21,6 +24,7 @@ export interface PanelState {
   selectedId: string | null;
   findings: PanelFinding[];
   connectionLoading: boolean;
+  auto: AutoReviewState;
 }
 
 export type ReviewState = Omit<PanelState, 'editorStatus' | 'canReview' | 'editorId'>;
@@ -32,6 +36,7 @@ export interface PanelHandlers {
   onApplyFinding(fid: string): void;
   onDelete(fid: string): void;
   onRevert(fid: string): void;
+  onAutoToggle(enabled: boolean): void;
 }
 
 const esc = (s: string) =>
@@ -90,8 +95,37 @@ function listBody(s: PanelState, showHandled: boolean): string {
     </section>` : ''}`;
 }
 
+/**
+ * 消化率リングつきの FAB（見本: docs/prd/auto-review/prototype/handling-ring.html）。
+ * 中央は既存ロゴ、外周の track 上を fill が「対応済み / 全指摘」の割合だけ進む。
+ * tooltip・件数バッジ・点滅は付けない。
+ */
 export function renderFab(): string {
-  return `<button class="mn fab" title="指摘paneを開閉する" aria-label="指摘paneを開閉する">${LOGO_MARK}</button>`;
+  const logo = LOGO_MARK.replace('<svg', '<svg class="logo"');
+  return `<button class="mn fab" aria-label="指摘一覧を開閉する。指摘はありません">
+    <svg class="fab-ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="21"/><circle class="fill" cx="22" cy="22" r="21" pathLength="100"/></svg>${logo}</button>`;
+}
+
+/** FAB のリングを現在の指摘の消化率へ更新する。閲覧は対応に数えない。 */
+export function updateFab(fab: HTMLElement, handled: number, total: number) {
+  const ratio = total === 0 ? 1 : handled / total;
+  const fill = fab.querySelector<SVGCircleElement>('.fill');
+  if (!fill) return;
+  fill.style.display = ratio === 0 ? 'none' : '';
+  fill.setAttribute('stroke-dasharray', ratio === 1 ? 'none' : '100');
+  fill.setAttribute('stroke-dashoffset', String(100 * (1 - ratio)));
+  const description = total === 0 ? '指摘はありません' : `${total}件中${handled}件対応済み`;
+  fab.setAttribute('aria-label', `指摘一覧を開閉する。${description}`);
+}
+
+/** 自動校閲の状態行。確定した本文があるときだけ出す（不明な本文は自動送信しない）。 */
+function autoRow(s: PanelState): string {
+  if (!s.canReview || s.editorStatus !== 'confirmed') return '';
+  if (s.auto === 'blocked') {
+    return `<div class="auto-row"><span class="auto-state">校閲を続けるには人の確認が必要です</span><button class="auto-btn" data-act="run">確認して見直す</button></div>`;
+  }
+  const paused = s.auto === 'paused';
+  return `<div class="auto-row"><span class="auto-state">${paused ? '自動校閲は一時停止中' : '自動校閲中'}</span><button class="auto-btn" data-act="auto-toggle" data-enable="${paused}">${paused ? '再開' : '一時停止'}</button></div>`;
 }
 
 export function renderPanel(s: PanelState, showHandled = false): string {
@@ -101,6 +135,7 @@ export function renderPanel(s: PanelState, showHandled = false): string {
 
   return `<aside class="mn panel" aria-label="minaosi 指摘一覧">
     <div class="list">${factCheck}${listBody(s, showHandled)}</div>
+    ${autoRow(s)}
   </aside>`;
 }
 
@@ -117,6 +152,7 @@ export function wirePanel(
     if (actEl) {
       switch (actEl.dataset.act) {
         case 'run': h.onRun(); return;
+        case 'auto-toggle': h.onAutoToggle(actEl.dataset.enable === 'true'); return;
         case 'toggle-handled': h.onToggleHandled(); return;
         case 'apply': if (fid) h.onApplyFinding(fid); return;
         case 'delete': if (fid) h.onDelete(fid); return;

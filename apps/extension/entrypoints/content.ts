@@ -14,7 +14,7 @@ export default defineContentScript({
     let detection: EditorDetection = { status: 'none' };
     const ports = new Set<Browser.runtime.Port>();
     const snapshot = (): NonNullable<PanelUpdate['state']> => ({
-      ...(ctrl?.snapshot() ?? { phase: 'idle', view: 'list', selectedId: null, findings: [], connectionLoading: false }),
+      ...(ctrl?.snapshot() ?? { phase: 'idle', view: 'list', selectedId: null, findings: [], connectionLoading: false, auto: 'on' as const }),
       editorStatus: detection.status,
       canReview: ctrl !== null,
       editorId,

@@ -137,17 +137,33 @@ export const PANEL_CSS = `
 }
 .btn-ghost:hover { color: var(--color-ink); border-color: var(--color-ink); }
 
-/* ---- FAB（右下 floating。minaosi マークの丸ボタン） ---- */
+/* ---- FAB（右下 floating。中央はロゴ、外周リングが指摘の消化率だけを表す） ---- */
 .fab {
   position: fixed; right: 24px; bottom: 24px; z-index: 2147483646;
-  width: 44px; height: 44px; border-radius: 50%;
-  background: var(--color-bg-surface); color: var(--color-ink); border: 1px solid var(--color-line-strong);
+  width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--color-bg-surface); color: var(--color-ink);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
 }
 .fab:active:not(:disabled) { transform: translateY(1px); }
 .fab:disabled { opacity: .55; cursor: default; }
-.fab svg { width: 20px; height: 20px; display: block; }
+.fab .logo { width: 20px; height: 20px; display: block; }
+.fab-ring { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.fab-ring .track { stroke: var(--color-line); stroke-width: 2; fill: none; }
+.fab-ring .fill { stroke: var(--color-ink); stroke-width: 2; fill: none; transform: rotate(-90deg); transform-origin: center; }
+
+/* ---- 自動校閲の状態行（パネル下端に常駐） ---- */
+.auto-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: 8px 16px; border-top: 1px solid var(--color-line);
+  color: var(--color-ink-mute); font-size: var(--font-size-caption); flex-shrink: 0;
+}
+.auto-btn {
+  font-family: inherit; font-size: var(--font-size-caption); font-weight: 600; white-space: nowrap;
+  padding: 3px 10px; background: transparent; color: var(--color-ink-sub);
+  border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); cursor: pointer;
+}
+.auto-btn:hover { color: var(--color-ink); border-color: var(--color-ink); }
 
 /* ---- overlay（本文上の重ね表示。本文 DOM は触らない） ---- */
 .ovl { position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; }

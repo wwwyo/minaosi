@@ -21,6 +21,17 @@ export function updatePanel(root: HTMLElement, state: PanelState, showHandled = 
     return;
   }
 
+  // .auto-row は .list の外にあるため、list 本文の比較とは別に同期する
+  const currentAuto = current.querySelector('.auto-row');
+  const nextAuto = next.querySelector('.auto-row');
+  if (currentAuto && nextAuto) {
+    if (currentAuto.outerHTML !== nextAuto.outerHTML) currentAuto.replaceWith(nextAuto);
+  } else if (nextAuto) {
+    current.append(nextAuto);
+  } else {
+    currentAuto?.remove();
+  }
+
   const list = current.querySelector<HTMLElement>('.list')!;
   const nextList = next.querySelector<HTMLElement>('.list')!;
   const ghosts = [...list.querySelectorAll<HTMLElement>('.is-exiting')];

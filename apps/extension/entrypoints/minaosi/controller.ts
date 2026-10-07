@@ -6,10 +6,11 @@ import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
-import { renderFab, type ReviewState } from './ui/panel';
+import { renderFab, updateFab, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand, TurnstileProof } from './panel-messages';
 import { PanelToggle } from './panel-toggle';
+import { AutoReviewScheduler, dirtyBlocks, mergeFindings, type AutoReviewState } from './auto-review';
 
 interface ReviewReply {
   ok: boolean;
@@ -22,6 +23,7 @@ export class Controller {
   private host: HTMLElement;
   private shadow: ShadowRoot;
   private fabRoot: HTMLElement;
+  private fab: HTMLElement;
   private deco: Decorations;
   private staleRaf = 0;
   private handledSequence = 0;
@@ -31,6 +33,14 @@ export class Controller {
   private unwatch: (() => void)[] = [];
   private stopPanelWatch: (() => void) | null = null;
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
+  /** 自動校閲の送信タイミング。編集検知・静穏時間・最小間隔はここに集約する */
+  private readonly scheduler: AutoReviewScheduler;
+  /** 前回送信したブロック本文（要素参照つき）。変わっていないブロックは再送しない */
+  private lastSentBlocks = new Map<HTMLElement, string>();
+  /** 送信を試みるべき編集が届いているか。実行中の編集は終了後の再送に使う */
+  private editedSince = true;
+  /** 自動経路のトークン取得~送信中。発火の重なりを防ぐ */
+  private autoBusy = false;
 
   private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
@@ -38,6 +48,7 @@ export class Controller {
     selectedId: null,
     findings: [],
     connectionLoading: true,
+    auto: 'on' as AutoReviewState,
   };
 
   constructor(
@@ -62,8 +73,14 @@ export class Controller {
       onUnapplied: (fid, idx) => this.markUnapplied(fid, idx),
     });
 
+    this.scheduler = new AutoReviewScheduler(this.editor, {
+      onEdit: () => { this.editedSince = true; },
+      onFire: () => { void this.runAuto(); },
+    });
+
     this.fabRoot.innerHTML = renderFab();
     const fab = this.fabRoot.querySelector('button')!;
+    this.fab = fab;
     const toggle = new PanelToggle((open, busy) => {
       fab.disabled = open === null || busy;
       if (import.meta.env.BROWSER !== 'firefox') fab.setAttribute('aria-expanded', String(open === true));
@@ -95,6 +112,12 @@ export class Controller {
     if (this.disposed) return;
     switch (command.action) {
       case 'run': void this.run(command.trigger, command.turnstile); return;
+      case 'auto': {
+        this.s.auto = command.enabled ? 'on' : 'paused';
+        if (command.enabled) this.scheduler.resume();
+        else this.scheduler.pause();
+        break;
+      }
       case 'select': this.select(command.id); return;
       case 'apply': this.applyFinding(command.id); return;
       case 'delete': {
@@ -119,6 +142,7 @@ export class Controller {
     this.unwatch = [reviewModeItem.watch(reload), providerItem.watch(reload),
       ...Object.values(PROVIDER_SETTINGS).flatMap((settings) => [settings.key.watch(reload), settings.model.watch(reload)]),
     ];
+    this.scheduler.start();
     await this.loadProvider();
   }
 
@@ -134,6 +158,8 @@ export class Controller {
     this.config = { mode: mode === 'byok' ? 'byok' : 'default', provider, apiKey, model };
     this.s.connectionLoading = false;
     this.render();
+    // 設定の読み込み・変更が済んだら一度自動校閲を試す（接続先が登録された直後に動き出す）
+    this.scheduler.schedule();
   }
 
   private byId(fid: string) {
@@ -144,6 +170,7 @@ export class Controller {
     if (this.disposed) return;
     this.publish();
     this.deco.render(this.s.findings, this.s.selectedId);
+    updateFab(this.fab, this.s.findings.filter((f) => f.state !== 'open').length, this.s.findings.length);
   }
 
   private select(fid: string | null) {
@@ -193,9 +220,39 @@ export class Controller {
 
   /* ---- 見直す ---- */
 
+  /**
+   * 自動校閲の発火点。トークンを非表示で取得してから run('automatic') へ渡す。
+   * widget が人の対話を要求したときは blocked にして、パネル側の「確認して見直す」を待つ。
+   */
+  private async runAuto() {
+    if (this.disposed || this.s.phase === 'running' || this.autoBusy || this.s.connectionLoading) return;
+    if (this.s.auto !== 'on' || !this.canRun('automatic')) return;
+    this.autoBusy = true;
+    this.editedSince = false;
+    try {
+      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:acquire-turnstile' })) as
+        { token?: string; interactive?: boolean; error?: string } | undefined;
+      if (this.disposed) return;
+      if (reply?.interactive) {
+        this.s.auto = 'blocked';
+        this.render();
+        return;
+      }
+      if (!reply?.token) return;
+      await this.run('automatic', { token: reply.token });
+    } catch {
+      // 自動経路の失敗は書き手を止めないため静かに諦める
+    } finally {
+      this.autoBusy = false;
+      // 実行中に届いた編集があれば、終わってから改めて差分を送る
+      if (!this.disposed && this.s.auto === 'on' && this.editedSince) this.scheduler.schedule();
+    }
+  }
+
   async run(trigger: ReviewTrigger, turnstile?: TurnstileProof) {
     if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
     if (!this.canRun(trigger)) return;
+    if (trigger === 'automatic' && this.s.auto !== 'on') return;
     if (turnstile?.error) {
       this.s.phase = 'error';
       this.s.error = turnstile.error;
@@ -203,19 +260,33 @@ export class Controller {
       return;
     }
     if (this.config.mode === 'byok' && (!this.config.apiKey || !this.config.model)) {
+      // 接続先の未設定は自動経路では静かに諦める（書き手の操作を待つ）
+      if (trigger === 'automatic') return;
       this.s.phase = 'error';
       this.s.error = '拡張機能のオプションでAPIキーとモデルを登録してください';
       this.render();
       return;
     }
+    const blocks = this.adapter.extractBlocks(this.editor);
+    // 直前に送った本文と変わったブロックだけを送る（小さな編集のたびに全文を送らない）
+    for (const el of [...this.lastSentBlocks.keys()]) {
+      if (!blocks.some((b) => b.element === el)) this.lastSentBlocks.delete(el);
+    }
+    const toSend = dirtyBlocks(blocks, this.lastSentBlocks);
+    if (!toSend.some((b) => b.text.trim())) {
+      for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
+      this.editedSince = false;
+      return;
+    }
+    this.editedSince = false;
+    const previousPhase = this.s.phase;
+    const previousError = this.s.error;
     this.s.phase = 'running';
     this.s.view = 'list';
     this.s.error = undefined;
-    this.s.factCheck = undefined;
     this.render();
     try {
-      const blocks = this.adapter.extractBlocks(this.editor);
-      const draft = blocks.map(({ index, text }) => ({ index, text }));
+      const draft = toSend.map(({ index, text }) => ({ index, text }));
       const msg: ReviewRequest = this.config.mode === 'default'
         ? { type: 'minaosi:review', mode: 'default', blocks: draft }
         : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
@@ -226,16 +297,34 @@ export class Controller {
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
-      this.s.findings = this.normalize(reply.findings, blocks);
-      this.s.factCheck = reply.factCheck;
+      const sentEls = new Set(toSend.map((b) => b.element));
+      this.s.findings = mergeFindings(this.s.findings, this.normalize(reply.findings, blocks), sentEls, blocks);
+      for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
+      this.s.factCheck = this.mergeFactCheck(reply.factCheck);
       this.s.phase = 'done';
-      this.s.selectedId = null;
+      // 確認済みの手動実行に成功したら自動校閲へ戻し、止まっていた差分も捌く
+      if (this.s.auto === 'blocked') { this.s.auto = 'on'; this.scheduler.schedule(); }
+      if (this.s.selectedId && !this.s.findings.some((f) => f.id === this.s.selectedId)) this.s.selectedId = null;
     } catch (e) {
-      this.s.phase = 'error';
-      this.s.error = e instanceof Error ? e.message : String(e);
-      // 既存の指摘・適用状態は残す（通信失敗の再実行で消えない）
+      if (trigger === 'automatic') {
+        // 自動経路の失敗は静かに戻す（エラー表示で書き手を止めない）
+        this.s.phase = previousPhase;
+        this.s.error = previousError;
+      } else {
+        this.s.phase = 'error';
+        this.s.error = e instanceof Error ? e.message : String(e);
+        // 既存の指摘・適用状態は残す（通信失敗の再実行で消えない）
+      }
     }
     this.render();
+  }
+
+  /** 部分校閲でも事実確認の済んだ段落は累積する（全文の確認とは扱わない） */
+  private mergeFactCheck(next: FactCheckSummary | undefined): FactCheckSummary | undefined {
+    if (!next) return this.s.factCheck;
+    const blocks = [...new Set([...(this.s.factCheck?.sourceCheckedBlocks ?? []), ...next.sourceCheckedBlocks])].sort((a, b) => a - b);
+    if (blocks.length) return { status: 'partial', sourceCheckedBlocks: blocks };
+    return next;
   }
 
   /**
@@ -449,6 +538,7 @@ export class Controller {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.staleRaf);
+    this.scheduler.dispose();
     this.stopPanelWatch?.();
     ++this.providerLoad;
     for (const unwatch of this.unwatch) unwatch();

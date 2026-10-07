@@ -22,7 +22,8 @@ export default defineConfig({
       minimum_chrome_version: browser === 'firefox' ? undefined : '142',
       description: '人間が書いた文章を、公開面そのままの表示の上で AI が校閲するブラウザ拡張',
       host_permissions: endpoint ? [`${new URL(endpoint).origin}/*`] : [],
-      permissions: ['storage'],
+      // offscreen: 自動校閲用の人間性の確認 widget を載せる隠し document（Chrome のみ。Firefox は background が DOM を持つ）
+      permissions: ['storage', ...(browser === 'firefox' ? [] : ['offscreen'])],
       icons: { 16: 'icons/icon-16.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
       action: { default_title: 'minaosi' },
     };

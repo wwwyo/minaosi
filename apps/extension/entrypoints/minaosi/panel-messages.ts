@@ -12,6 +12,7 @@ export interface TurnstileProof {
 
 export type PanelCommand =
   | { action: 'run'; trigger: ReviewTrigger; editorId: string; turnstile?: TurnstileProof }
+  | { action: 'auto'; enabled: boolean }
   | { action: 'select'; id: string | null }
   | { action: 'apply' | 'delete' | 'revert'; id: string };
 
