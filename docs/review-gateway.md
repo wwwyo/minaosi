@@ -67,7 +67,7 @@ mise exec -- bun run api:deploy
 
 本番と同じGateway経路をローカルで確認するときは、`mise exec -- bun run api:worker:dev` を使う。8788で起動し、OpenCode Go経路は無効になる。拡張から検証する場合は、開発用の `WXT_REVIEW_API_URL` を `http://127.0.0.1:8788/review` に設定する。どちらの開発モードもbindingをローカルで模擬する。Gatewayへの実AI呼び出しには上記の接続設定が必要で、シミュレーターの起動だけでは外部AIの設定は完了しない。
 
-`api:build` は `.cloudflare/output/v0/` へビルドし、アップロードは行わない。`api:deploy` はビルド後にWorkerを公開する。デプロイは別途実行する。`workersDev`・`previewUrls` の変更は deploy でWorkerの設定へ反映されるため、`previewUrls` を有効にするPR自身の preview build はまだ無効な設定で動き "No Preview URL" を報告する。失敗ではなく、merge後のdeploy以降のbuildで発行される。
+`api:build` は `.cloudflare/output/v0/` へビルドし、アップロードは行わない。`api:deploy` はビルド後にWorkerを公開する。デプロイは別途実行する。`workersDev`・`previewUrls` の変更は deploy でWorkerの設定へ反映される。ただし `previewUrls` が有効にするのはVersion URLであり、Durable Objectを実装するWorkerにはVersion URLが発行されない。このWorkerは `ReviewConcurrency` をexportしているため対象外で、preview build が "No Preview URL" を報告するのは設定未反映ではなく仕様。PR単位のプレビューにはVersion URLではなくCloudflareのWorker Previewsを使う。
 
 Workerのsecretは、運営者またはセルフホストする人が自分のCloudflareアカウントへ登録する。拡張の利用者が登録するBYOKキーとは別の設定であり、BYOKキーをWorkerへ保存しない。登録にはCloudflare管理画面のWorker設定、またはcf標準コマンドを使う。`bindings.secret()`は必要な名前の宣言であり、秘密値を自動アップロードしない。
 
@@ -114,7 +114,7 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 ### 本番キー
 
-本番 widget（`minaosi-review`、invisible）は `minaosi.syokan.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。本番の公開入口は custom domain に絞り、`workersDev` は無効化している。`previewUrls` は有効で、Access application `minaosi-review previews`（Cloudflare アカウントのメンバーのみ許可）がプレビューURLへのアクセスを制限する。別環境で作り直す場合の手順:
+本番 widget（`minaosi-review`、invisible）は `minaosi.syokan.dev` を hostname に登録済みで、sitekey は `cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に入っている。secret は `cf deploy --secrets-file` で Worker へ登録済み。登録状態は `cf turnstile widgets list` で確認できる。本番の公開入口は custom domain に絞り、`workersDev` は無効化している。`previewUrls` は有効だが、このWorkerはDurable ObjectをexportするためVersion URLは発行されない（上記）。プレビュー向けには Access application `minaosi-review previews`（Cloudflare アカウントのメンバーのみ許可）が存在する。別環境で作り直す場合の手順:
 
 1. `cf turnstile widgets create --body '{"name":"<widget名>","domains":["<公開ホスト名>"],"mode":"invisible"}'` で widget を作成する（`mode` は生成されたフラグに無いため `--body` で渡す）。invisible は常時は表示されず、対話が必要な判定のときだけ challenge が表示される。hostname には Worker の公開ホスト名（`minaosi.syokan.dev` のようなカスタムドメイン）を登録する。
 2. 発行された sitekey を `apps/api/cloudflare.config.ts` の `TURNSTILE_SITE_KEY` に設定する。
