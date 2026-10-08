@@ -14,10 +14,14 @@ export function dirtyBlocks(blocks: DraftBlock[], sent: ReadonlyMap<HTMLElement,
   return blocks.filter((b) => sent.get(b.element) !== b.text);
 }
 
-/** 指摘の同一性。編集後に同じ指摘が再報告されたかを判断する材料にする。 */
+/**
+ * 指摘の同一性。編集後に同じ指摘が再報告されたかを判断する材料にする。
+ * 表題はAIの言い回しで揺れるため署名に含めず、対象文字列で比べる
+ * （対象を持たない指摘だけ表題で区別する）。
+ */
 function findingSignature(f: Pick<Finding, 'kind' | 'title' | 'matches'>): string {
   const froms = f.matches.map((m) => m.from).sort();
-  return `${f.kind}\n${f.title}\n${froms.join('\n')}`;
+  return `${f.kind}\n${froms.join('\n')}\n${froms.length ? '' : f.title}`;
 }
 
 /**

@@ -44,8 +44,9 @@ describe('mergeFindings', () => {
   test('送ったブロックの指摘は応答で置き換わり、送らなかったブロックの指摘と対応状態は残る', () => {
     const sentEl = el();
     const keptEl = el();
-    const kept = finding('残る指摘', 1, keptEl, 'resolved');
-    const incoming = finding('新しい指摘', 0, sentEl);
+    // 同一性は対象文字列で比べるため、別の指摘には別の対象を持たせる
+    const kept = { ...finding('残る指摘', 1, keptEl, 'resolved'), matches: [match('対象A')] };
+    const incoming = { ...finding('新しい指摘', 0, sentEl), matches: [match('対象B')] };
     const merged = mergeFindings(
       [finding('消える指摘', 0, sentEl), kept],
       [incoming],

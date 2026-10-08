@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 ---
 
 # 校閲の自動起動（auto-review）

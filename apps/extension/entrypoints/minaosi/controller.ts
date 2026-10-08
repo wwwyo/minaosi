@@ -240,6 +240,17 @@ export class Controller {
     return null;
   }
 
+  /** 手動の「見直す」は差分ではなく全文を送る（意図的な再校閲に応えるため） */
+  private fullSend(): { blocks: DraftBlock[]; toSend: DraftBlock[] } | null {
+    const blocks = this.adapter.extractBlocks(this.editor);
+    const alive = new Set(blocks.map((b) => b.element));
+    for (const el of this.lastSentBlocks.keys()) if (!alive.has(el)) this.lastSentBlocks.delete(el);
+    const toSend = blocks.filter((b) => b.text.trim());
+    if (!toSend.length) return null;
+    this.editedSince = false;
+    return { blocks, toSend };
+  }
+
   /** 実行中に届いた編集があれば、終わってから改めて差分を送る */
   private rescheduleIfEditedPending() {
     if (!this.disposed && this.s.auto === 'on' && this.editedSince) this.scheduler.schedule();
@@ -290,8 +301,9 @@ export class Controller {
       this.render();
       return;
     }
-    // 直前に送った本文と変わったブロックだけを送る（小さな編集のたびに全文を送らない）
-    const prepared = this.pendingSend();
+    // 直前に送った本文と変わったブロックだけを送る（小さな編集のたびに全文を送らない）。
+    // 手動の「見直す」は変更の有無にかかわらず全文を確認し直す。
+    const prepared = trigger === 'manual' ? this.fullSend() : this.pendingSend();
     if (!prepared) return;
     const { blocks, toSend } = prepared;
     this.editedSince = false;
@@ -323,9 +335,11 @@ export class Controller {
       if (this.s.selectedId && !this.s.findings.some((f) => f.id === this.s.selectedId)) this.s.selectedId = null;
     } catch (e) {
       if (trigger === 'automatic') {
-        // 自動経路の失敗は静かに戻す（エラー表示で書き手を止めない）
+        // 自動経路の失敗は静かに戻す（エラー表示で書き手を止めない）。
+        // 送信履歴が進んでいないため未送信のままにして、末尾の再予約へ回す。
         this.s.phase = previousPhase;
         this.s.error = previousError;
+        this.editedSince = true;
       } else {
         this.s.phase = 'error';
         this.s.error = e instanceof Error ? e.message : String(e);
