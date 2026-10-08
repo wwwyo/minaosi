@@ -1,5 +1,5 @@
 import { browser } from '#imports';
-import { TurnstileGate, TurnstileInteractionRequired } from '../minaosi/turnstile';
+import { TurnstileGate, acquireHiddenToken } from '../minaosi/turnstile';
 
 /**
  * Chrome MV3 の service worker には DOM が無いため、自動校閲用の人間性の確認は
@@ -15,14 +15,6 @@ browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ error: '校閲サーバーの接続先が設定されていません' });
     return undefined;
   }
-  void gate.acquire().then(
-    (token) => sendResponse({ token }),
-    (e: unknown) =>
-      sendResponse(
-        e instanceof TurnstileInteractionRequired
-          ? { interactive: true }
-          : { error: e instanceof Error ? e.message : String(e) },
-      ),
-  );
+  void acquireHiddenToken(gate).then(sendResponse);
   return true;
 });

@@ -1,16 +1,14 @@
 import { test, type Browser } from '@e2e-dev/web';
-import { expect, type App } from 'e2e';
+import { expect } from 'e2e';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { connectPanel } from './support/panel';
+import type { ReviewCall } from './support/site';
 
 /**
  * 自動校閲の E2E。拡張は tests/support/site.ts の偽校閲API（127.0.0.1:18787）へ向けた
  * development ビルド（bun run build:e2e）。実 AI・実 Turnstile は対象外。
  */
 const REVIEW_API = 'http://127.0.0.1:18787';
-
-type ReviewCall = {
-  blocks: { index: number; text: string }[];
-  hasToken: boolean;
-};
 
 /** 偽校閲APIに届いた送信一覧を読む（送信側は拡張、こちらは現在のページから観測するだけ）。 */
 function reviewCalls(browser: Browser): Promise<ReviewCall[]> {
@@ -19,20 +17,6 @@ function reviewCalls(browser: Browser): Promise<ReviewCall[]> {
     REVIEW_API,
   );
 }
-
-/** 本文タブを別タブで開き、sidepanel.html を読み込んだタブから接続する（surfaces.e2e と同じ形）。 */
-async function connectPanel(app: App, browser: Browser, optionsUrl: string, draftUrl: string): Promise<number> {
-  const tabId = await browser.evaluate<number, string>(
-    'async url => (await chrome.tabs.create({ url, active: false })).id',
-    draftUrl,
-  );
-  await app.open(optionsUrl.replace('options.html', 'sidepanel.html'));
-  await browser.evaluate('async id => { await chrome.tabs.update(id, { active: true }); }', tabId);
-  return tabId;
-}
-
-/** 「一時停止中は送らない」を確かめるための限定的な待機（準備待ちではなく、不在を証明する窓）。 */
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 test('本文を開くと自動で校閲され、編集の停止で変わった段落だけを再送する', { tags: ['auto-review'] }, async ({ app, browser, agent }) => {
   await app.open('/auto-layout');
@@ -65,7 +49,7 @@ test('パネルから自動校閲を一時停止・再開できる。止めて�
   await app.open(optionsUrl);
   // ここまでに先の本文タブ（1枚目）が送った回数だけ先に数えておく
   const before = (await reviewCalls(browser)).length;
-  const tabId = await connectPanel(app, browser, optionsUrl, draftUrl);
+  const { tabId, openedAt } = await connectPanel(app, browser, optionsUrl, draftUrl);
 
   // 接続先は確定した本文なので、自動校閲の状態行が出て、開き直した本文の初期送信も届く
   await expect(screen.getByText('自動校閲中')).toBeVisible();
@@ -75,8 +59,9 @@ test('パネルから自動校閲を一時停止・再開できる。止めて�
   // 一時停止：このあと本文は20秒の自己編集（autoedit）で変わるが、送信はされない
   await screen.getByRole('button', '一時停止').tap();
   await expect(screen.getByText('自動校閲は一時停止中')).toBeVisible();
-  // 編集（tabId のタブで20秒後）+ デバウンス + 最小間隔を過ぎても送信が無いことを見る
-  await sleep(22_000);
+  // 編集（本文タブを開いてから20秒後）+ デバウンス + 最小間隔を過ぎても送信が無いことを見る
+  // — セットアップが速く終わっても、抑制された送信の最早発生時刻を窓が覆うよう本文の時計で待つ
+  await sleep(Math.max(0, openedAt + 32_000 - Date.now()));
   expect((await reviewCalls(browser)).length).toBe(base);
 
   // 再開：溜まっていた差分が変わった段落だけ送られる

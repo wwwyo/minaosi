@@ -1,16 +1,17 @@
 import { browser } from '#imports';
-import type { DraftBlock, Finding, MatchSite } from './types';
+import type { AutoReviewState, DraftBlock, Finding, MatchSite } from './types';
 import { selectReviewEditor, type ReviewTrigger, type SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
-import { renderFab, updateFab, type ReviewState } from './ui/panel';
+import { renderFab, updateFab, initialReviewState, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand, TurnstileProof } from './panel-messages';
 import { PanelToggle } from './panel-toggle';
-import { AutoReviewScheduler, dirtyBlocks, mergeFindings, type AutoReviewState } from './auto-review';
+import { AutoReviewScheduler, dirtyBlocks, mergeFindings } from './auto-review';
+import type { HiddenAcquireReply } from './turnstile';
 
 interface ReviewReply {
   ok: boolean;
@@ -41,14 +42,12 @@ export class Controller {
   private editedSince = true;
   /** 自動経路のトークン取得~送信中。発火の重なりを防ぐ */
   private autoBusy = false;
+  /** 事実確認が済んだ段落（要素参照）。部分送信では応答は差分だけを返すため累積する */
+  private factCheckedEls = new Set<HTMLElement>();
 
   private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
-    phase: 'idle',
-    view: 'list',
-    selectedId: null,
-    findings: [],
+    ...initialReviewState(),
     connectionLoading: true,
-    auto: 'on' as AutoReviewState,
   };
 
   constructor(
@@ -221,17 +220,42 @@ export class Controller {
   /* ---- 見直す ---- */
 
   /**
-   * 自動校閲の発火点。トークンを非表示で取得してから run('automatic') へ渡す。
+   * 直前に送った本文と変わったブロックを求める。変化がないか、変化があっても全部空なら
+   * 送信履歴だけを進めて null を返す（空原稿・空にした段落で送信しない）。
+   */
+  private pendingSend(): { blocks: DraftBlock[]; toSend: DraftBlock[] } | null {
+    const blocks = this.adapter.extractBlocks(this.editor);
+    const alive = new Set(blocks.map((b) => b.element));
+    for (const el of this.lastSentBlocks.keys()) if (!alive.has(el)) this.lastSentBlocks.delete(el);
+    const toSend = dirtyBlocks(blocks, this.lastSentBlocks);
+    if (toSend.some((b) => b.text.trim())) return { blocks, toSend };
+    for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
+    this.editedSince = false;
+    // 全部空にした段落の指摘は残り続けない（本文が無いため次回も送らない）
+    if (toSend.length) {
+      const emptied = new Set(toSend.map((b) => b.element));
+      this.s.findings = this.s.findings.filter((f) => !f.blockEl || !emptied.has(f.blockEl));
+      this.render();
+    }
+    return null;
+  }
+
+  /** 実行中に届いた編集があれば、終わってから改めて差分を送る */
+  private rescheduleIfEditedPending() {
+    if (!this.disposed && this.s.auto === 'on' && this.editedSince) this.scheduler.schedule();
+  }
+
+  /**
+   * 自動校閲の発火点。差分があるときだけトークンを非表示で取得して run('automatic') へ渡す。
    * widget が人の対話を要求したときは blocked にして、パネル側の「確認して見直す」を待つ。
    */
   private async runAuto() {
     if (this.disposed || this.s.phase === 'running' || this.autoBusy || this.s.connectionLoading) return;
     if (this.s.auto !== 'on' || !this.canRun('automatic')) return;
+    if (!this.editedSince || !this.pendingSend()) return;
     this.autoBusy = true;
-    this.editedSince = false;
     try {
-      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:acquire-turnstile' })) as
-        { token?: string; interactive?: boolean; error?: string } | undefined;
+      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:acquire-turnstile' })) as HiddenAcquireReply | undefined;
       if (this.disposed) return;
       if (reply?.interactive) {
         this.s.auto = 'blocked';
@@ -244,8 +268,7 @@ export class Controller {
       // 自動経路の失敗は書き手を止めないため静かに諦める
     } finally {
       this.autoBusy = false;
-      // 実行中に届いた編集があれば、終わってから改めて差分を送る
-      if (!this.disposed && this.s.auto === 'on' && this.editedSince) this.scheduler.schedule();
+      this.rescheduleIfEditedPending();
     }
   }
 
@@ -267,17 +290,10 @@ export class Controller {
       this.render();
       return;
     }
-    const blocks = this.adapter.extractBlocks(this.editor);
     // 直前に送った本文と変わったブロックだけを送る（小さな編集のたびに全文を送らない）
-    for (const el of [...this.lastSentBlocks.keys()]) {
-      if (!blocks.some((b) => b.element === el)) this.lastSentBlocks.delete(el);
-    }
-    const toSend = dirtyBlocks(blocks, this.lastSentBlocks);
-    if (!toSend.some((b) => b.text.trim())) {
-      for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
-      this.editedSince = false;
-      return;
-    }
+    const prepared = this.pendingSend();
+    if (!prepared) return;
+    const { blocks, toSend } = prepared;
     this.editedSince = false;
     const previousPhase = this.s.phase;
     const previousError = this.s.error;
@@ -300,7 +316,7 @@ export class Controller {
       const sentEls = new Set(toSend.map((b) => b.element));
       this.s.findings = mergeFindings(this.s.findings, this.normalize(reply.findings, blocks), sentEls, blocks);
       for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
-      this.s.factCheck = this.mergeFactCheck(reply.factCheck);
+      this.s.factCheck = this.mergeFactCheck(reply.factCheck, blocks);
       this.s.phase = 'done';
       // 確認済みの手動実行に成功したら自動校閲へ戻し、止まっていた差分も捌く
       if (this.s.auto === 'blocked') { this.s.auto = 'on'; this.scheduler.schedule(); }
@@ -317,14 +333,20 @@ export class Controller {
       }
     }
     this.render();
+    // 実行中に届いた編集の発火は飲み込まれているため、終わった時点で差分を捌く
+    this.rescheduleIfEditedPending();
   }
 
-  /** 部分校閲でも事実確認の済んだ段落は累積する（全文の確認とは扱わない） */
-  private mergeFactCheck(next: FactCheckSummary | undefined): FactCheckSummary | undefined {
+  /** 部分校閲でも事実確認の済んだ段落は累積する（全文の確認とは扱わない）。段落の挿入・削除で index がずれるため内部は要素参照で持つ。 */
+  private mergeFactCheck(next: FactCheckSummary | undefined, blocks: DraftBlock[]): FactCheckSummary | undefined {
     if (!next) return this.s.factCheck;
-    const blocks = [...new Set([...(this.s.factCheck?.sourceCheckedBlocks ?? []), ...next.sourceCheckedBlocks])].sort((a, b) => a - b);
-    if (blocks.length) return { status: 'partial', sourceCheckedBlocks: blocks };
-    return next;
+    for (const i of next.sourceCheckedBlocks) {
+      const el = blocks.find((b) => b.index === i)?.element;
+      if (el) this.factCheckedEls.add(el);
+    }
+    for (const el of this.factCheckedEls) if (!el.isConnected) this.factCheckedEls.delete(el);
+    const indices = blocks.filter((b) => this.factCheckedEls.has(b.element)).map((b) => b.index);
+    return indices.length ? { status: 'partial', sourceCheckedBlocks: indices } : next;
   }
 
   /**

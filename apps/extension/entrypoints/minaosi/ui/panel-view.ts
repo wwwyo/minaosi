@@ -25,7 +25,15 @@ export function updatePanel(root: HTMLElement, state: PanelState, showHandled = 
   const currentAuto = current.querySelector('.auto-row');
   const nextAuto = next.querySelector('.auto-row');
   if (currentAuto && nextAuto) {
-    if (currentAuto.outerHTML !== nextAuto.outerHTML) currentAuto.replaceWith(nextAuto);
+    if (currentAuto.outerHTML !== nextAuto.outerHTML) {
+      // 一時停止ボタンにフォーカスしたまま置き換わると focus が失われるため移し直す
+      // （closed shadow の中なので document.activeElement ではなく root 側を見る）
+      const root = current.getRootNode();
+      const focused = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
+      const refocus = focused !== null && currentAuto.contains(focused);
+      currentAuto.replaceWith(nextAuto);
+      if (refocus) nextAuto.querySelector<HTMLElement>('[data-act]')?.focus({ preventScroll: true });
+    }
   } else if (nextAuto) {
     current.append(nextAuto);
   } else {

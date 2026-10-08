@@ -5,6 +5,9 @@ import type { ReviewedFinding } from '@minaosi/api/rpc';
 export type FindingKind = ReviewedFinding['kind'];
 export type FindingState = 'open' | 'resolved' | 'deleted';
 
+/** 自動校閲の状態。blocked は人の確認が要るため一時止まっている状態。 */
+export type AutoReviewState = 'on' | 'paused' | 'blocked';
+
 export const KIND_LABEL: Record<FindingKind, string> = {
   typo: '誤字',
   fact: '事実',

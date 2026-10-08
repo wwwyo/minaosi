@@ -5,11 +5,9 @@ import type { DraftBlock, Finding } from './types';
  * 起動判断はすべてルールベース（docs/prd/auto-review/design.md）。
  */
 
-export const AUTO_REVIEW_INITIAL_DELAY_MS = 1_500;
-export const AUTO_REVIEW_DEBOUNCE_MS = 4_000;
-export const AUTO_REVIEW_MIN_INTERVAL_MS = 10_000;
-
-export type AutoReviewState = 'on' | 'paused' | 'blocked';
+const INITIAL_DELAY_MS = 1_500;
+const DEBOUNCE_MS = 4_000;
+const MIN_INTERVAL_MS = 10_000;
 
 /** 前回送信時と本文または要素が変わったブロックだけを返す。 */
 export function dirtyBlocks(blocks: DraftBlock[], sent: ReadonlyMap<HTMLElement, string>): DraftBlock[] {
@@ -29,7 +27,7 @@ function findingSignature(f: Pick<Finding, 'kind' | 'title' | 'matches'>): strin
  * - 本文から外れたブロックに紐づく指摘は消す
  * - 削除した指摘と同じ指摘が再報告されたら削除の判断を引き継ぐ
  */
-export function mergeFindings(current: Finding[], incoming: Finding[], sent: ReadonlySet<HTMLElement>, blocks: DraftBlock[] = []): Finding[] {
+export function mergeFindings(current: Finding[], incoming: Finding[], sent: ReadonlySet<HTMLElement>, blocks: DraftBlock[]): Finding[] {
   const deleted = new Map<string, Finding>();
   for (const f of current) if (f.state === 'deleted') deleted.set(findingSignature(f), f);
 
@@ -42,9 +40,22 @@ export function mergeFindings(current: Finding[], incoming: Finding[], sent: Rea
     if (index !== undefined && index !== f.block) merged.push({ ...f, block: index });
     else merged.push(f);
   }
+  // 削除済みの指摘は dedup 対象にしない（同名を別箇所へ再報告されたら新しい指摘として出す）
+  const keptSignatures = new Set(merged.filter((f) => f.state !== 'deleted').map(findingSignature));
   for (const f of incoming) {
-    const old = deleted.get(findingSignature(f));
-    merged.push(old ? { ...f, state: 'deleted', handledOrder: old.handledOrder } : f);
+    const signature = findingSignature(f);
+    const old = deleted.get(signature);
+    // 削除の判断は同じ箇所への再報告だけ引き継ぐ。本文から外れた要素の古い block 番号は信用しない
+    const oldIndex = old && (!old.blockEl || old.blockEl.isConnected) ? old.block : undefined;
+    if (old && (old.blockEl === f.blockEl || oldIndex === f.block)) {
+      deleted.delete(signature);
+      merged.push({ ...f, state: 'deleted', handledOrder: old.handledOrder });
+      continue;
+    }
+    // アンカーを持たない指摘など、残した指摘と同じ再報告は積まない
+    if (keptSignatures.has(signature)) continue;
+    keptSignatures.add(signature);
+    merged.push(f);
   }
   const order = (f: Finding) => (f.block === -1 ? Number.MAX_SAFE_INTEGER : f.block);
   return merged.sort((a, b) => order(a) - order(b));
@@ -55,9 +66,6 @@ interface SchedulerHandlers {
   onEdit(): void;
   /** 送信タイミング。実際に送るかは呼び先が差分と状態で判断する。 */
   onFire(): void;
-  initialDelayMs?: number;
-  debounceMs?: number;
-  minIntervalMs?: number;
 }
 
 /**
@@ -96,18 +104,17 @@ export class AutoReviewScheduler {
   resume() {
     if (!this.paused) return;
     this.paused = false;
-    this.schedule();
+    // 一時停止中に編集が無ければ発火しない（ただし初回送信前の一時停止は発火を戻す）
+    if (this.pending || this.lastFireAt === 0) this.schedule();
   }
 
   /** 発火を予約する。実行後・設定読み込み後・再開時にも呼ぶ。 */
   schedule() {
     if (this.disposed || this.paused || this.composing) return;
     this.clearTimer();
-    const debounce = this.lastFireAt === 0
-      ? this.handlers.initialDelayMs ?? AUTO_REVIEW_INITIAL_DELAY_MS
-      : this.handlers.debounceMs ?? AUTO_REVIEW_DEBOUNCE_MS;
+    const debounce = this.lastFireAt === 0 ? INITIAL_DELAY_MS : DEBOUNCE_MS;
     const elapsed = Date.now() - this.lastFireAt;
-    const wait = Math.max(debounce, (this.handlers.minIntervalMs ?? AUTO_REVIEW_MIN_INTERVAL_MS) - elapsed);
+    const wait = Math.max(debounce, MIN_INTERVAL_MS - elapsed);
     this.timer = setTimeout(() => this.fire(), wait);
   }
 

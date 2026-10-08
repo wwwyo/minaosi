@@ -58,18 +58,32 @@ describe('mergeFindings', () => {
 
   test('本文から外れたブロックの指摘は消える', () => {
     const detached = el(false);
-    const merged = mergeFindings([finding('残る指摘', 0), finding('消える指摘', 1, detached)], [], new Set());
+    const merged = mergeFindings([finding('残る指摘', 0), finding('消える指摘', 1, detached)], [], new Set(), []);
     expect(merged.map((f) => f.id)).toEqual(['残る指摘']);
   });
 
-  test('削除した指摘と同じ指摘が再報告されたら削除の判断を引き継ぐ', () => {
+  test('削除した指摘と同じ指摘が同じ箇所へ再報告されたら削除の判断を引き継ぐ', () => {
     const sentEl = el();
     const deletedFinding = { ...finding('削除した指摘', 0, sentEl, 'deleted', '同じ表題'), handledOrder: 2 };
     const incoming = { ...finding('再報告', 0, sentEl, 'open', '同じ表題'), matches: [match('対象')] };
-    const merged = mergeFindings([deletedFinding], [incoming], new Set([sentEl]));
+    const merged = mergeFindings([deletedFinding], [incoming], new Set([sentEl]), []);
     expect(merged).toHaveLength(1);
     expect(merged[0]!.state).toBe('deleted');
     expect(merged[0]!.handledOrder).toBe(2);
+  });
+
+  test('削除した指摘と同じ表題でも別ブロックへの再報告は新しい指摘として残す', () => {
+    const deletedEl = el();
+    const otherEl = el();
+    const deletedFinding = { ...finding('削除した指摘', 0, deletedEl, 'deleted', '同じ表題'), handledOrder: 2 };
+    const incoming = { ...finding('別ブロックの同名', 1, otherEl, 'open', '同じ表題'), matches: [match('対象')] };
+    const merged = mergeFindings(
+      [deletedFinding],
+      [incoming],
+      new Set([otherEl]),
+      [block(0, '', deletedEl), block(1, '', otherEl)],
+    );
+    expect(merged.map((f) => f.state)).toEqual(['deleted', 'open']);
   });
 
   test('挿入でずれた残った指摘の block 番号は要素参照から現在の番号へ写し直す', () => {

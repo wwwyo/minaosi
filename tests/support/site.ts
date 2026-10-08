@@ -64,7 +64,12 @@ console.log(`E2E site: http://127.0.0.1:${server.port}`);
  * ビルドした拡張がここへ送る。/turnstile は widget ページの protocol だけを模倣し、
  * /__requests は送信済みリクエストの観測口。
  */
-const reviewCalls: { blocks: { index: number; text: string }[]; hasToken: boolean }[] = [];
+export type ReviewCall = {
+  blocks: { index: number; text: string }[];
+  hasToken: boolean;
+};
+
+const reviewCalls: ReviewCall[] = [];
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': '*',

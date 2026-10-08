@@ -10,6 +10,24 @@ export class TurnstileInteractionRequired extends Error {
   }
 }
 
+/** 非表示経路のトークン取得結果。interactive は widget が人の対話を要求した印。 */
+export interface HiddenAcquireReply {
+  token?: string;
+  interactive?: boolean;
+  error?: string;
+}
+
+/** 非表示の document で動く gate からトークンを取り、メッセージ応答の形に畳む。 */
+export async function acquireHiddenToken(gate: TurnstileGate): Promise<HiddenAcquireReply> {
+  try {
+    return { token: await gate.acquire() };
+  } catch (e) {
+    return e instanceof TurnstileInteractionRequired
+      ? { interactive: true }
+      : { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * 校閲サーバーが配る /turnstile の widget ページを iframe で開き、確認トークンを受け取る。
  * side panel・background(event page)・offscreen document など、拡張の document 内で使う前提。

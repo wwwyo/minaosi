@@ -136,6 +136,7 @@ export const PANEL_CSS = `
   padding: 5px 12px; cursor: pointer;
 }
 .btn-ghost:hover { color: var(--color-ink); border-color: var(--color-ink); }
+.btn-ghost.sm { font-size: var(--font-size-caption); padding: 3px 10px; white-space: nowrap; }
 
 /* ---- FAB（右下 floating。中央はロゴ、外周リングが指摘の消化率だけを表す） ---- */
 .fab {
@@ -158,12 +159,6 @@ export const PANEL_CSS = `
   padding: 8px 16px; border-top: 1px solid var(--color-line);
   color: var(--color-ink-mute); font-size: var(--font-size-caption); flex-shrink: 0;
 }
-.auto-btn {
-  font-family: inherit; font-size: var(--font-size-caption); font-weight: 600; white-space: nowrap;
-  padding: 3px 10px; background: transparent; color: var(--color-ink-sub);
-  border: 1px solid var(--color-line-strong); border-radius: var(--radius-md); cursor: pointer;
-}
-.auto-btn:hover { color: var(--color-ink); border-color: var(--color-ink); }
 
 /* ---- overlay（本文上の重ね表示。本文 DOM は触らない） ---- */
 .ovl { position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; }

@@ -1,4 +1,4 @@
-import { KIND_LABEL, type Finding } from '../types';
+import { KIND_LABEL, type AutoReviewState, type Finding } from '../types';
 import type { FactCheckSummary } from '@minaosi/api/rpc';
 import type { EditorStatus } from '../surfaces/types';
 import {
@@ -9,9 +9,6 @@ import {
 export type View = 'list';
 
 export type PanelFinding = Omit<Finding, 'blockEl'>;
-
-/** 自動校閲の状態。blocked は人の確認が要るため一時止まっている状態。 */
-export type AutoReviewState = 'on' | 'paused' | 'blocked';
 
 export interface PanelState {
   editorStatus: EditorStatus;
@@ -28,6 +25,11 @@ export interface PanelState {
 }
 
 export type ReviewState = Omit<PanelState, 'editorStatus' | 'canReview' | 'editorId'>;
+
+/** 校閲前の初期 state。controller が接続される前の pane 側 fallback としても使う。 */
+export function initialReviewState(): ReviewState {
+  return { phase: 'idle', view: 'list', selectedId: null, findings: [], connectionLoading: false, auto: 'on' };
+}
 
 export interface PanelHandlers {
   onRun(): void;
@@ -122,10 +124,10 @@ export function updateFab(fab: HTMLElement, handled: number, total: number) {
 function autoRow(s: PanelState): string {
   if (!s.canReview || s.editorStatus !== 'confirmed') return '';
   if (s.auto === 'blocked') {
-    return `<div class="auto-row"><span class="auto-state">校閲を続けるには人の確認が必要です</span><button class="auto-btn" data-act="run">確認して見直す</button></div>`;
+    return `<div class="auto-row"><span class="auto-state">校閲を続けるには人の確認が必要です</span><button class="btn-ghost sm" data-act="run">確認して見直す</button></div>`;
   }
   const paused = s.auto === 'paused';
-  return `<div class="auto-row"><span class="auto-state">${paused ? '自動校閲は一時停止中' : '自動校閲中'}</span><button class="auto-btn" data-act="auto-toggle" data-enable="${paused}">${paused ? '再開' : '一時停止'}</button></div>`;
+  return `<div class="auto-row"><span class="auto-state">${paused ? '自動校閲は一時停止中' : '自動校閲中'}</span><button class="btn-ghost sm" data-act="auto-toggle" data-enable="${paused}">${paused ? '再開' : '一時停止'}</button></div>`;
 }
 
 export function renderPanel(s: PanelState, showHandled = false): string {
