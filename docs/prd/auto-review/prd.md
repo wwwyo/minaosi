@@ -1,5 +1,5 @@
 ---
-status: ready
+status: done
 ---
 
 # 校閲の自動起動（auto-review）

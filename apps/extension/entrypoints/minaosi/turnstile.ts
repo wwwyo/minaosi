@@ -2,10 +2,37 @@ const MESSAGE_TYPE = 'minaosi-turnstile';
 const ACQUIRE_TIMEOUT_MS = 90_000;
 const LOAD_TIMEOUT_MS = 15_000;
 
+/** widget が対話を要求したが、呼び出し側（非表示の document）では応えられない。 */
+export class TurnstileInteractionRequired extends Error {
+  constructor() {
+    super('人の確認が必要です');
+    this.name = 'TurnstileInteractionRequired';
+  }
+}
+
+/** 非表示経路のトークン取得結果。interactive は widget が人の対話を要求した印。 */
+export interface HiddenAcquireReply {
+  token?: string;
+  interactive?: boolean;
+  error?: string;
+}
+
+/** 非表示の document で動く gate からトークンを取り、メッセージ応答の形に畳む。 */
+export async function acquireHiddenToken(gate: TurnstileGate): Promise<HiddenAcquireReply> {
+  try {
+    return { token: await gate.acquire() };
+  } catch (e) {
+    return e instanceof TurnstileInteractionRequired
+      ? { interactive: true }
+      : { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * 校閲サーバーが配る /turnstile の widget ページを iframe で開き、確認トークンを受け取る。
- * side panel（拡張の document）内で使う前提。content script 側へ埋める構成は
- * ページの CSP frame-src に依存するため採らない（docs/review-gateway.md 参照）。
+ * side panel・background(event page)・offscreen document など、拡張の document 内で使う前提。
+ * content script 側へ埋める構成はページの CSP frame-src に依存するため採らない
+ * （docs/review-gateway.md 参照）。
  */
 export class TurnstileGate {
   private frame: HTMLIFrameElement | null = null;
@@ -16,14 +43,16 @@ export class TurnstileGate {
   private constructor(
     private readonly pageUrl: string,
     private readonly origin: string,
+    /** false なら widget が対話を要求した時点で TurnstileInteractionRequired で失敗する */
+    private readonly interactive = true,
   ) {}
 
   /** 校閲サーバーの /review URL から widget ページのURLを組み立てる。未設定・不正なURLは null。 */
-  static fromReviewEndpoint(endpoint: string): TurnstileGate | null {
+  static fromReviewEndpoint(endpoint: string, opts: { interactive?: boolean } = {}): TurnstileGate | null {
     if (!endpoint) return null;
     try {
       const page = new URL('/turnstile', endpoint);
-      return new TurnstileGate(page.href, page.origin);
+      return new TurnstileGate(page.href, page.origin, opts.interactive !== false);
     } catch {
       return null;
     }
@@ -100,6 +129,10 @@ export class TurnstileGate {
         if (typeof data.token === 'string') this.settle(data.token, null);
         return;
       case 'interactive':
+        if (data.interactive === true && !this.interactive) {
+          this.settle(null, new TurnstileInteractionRequired());
+          return;
+        }
         if (this.frame) this.show(this.frame, data.interactive === true);
         return;
       case 'expired':

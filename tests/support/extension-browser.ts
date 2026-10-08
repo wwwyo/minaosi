@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { BrowserProvider } from '@e2e-dev/web';
@@ -14,7 +15,9 @@ export function extensionBrowser(): BrowserProvider {
       const profile = await mkdtemp(join(tmpdir(), 'minaosi-e2e-'));
       let context: BrowserContext | undefined;
       try {
-        const extension = resolve('apps/extension/.output/chrome-mv3');
+        // test:e2e は偽校閲 API へ向けた development ビルド（chrome-mv3-dev）を読み込む。
+        const dev = resolve('apps/extension/.output/chrome-mv3-dev');
+        const extension = existsSync(join(dev, 'manifest.json')) ? dev : resolve('apps/extension/.output/chrome-mv3');
         context = await chromium.launchPersistentContext(profile, {
           channel: 'chromium',
           headless: true,

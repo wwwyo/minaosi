@@ -2,6 +2,7 @@ import { genericAdapter } from './minaosi/surfaces/generic';
 import { selectReviewEditor, type EditorDetection } from './minaosi/surfaces/types';
 import { Controller } from './minaosi/controller';
 import { PANEL_PORT, type PanelCommand, type PanelUpdate } from './minaosi/panel-messages';
+import { initialReviewState } from './minaosi/ui/panel';
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -14,7 +15,7 @@ export default defineContentScript({
     let detection: EditorDetection = { status: 'none' };
     const ports = new Set<Browser.runtime.Port>();
     const snapshot = (): NonNullable<PanelUpdate['state']> => ({
-      ...(ctrl?.snapshot() ?? { phase: 'idle', view: 'list', selectedId: null, findings: [], connectionLoading: false }),
+      ...(ctrl?.snapshot() ?? initialReviewState()),
       editorStatus: detection.status,
       canReview: ctrl !== null,
       editorId,

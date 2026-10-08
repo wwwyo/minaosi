@@ -74,6 +74,7 @@ wirePanel(root, {
     if (latestState) updatePanel(root, latestState, showHandled);
   },
   onSelect: (id) => send({ action: 'select', id }),
+  onAutoToggle: (enabled) => send({ action: 'auto', enabled }),
   onApplyFinding: (id) => send({ action: 'apply', id }),
   onDelete: (id) => send({ action: 'delete', id }),
   onRevert: (id) => send({ action: 'revert', id }),

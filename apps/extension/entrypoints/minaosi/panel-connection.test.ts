@@ -36,7 +36,7 @@ function fixture() {
 
 const readyState: NonNullable<PanelUpdate['state']> = {
   editorStatus: 'confirmed', canReview: true, editorId: 'test-editor', phase: 'idle', view: 'list', selectedId: null,
-  findings: [], connectionLoading: false,
+  findings: [], connectionLoading: false, auto: 'on',
 };
 
 describe('PanelConnection', () => {

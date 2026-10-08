@@ -1,14 +1,16 @@
 import { browser } from '#imports';
-import type { DraftBlock, Finding, MatchSite } from './types';
+import type { AutoReviewState, DraftBlock, Finding, MatchSite } from './types';
 import { selectReviewEditor, type ReviewTrigger, type SurfaceAdapter } from './surfaces/types';
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
 import { Decorations } from './ui/decorations';
-import { renderFab, type ReviewState } from './ui/panel';
+import { renderFab, updateFab, initialReviewState, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
 import type { PanelCommand, TurnstileProof } from './panel-messages';
 import { PanelToggle } from './panel-toggle';
+import { AutoReviewScheduler, dirtyBlocks, mergeFindings } from './auto-review';
+import type { HiddenAcquireReply } from './turnstile';
 
 interface ReviewReply {
   ok: boolean;
@@ -17,10 +19,14 @@ interface ReviewReply {
   factCheck?: FactCheckSummary;
 }
 
+/** 自動経路が連続して失敗したとき再送を試みる上限。超えたら次の編集まで静かに待つ */
+const AUTO_RETRY_LIMIT = 3;
+
 export class Controller {
   private host: HTMLElement;
   private shadow: ShadowRoot;
   private fabRoot: HTMLElement;
+  private fab: HTMLElement;
   private deco: Decorations;
   private staleRaf = 0;
   private handledSequence = 0;
@@ -33,12 +39,21 @@ export class Controller {
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, model: '', hasKey: false };
   /** background から設定を一度でも取得できたか。未取得のまま実行させない。 */
   private configLoaded = false;
+  /** 自動校閲の送信タイミング。編集検知・静穏時間・最小間隔はここに集約する */
+  private readonly scheduler: AutoReviewScheduler;
+  /** 前回送信したブロック本文（要素参照つき）。変わっていないブロックは再送しない */
+  private lastSentBlocks = new Map<HTMLElement, string>();
+  /** 送信を試みるべき編集が届いているか。実行中の編集は終了後の再送に使う */
+  private editedSince = true;
+  /** 自動経路の連続失敗数。AUTO_RETRY_LIMIT を超えたら次の編集まで再予約しない */
+  private autoFailures = 0;
+  /** 自動経路のトークン取得~送信中。発火の重なりを防ぐ */
+  private autoBusy = false;
+  /** 事実確認が済んだ段落（要素参照）。部分送信では応答は差分だけを返すため累積する */
+  private factCheckedEls = new Set<HTMLElement>();
 
   private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
-    phase: 'idle',
-    view: 'list',
-    selectedId: null,
-    findings: [],
+    ...initialReviewState(),
     connectionLoading: true,
   };
 
@@ -64,8 +79,14 @@ export class Controller {
       onUnapplied: (fid, idx) => this.markUnapplied(fid, idx),
     });
 
+    this.scheduler = new AutoReviewScheduler(this.editor, {
+      onEdit: () => { this.editedSince = true; this.autoFailures = 0; },
+      onFire: () => { void this.runAuto(); },
+    });
+
     this.fabRoot.innerHTML = renderFab();
     const fab = this.fabRoot.querySelector('button')!;
+    this.fab = fab;
     const toggle = new PanelToggle((open, busy) => {
       fab.disabled = open === null || busy;
       if (import.meta.env.BROWSER !== 'firefox') fab.setAttribute('aria-expanded', String(open === true));
@@ -97,6 +118,12 @@ export class Controller {
     if (this.disposed) return;
     switch (command.action) {
       case 'run': void this.run(command.trigger, command.turnstile); return;
+      case 'auto': {
+        this.s.auto = command.enabled ? 'on' : 'paused';
+        if (command.enabled) this.scheduler.resume();
+        else this.scheduler.pause();
+        break;
+      }
       case 'select': this.select(command.id); return;
       case 'apply': this.applyFinding(command.id); return;
       case 'delete': {
@@ -126,6 +153,7 @@ export class Controller {
     };
     browser.runtime.onMessage.addListener(onConfig);
     this.stopConfigWatch = () => browser.runtime.onMessage.removeListener(onConfig);
+    this.scheduler.start();
     await this.reloadConfig();
   }
 
@@ -153,6 +181,8 @@ export class Controller {
     if (this.disposed || generation !== this.providerLoad) return;
     this.s.connectionLoading = false;
     this.render();
+    // 設定の読み込み・変更が済んだら一度自動校閲を試す（接続先が登録された直後に動き出す）
+    this.scheduler.schedule();
   }
 
   private byId(fid: string) {
@@ -163,6 +193,7 @@ export class Controller {
     if (this.disposed) return;
     this.publish();
     this.deco.render(this.s.findings, this.s.selectedId);
+    updateFab(this.fab, this.s.findings.filter((f) => f.state !== 'open').length, this.s.findings.length);
   }
 
   private select(fid: string | null) {
@@ -212,58 +243,176 @@ export class Controller {
 
   /* ---- 見直す ---- */
 
-  async run(trigger: ReviewTrigger, turnstile?: TurnstileProof) {
-    if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
+  /**
+   * 直前に送った本文と変わったブロックを求める。変化がないか、変化があっても全部空なら
+   * 送信履歴だけを進めて null を返す（空原稿・空にした段落で送信しない）。
+   */
+  private pendingSend(): { blocks: DraftBlock[]; toSend: DraftBlock[] } | null {
+    const blocks = this.adapter.extractBlocks(this.editor);
+    const alive = new Set(blocks.map((b) => b.element));
+    for (const el of this.lastSentBlocks.keys()) if (!alive.has(el)) this.lastSentBlocks.delete(el);
+    const changed = dirtyBlocks(blocks, this.lastSentBlocks);
+    const toSend = changed.filter((b) => b.text.trim());
+    // 空にした段落は送らず送信履歴だけ進める（本文が無いため次回も送らない）
+    const emptied = new Set<HTMLElement>();
+    for (const b of changed) {
+      if (!b.text.trim()) {
+        this.lastSentBlocks.set(b.element, b.text);
+        emptied.add(b.element);
+      }
+    }
+    // 空になった段落の指摘は残り続けない
+    if (emptied.size) {
+      this.s.findings = this.s.findings.filter((f) => !f.blockEl || !emptied.has(f.blockEl));
+      this.render();
+    }
+    if (toSend.length) return { blocks, toSend };
+    this.editedSince = false;
+    return null;
+  }
+
+  /** 手動の「見直す」は差分ではなく全文を送る（意図的な再校閲に応えるため） */
+  private fullSend(): { blocks: DraftBlock[]; toSend: DraftBlock[] } | null {
+    const blocks = this.adapter.extractBlocks(this.editor);
+    const alive = new Set(blocks.map((b) => b.element));
+    for (const el of this.lastSentBlocks.keys()) if (!alive.has(el)) this.lastSentBlocks.delete(el);
+    const toSend = blocks.filter((b) => b.text.trim());
+    if (!toSend.length) return null;
+    this.editedSince = false;
+    return { blocks, toSend };
+  }
+
+  /** 実行中に届いた編集があれば、終わってから改めて差分を送る。連続失敗は上限で止める */
+  private rescheduleIfEditedPending() {
+    if (!this.disposed && this.s.auto === 'on' && this.editedSince && this.autoFailures < AUTO_RETRY_LIMIT) {
+      this.scheduler.schedule();
+    }
+  }
+
+  /**
+   * 自動校閲の発火点。差分があるときだけトークンを非表示で取得して run('automatic') へ渡す。
+   * widget が人の対話を要求したときは blocked にして、パネル側の「確認して見直す」を待つ。
+   */
+  private async runAuto() {
+    if (this.disposed || this.s.phase === 'running' || this.autoBusy || this.s.connectionLoading) return;
+    if (this.s.auto !== 'on' || !this.canRun('automatic')) return;
+    if (!this.editedSince || !this.pendingSend()) return;
+    this.autoBusy = true;
+    let sent = false;
+    try {
+      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:acquire-turnstile' })) as HiddenAcquireReply | undefined;
+      if (this.disposed) return;
+      if (reply?.interactive) {
+        this.s.auto = 'blocked';
+        this.render();
+        return;
+      }
+      if (reply?.token) sent = await this.run('automatic', { token: reply.token });
+    } catch {
+      // 自動経路の失敗は書き手を止めないため静かに諦める
+    } finally {
+      this.autoBusy = false;
+      // 送信に成功したら失敗カウントを戻す。差分が未送信のままなら失敗として数え、上限で再予約を止める
+      if (sent) this.autoFailures = 0;
+      else if (this.editedSince) this.autoFailures++;
+      this.rescheduleIfEditedPending();
+    }
+  }
+
+  /** 校閲を1回実行する。送信が完了したときだけ true を返す（自動経路の失敗計数に使う） */
+  async run(trigger: ReviewTrigger, turnstile?: TurnstileProof): Promise<boolean> {
+    if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return false;
     // 初期値を読み込み済みと扱わない。未取得なら再取得し、それでも駄目なら実行しない。
     if (!this.configLoaded) await this.reloadConfig();
-    if (this.disposed) return;
+    if (this.disposed) return false;
     if (!this.configLoaded) {
+      // 自動経路では設定未取得の失敗を表に出さない（手動はエラーとして見せる）
+      if (trigger === 'automatic') return false;
       this.s.phase = 'error';
       this.s.error = '設定を読み込めませんでした。ページを開き直してください';
       this.render();
-      return;
+      return false;
     }
-    if (!this.canRun(trigger)) return;
+    if (!this.canRun(trigger)) return false;
+    if (trigger === 'automatic' && this.s.auto !== 'on') return false;
     if (turnstile?.error) {
       this.s.phase = 'error';
       this.s.error = turnstile.error;
       this.render();
-      return;
+      return false;
     }
     if (this.config.mode === 'byok' && (!this.config.hasKey || !this.config.model)) {
+      // 接続先の未設定は自動経路では静かに諦める（書き手の操作を待つ）
+      if (trigger === 'automatic') return false;
       this.s.phase = 'error';
       this.s.error = '拡張機能のオプションでAPIキーとモデルを登録してください';
       this.render();
-      return;
+      return false;
     }
+    // 直前に送った本文と変わったブロックだけを送る（小さな編集のたびに全文を送らない）。
+    // 手動の「見直す」は変更の有無にかかわらず全文を確認し直す。
+    const prepared = trigger === 'manual' ? this.fullSend() : this.pendingSend();
+    if (!prepared) return false;
+    const { blocks, toSend } = prepared;
+    this.editedSince = false;
+    const previousPhase = this.s.phase;
+    const previousError = this.s.error;
     this.s.phase = 'running';
     this.s.view = 'list';
     this.s.error = undefined;
-    this.s.factCheck = undefined;
     this.render();
+    let sent = false;
     try {
-      const blocks = this.adapter.extractBlocks(this.editor);
-      const draft = blocks.map(({ index, text }) => ({ index, text }));
+      const draft = toSend.map(({ index, text }) => ({ index, text }));
       const msg: ReviewRequest = this.config.mode === 'default'
         ? { type: 'minaosi:review', mode: 'default', blocks: draft }
         : { type: 'minaosi:review', mode: 'byok', provider: this.config.provider, model: this.config.model, blocks: draft };
       msg.turnstileToken = turnstile?.token;
       const reply = (await browser.runtime.sendMessage(msg)) as ReviewReply;
-      if (this.disposed) return;
-      if (!this.canRun(trigger)) { this.s.phase = 'idle'; this.render(); return; }
+      if (this.disposed) return false;
+      if (!this.canRun(trigger)) { this.s.phase = 'idle'; this.render(); return false; }
       if (!reply?.ok || !Array.isArray(reply.findings)) {
         throw new Error(reply?.error ?? '校閲結果が返りませんでした');
       }
-      this.s.findings = this.normalize(reply.findings, blocks);
-      this.s.factCheck = reply.factCheck;
+      const sentEls = new Set(toSend.map((b) => b.element));
+      this.s.findings = mergeFindings(this.s.findings, this.normalize(reply.findings, blocks), sentEls, blocks);
+      for (const b of toSend) this.lastSentBlocks.set(b.element, b.text);
+      this.s.factCheck = this.mergeFactCheck(reply.factCheck, blocks);
       this.s.phase = 'done';
-      this.s.selectedId = null;
+      // 確認済みの手動実行に成功したら自動校閲へ戻し、止まっていた差分も捌く
+      if (this.s.auto === 'blocked') { this.s.auto = 'on'; this.scheduler.schedule(); }
+      if (this.s.selectedId && !this.s.findings.some((f) => f.id === this.s.selectedId)) this.s.selectedId = null;
+      sent = true;
     } catch (e) {
-      this.s.phase = 'error';
-      this.s.error = e instanceof Error ? e.message : String(e);
-      // 既存の指摘・適用状態は残す（通信失敗の再実行で消えない）
+      if (trigger === 'automatic') {
+        // 自動経路の失敗は静かに戻す（エラー表示で書き手を止めない）。
+        // 送信履歴が進んでいないため未送信のままにして、末尾の再予約へ回す。
+        this.s.phase = previousPhase;
+        this.s.error = previousError;
+        this.editedSince = true;
+      } else {
+        this.s.phase = 'error';
+        this.s.error = e instanceof Error ? e.message : String(e);
+        // 既存の指摘・適用状態は残す（通信失敗の再実行で消えない）
+      }
     }
     this.render();
+    // 実行中に届いた編集の発火は飲み込まれているため、終わった時点で差分を捌く
+    this.rescheduleIfEditedPending();
+    return sent;
+  }
+
+  /** 部分校閲でも事実確認の済んだ段落は累積する（全文の確認とは扱わない）。段落の挿入・削除で index がずれるため内部は要素参照で持つ。 */
+  private mergeFactCheck(next: FactCheckSummary | undefined, blocks: DraftBlock[]): FactCheckSummary | undefined {
+    if (!next) return this.s.factCheck;
+    for (const i of next.sourceCheckedBlocks) {
+      const el = blocks.find((b) => b.index === i)?.element;
+      if (el) this.factCheckedEls.add(el);
+    }
+    for (const el of this.factCheckedEls) if (!el.isConnected) this.factCheckedEls.delete(el);
+    // 常に生存中の要素から番号を組み直す（剪定前の next をそのまま返さない）
+    const indices = blocks.filter((b) => this.factCheckedEls.has(b.element)).map((b) => b.index);
+    return { status: indices.length ? 'partial' : 'unavailable', sourceCheckedBlocks: indices };
   }
 
   /**
@@ -323,6 +472,15 @@ export class Controller {
     return out;
   }
 
+  /**
+   * パネル操作（適用・元に戻す）で本文を書き換えた直後に呼ぶ。
+   * MutationObserver は自分の編集も拾うため、書いた結果を送信履歴へ記録して
+   * 未送信の差分と誤認させない（適用直後の自動再送で対応済み指摘と undo 情報が消えない）。
+   */
+  private recordSent(el: HTMLElement) {
+    this.lastSentBlocks.set(el, blockText(el));
+  }
+
   /* ---- 適用 / 元に戻す ---- */
 
   private applyMatch(fid: string, idx: number) {
@@ -361,6 +519,7 @@ export class Controller {
     // undo 用文脈を採れなかった適用は「元に戻す」が効かないため stale として表面化する
     m.stale = at === undefined;
     if (startIdx !== null) this.refreshAfterEdit(f.blockEl, startIdx, m.to.length - m.from.length, m);
+    this.recordSent(f.blockEl);
     this.syncResolved(f);
     this.s.selectedId = null;
   }
@@ -467,6 +626,7 @@ export class Controller {
         if (text.slice(at, at + m.from.length) === m.from) this.recapture(m, text, at);
         this.refreshAfterEdit(f.blockEl, at, m.from.length - m.to.length, m);
       }
+      this.recordSent(f.blockEl);
     }
     this.syncResolved(f);
     this.s.selectedId = null;
@@ -477,6 +637,7 @@ export class Controller {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.staleRaf);
+    this.scheduler.dispose();
     this.stopPanelWatch?.();
     this.stopConfigWatch?.();
     ++this.providerLoad;

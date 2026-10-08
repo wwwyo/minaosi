@@ -1,5 +1,6 @@
 import { test } from '@e2e-dev/web';
 import { expect } from 'e2e';
+import { connectPanel } from './support/panel';
 
 test('本文の隣のヘッダーに保存操作がある執筆画面を検知する', { tags: ['surface'] }, async ({ app, browser, agent }) => {
   await app.open('/note-layout');
@@ -27,15 +28,17 @@ test('パネルで未判定・編集領域なし・確定した本文を区別�
   if (!optionsUrl) throw new Error('The extension browser did not provide its options URL.');
   await app.open(optionsUrl);
   // 公開のtabs APIで別タブを用意し、実際のcontent scriptへパネルを接続する。
-  const tabId = await browser.evaluate<number, string>('async url => (await chrome.tabs.create({ url, active: false })).id', draftUrl);
-  await app.open(optionsUrl.replace('options.html', 'sidepanel.html'));
-  await browser.evaluate('async id => { await chrome.tabs.update(id, { active: true }); }', tabId);
+  const { tabId } = await connectPanel(app, browser, optionsUrl, draftUrl);
   await expect(screen.getByText('本文かは未判定です。最大の編集領域を見直せます。')).toBeVisible();
   await expect(screen.getByRole('button', '見直す')).toBeEnabled();
+  // 未判定の本文へ自動校閲は出さない（自動校閲の状態行自体が無い）
+  await expect(screen.getByText('自動校閲中')).not.toBeVisible();
   await browser.evaluate('async data => { await chrome.tabs.update(data.id, { url: data.url }); }', { id: tabId, url: new URL('/no-editor', draftUrl).href });
   await expect(screen.getByText('編集領域はありません')).toBeVisible();
   await expect(screen.getByRole('button', '見直す')).not.toBeVisible();
   await browser.evaluate('async data => { await chrome.tabs.update(data.id, { url: data.url }); }', { id: tabId, url: new URL('/generic-layout', draftUrl).href });
-  await expect(screen.getByRole('button', '見直す')).toBeEnabled();
+  // 確定した本文ではボタンを押さず自動で校閲が走り、指摘が届く
+  await expect(screen.getByText('自動校閲中')).toBeVisible();
+  await expect(screen.getByText('合成の指摘0')).toBeVisible({ timeout: 30_000 });
   await expect(screen.getByText('本文かは未判定です。最大の編集領域を見直せます。')).not.toBeVisible();
 });
