@@ -1,5 +1,4 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { BrowserProvider } from '@e2e-dev/web';
@@ -17,10 +16,12 @@ export function extensionBrowser(): BrowserProvider {
       try {
         // test:e2e は偽校閲 API へ向けた development ビルド（chrome-mv3-dev）を読み込む。
         const dev = resolve('apps/extension/.output/chrome-mv3-dev');
-        const extension = existsSync(join(dev, 'manifest.json')) ? dev : resolve('apps/extension/.output/chrome-mv3');
+        await readFile(join(dev, 'manifest.json'));
+        const extension = dev;
         context = await chromium.launchPersistentContext(profile, {
           channel: 'chromium',
           headless: true,
+          timeout: 30_000,
           handleSIGINT: false,
           handleSIGTERM: false,
           // ブラウザへモデルのAPIキーやage復号キーを継承しない。
@@ -38,7 +39,7 @@ export function extensionBrowser(): BrowserProvider {
         // この受け渡しはe2e.config.tsのworkers: 1を前提とする。
         process.env.MINAOSI_E2E_OPTIONS_URL = `chrome-extension://${extensionId}/options.html`;
         const page = context.pages()[0] ?? await context.newPage();
-        await page.goto(process.env.MINAOSI_E2E_OPTIONS_URL);
+        await page.goto(process.env.MINAOSI_E2E_OPTIONS_URL, { timeout: 15_000 });
         request.signal.throwIfAborted();
         const [port] = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).trim().split('\n');
         if (!/^\d+$/.test(port!)) throw new Error('Chromium did not expose a valid CDP port.');

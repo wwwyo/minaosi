@@ -1,8 +1,13 @@
-import { test } from '@e2e-dev/web';
+import { beforeEach, test } from '@e2e-dev/web';
 import { expect } from 'e2e';
 import { connectPanel } from './support/panel';
 
-test('本文の隣のヘッダーに保存操作がある執筆画面を検知する', { tags: ['surface'] }, async ({ app, browser, agent }) => {
+beforeEach(async () => {
+  const response = await fetch('http://127.0.0.1:18787/__reset', { method: 'POST' });
+  if (!response.ok) throw new Error('Could not reset the synthetic review requests.');
+});
+
+test('本文の隣のヘッダーに保存操作がある執筆画面を検知する', { tags: ['surface', 'model'] }, async ({ app, browser, agent }) => {
   await app.open('/note-layout');
   await expect(browser.locator('#minaosi-root')).toBeAttached();
   await agent.assert('画面右下に、丸い枠で囲まれたminaosiのm字のロゴの起動ボタンが表示されている', { vision: true });
@@ -10,7 +15,7 @@ test('本文の隣のヘッダーに保存操作がある執筆画面を検知�
   await expect(browser.locator('[contenteditable="true"]')).toHaveText('これはE2E用の合成原稿です。');
 });
 
-test('保存操作なしで大きい本文を検知し、競合しても手動の起動ボタンを残す', { tags: ['surface'] }, async ({ app, screen, browser, agent }) => {
+test('保存操作なしで大きい本文を検知し、競合しても手動の起動ボタンを残す', { tags: ['surface', 'model'] }, async ({ app, screen, browser, agent }) => {
   await app.open('/generic-layout');
   await expect(browser.locator('#minaosi-root')).toBeAttached();
   await agent.assert('画面右下に、丸い枠で囲まれたminaosiのm字のロゴの起動ボタンが表示されている', { vision: true });

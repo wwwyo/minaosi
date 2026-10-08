@@ -1,4 +1,4 @@
-import { test, type Browser } from '@e2e-dev/web';
+import { beforeEach, test, type Browser } from '@e2e-dev/web';
 import { expect } from 'e2e';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { connectPanel } from './support/panel';
@@ -10,6 +10,11 @@ import type { ReviewCall } from './support/site';
  */
 const REVIEW_API = 'http://127.0.0.1:18787';
 
+beforeEach(async () => {
+  const response = await fetch(`${REVIEW_API}/__reset`, { method: 'POST' });
+  if (!response.ok) throw new Error('Could not reset the synthetic review requests.');
+});
+
 /** 偽校閲APIに届いた送信一覧を読む（送信側は拡張、こちらは現在のページから観測するだけ）。 */
 function reviewCalls(browser: Browser): Promise<ReviewCall[]> {
   return browser.evaluate<ReviewCall[], string>(
@@ -18,7 +23,7 @@ function reviewCalls(browser: Browser): Promise<ReviewCall[]> {
   );
 }
 
-test('本文を開くと自動で校閲され、編集の停止で変わった段落だけを再送する', { tags: ['auto-review'] }, async ({ app, browser, agent }) => {
+test('本文を開くと自動で校閲され、編集の停止で変わった段落だけを再送する', { tags: ['auto-review', 'model'] }, async ({ app, browser, agent }) => {
   await app.open('/auto-layout');
   await expect(browser.locator('#minaosi-root')).toBeAttached();
 

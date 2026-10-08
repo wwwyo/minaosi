@@ -39,7 +39,7 @@ describe('拡張の設定', { tags: ['options'] }, () => {
   });
 });
 
-test('執筆画面に実際の拡張の起動ボタンが現れる', { tags: ['surface'] }, async ({ app, screen, browser, agent }) => {
+test('執筆画面に実際の拡張の起動ボタンが現れる', { tags: ['surface', 'model'] }, async ({ app, screen, browser, agent }) => {
   await app.open('/');
   await expect(screen.getByRole('textbox', '本文')).toHaveText('これはE2E用の合成原稿です。');
   // content scriptのisolated world内のclosed shadow rootはrunnerのDOM readerから参照できない。

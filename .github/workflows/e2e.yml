@@ -1,0 +1,39 @@
+name: E2E deterministic
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+      - run: mise exec -- bun install --frozen-lockfile
+      - run: mise exec -- bun run playwright install --with-deps chromium
+      - run: mise exec -- bun run check:e2e
+      - run: mise exec -- bun run test:e2e:transport
+      - run: mise exec -- bun run test:e2e:offline
+      - name: Inspect artifact contents before uploading
+        if: ${{ !cancelled() }}
+        id: audit
+        run: mise exec -- bun run check:e2e:artifacts
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
+        with:
+          name: e2e-deterministic-${{ github.sha }}
+          path: |
+            .e2e/report.json
+            .e2e/junit.xml
+            .e2e/artifacts/
+          if-no-files-found: error
+          retention-days: 7
