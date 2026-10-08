@@ -48,8 +48,8 @@ async function run(args: string[], childEnv: Record<string, string>, timeout: nu
     }
   };
   const timer = setTimeout(stop, timeout);
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
+  process.on('SIGINT', stop);
+  process.on('SIGTERM', stop);
   try {
     return await new Promise<number>((resolve, reject) => {
       child.once('error', reject);

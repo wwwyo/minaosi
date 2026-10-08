@@ -47,6 +47,7 @@ Access に個人ログインしかない現状では、GitHub-hosted runner に�
 - `agent.act` は最大10 steps/10 model calls（操作 smoke は6）。`maxInputTokens: 32,768` は judgment の入力推定上限であり、act では観測を縮小する予算に使う。固定 runner は act の履歴・tools 全体にこの token 上限を検査しないため、request 全体32,768とは扱わない。transport は画像・履歴・tools を含む request body を256 KiB、worker を60 HTTP requests、output を各 request 最大2,048 tokens に制限する。provider が公表する context window は256,000 tokensであり、ローカルでは正確な画像 token 数を測定しない。runner の内蔵 SDK retry 5回も HTTP 上限へ数え、transport で再試行は足さない。output は60×2,048の枠で、実 input/token 単価による課金額は report と provider usage で確認する。
 - wrapper は build/preflight を3分、run を15分に制限し、SIGTERM で runner の cleanup を開始する。runner の attempt 120秒＋cleanup 30秒に5秒の余裕を置き、155秒で終わらなければ2回目の SIGTERM で worker を強制 teardown する。さらに cleanup の猶予を置き、190秒で3回目を送り runner 自身に detached app groups を終了させる。195秒でなお止まらなければ runner group を SIGKILL する。runner は terminal と別の process group に置き、同じ interrupt が二重に届くことを防ぐ。build/preflight の最終猶予は35秒。OS 停止や最終 SIGKILL では cleanup を保証できない。profile と port の残存を調べ、この run の残存だけを処理する。
 - build と runner に継承する環境変数を限定し、key・age 復号キーを渡さない。runner だけが Access URL を読む。site は `env -i`、Chromium は PATH/HOME だけを継承する。JWT は env に入れない。
+- wrapper は child の終了まで SIGINT/SIGTERM の handler を維持する。終了処理の途中で同じ signal を繰り返しても wrapper だけが終了せず、最初に開始した有限の終了待機を継続する。
 
 ## 証跡と運用
 
