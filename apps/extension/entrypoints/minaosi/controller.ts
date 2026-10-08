@@ -4,7 +4,6 @@ import { selectReviewEditor, type ReviewTrigger, type SurfaceAdapter } from './s
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
-import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
 import { renderFab, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
@@ -28,9 +27,10 @@ export class Controller {
   private reviewSequence = 0;
   private providerLoad = 0;
   private disposed = false;
-  private unwatch: (() => void)[] = [];
+  private stopConfigWatch: (() => void) | null = null;
   private stopPanelWatch: (() => void) | null = null;
-  private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
+  // 認証情報の実値は持たない。キーの有無だけを background に問い合わせる（ADR 0004）。
+  private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, model: '', hasKey: false };
 
   private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
@@ -115,23 +115,38 @@ export class Controller {
 
   async init() {
     if (this.disposed) return;
-    const reload = () => { void this.loadProvider(); };
-    this.unwatch = [reviewModeItem.watch(reload), providerItem.watch(reload),
-      ...Object.values(PROVIDER_SETTINGS).flatMap((settings) => [settings.key.watch(reload), settings.model.watch(reload)]),
-    ];
-    await this.loadProvider();
+    // content script から storage.local を直接読まない。設定変更は background が中継する。
+    const onConfig: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message) => {
+      if (typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'minaosi:review-config-changed') {
+        void this.reloadConfig();
+      }
+    };
+    browser.runtime.onMessage.addListener(onConfig);
+    this.stopConfigWatch = () => browser.runtime.onMessage.removeListener(onConfig);
+    await this.reloadConfig();
   }
 
-  private async loadProvider() {
+  private async reloadConfig() {
     const generation = ++this.providerLoad;
     this.s.connectionLoading = true;
     this.render();
-    const [mode, storedProvider] = await Promise.all([reviewModeItem.getValue(), providerItem.getValue()]);
-    const provider = isReviewProvider(storedProvider) ? storedProvider : 'anthropic';
-    const settings = PROVIDER_SETTINGS[provider];
-    const [apiKey, model] = await Promise.all([settings.key.getValue(), settings.model.getValue()]);
+    try {
+      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:get-review-config' })) as {
+        ok?: unknown; mode?: unknown; provider?: unknown; model?: unknown; hasKey?: unknown;
+      } | undefined;
+      if (this.disposed || generation !== this.providerLoad) return;
+      if (reply?.ok === true && isReviewProvider(reply.provider)) {
+        this.config = {
+          mode: reply.mode === 'byok' ? 'byok' : 'default',
+          provider: reply.provider,
+          model: typeof reply.model === 'string' ? reply.model : '',
+          hasKey: reply.hasKey === true,
+        };
+      }
+    } catch {
+      // background 未起動時は前回値を維持する。
+    }
     if (this.disposed || generation !== this.providerLoad) return;
-    this.config = { mode: mode === 'byok' ? 'byok' : 'default', provider, apiKey, model };
     this.s.connectionLoading = false;
     this.render();
   }
@@ -202,7 +217,7 @@ export class Controller {
       this.render();
       return;
     }
-    if (this.config.mode === 'byok' && (!this.config.apiKey || !this.config.model)) {
+    if (this.config.mode === 'byok' && (!this.config.hasKey || !this.config.model)) {
       this.s.phase = 'error';
       this.s.error = '拡張機能のオプションでAPIキーとモデルを登録してください';
       this.render();
@@ -450,8 +465,8 @@ export class Controller {
     this.disposed = true;
     cancelAnimationFrame(this.staleRaf);
     this.stopPanelWatch?.();
+    this.stopConfigWatch?.();
     ++this.providerLoad;
-    for (const unwatch of this.unwatch) unwatch();
     this.deco.dispose();
     this.host.remove();
   }

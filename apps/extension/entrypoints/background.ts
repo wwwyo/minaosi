@@ -1,6 +1,6 @@
 import { browser } from '#imports';
-import { isReviewProvider, review, type ReviewRequest } from './minaosi/review/providers';
-import { PROVIDER_SETTINGS } from './minaosi/store';
+import { isReviewProvider, review, type ReviewMode, type ReviewProvider, type ReviewRequest } from './minaosi/review/providers';
+import { PROVIDER_SETTINGS, providerItem, restrictStorageToTrustedContexts, reviewModeItem } from './minaosi/store';
 
 /**
  * 原稿の外部送信は background で行う（content script からの fetch は
@@ -9,6 +9,33 @@ import { PROVIDER_SETTINGS } from './minaosi/store';
  */
 
 export default defineBackground(() => {
+  // BYOKキー等を含む storage.local を trusted context に限定する（ADR 0004）。
+  // content script 側は設定値を直接読まず、下の get-review-config 経由で受け取る。
+  void restrictStorageToTrustedContexts();
+
+  /** 信頼できるコンテキストで設定を読み、content script へ渡す非秘密の設定だけを返す。 */
+  const readReviewConfig = async (): Promise<{ mode: ReviewMode; provider: ReviewProvider; model: string; hasKey: boolean }> => {
+    const [mode, storedProvider] = await Promise.all([reviewModeItem.getValue(), providerItem.getValue()]);
+    const provider = isReviewProvider(storedProvider) ? storedProvider : 'anthropic';
+    const settings = PROVIDER_SETTINGS[provider];
+    const [apiKey, model] = await Promise.all([settings.key.getValue(), settings.model.getValue()]);
+    return { mode: mode === 'byok' ? 'byok' : 'default', provider, model, hasKey: apiKey.length > 0 };
+  };
+
+  /** 設定変更を content script へ通知する（content 側は storage を watch しない）。 */
+  const broadcastConfigChanged = () => {
+    void browser.tabs.query({}).then((tabs) => {
+      for (const tab of tabs) {
+        if (tab.id !== undefined) void browser.tabs.sendMessage(tab.id, { type: 'minaosi:review-config-changed' }).catch(() => {});
+      }
+    });
+  };
+  reviewModeItem.watch(broadcastConfigChanged);
+  providerItem.watch(broadcastConfigChanged);
+  for (const settings of Object.values(PROVIDER_SETTINGS)) {
+    settings.key.watch(broadcastConfigChanged);
+    settings.model.watch(broadcastConfigChanged);
+  }
   const sidebar = (browser as typeof browser & { sidebarAction: { toggle(): Promise<void> } }).sidebarAction;
   if (import.meta.env.BROWSER !== 'firefox') {
     void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -40,6 +67,15 @@ export default defineBackground(() => {
           ? browser.sidePanel.open({ windowId: sender.tab.windowId })
           : browser.sidePanel.close({ windowId: sender.tab.windowId });
       void toggling.then(() => sendResponse({ ok: true }), (error: Error) => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (msg?.type === 'minaosi:review-config-changed') return undefined;
+    if (msg?.type === 'minaosi:get-review-config') {
+      // キーの実値は渡さず、有無だけを返す。送信時のキーは background が改めて読む。
+      void readReviewConfig().then(
+        (config) => sendResponse({ ok: true, ...config }),
+        () => sendResponse({ ok: false }),
+      );
       return true;
     }
     if (!msg || msg.type !== 'minaosi:review') return undefined;

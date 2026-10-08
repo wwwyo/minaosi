@@ -1,5 +1,8 @@
 import { isReviewProvider, type ReviewMode, type ReviewProvider } from '../minaosi/review/providers';
-import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from '../minaosi/store';
+import { reviewModeItem, providerItem, PROVIDER_SETTINGS, restrictStorageToTrustedContexts } from '../minaosi/store';
+
+// options は trusted context。storage.local の限定をここでも適用する（ADR 0004）。
+void restrictStorageToTrustedContexts();
 import { providerForModel } from '../minaosi/review/models';
 import { PANEL_CSS } from '../minaosi/ui/styles';
 import wordmark from '../../assets/wordmark.svg?raw';
