@@ -24,6 +24,7 @@ test('保存操作なしで大きい本文を検知し、競合しても手動�
   await expect(browser.locator('#minaosi-root')).toBeAttached();
   await expect(browser.locator('#draft')).toHaveText('これはE2E用の合成原稿です。');
   await expect(browser.locator('#second')).toHaveText('もう一つの合成原稿です。');
+  await agent.assert('画面右下に、丸い枠で囲まれたminaosiのm字のロゴの起動ボタンが表示されている', { vision: true });
 });
 
 test('パネルで未判定・編集領域なし・確定した本文を区別する', { tags: ['surface'] }, async ({ app, screen, browser }) => {

@@ -20,3 +20,15 @@
 中断検証では、初回 Ctrl-C が wrapper と同じ process group の runner に二重に届き、強制 teardown で一時 profile が残った。port は解放された。対象 Chromium の終了を確認してこの run の profile だけを削除し、runner を別 process group にして一度だけ SIGTERM を送るよう修正した。修正後、実拡張から偽 API に送信されたことを観測して wrapper に SIGTERM を送り、run `01a11aa8-025a-72c9-845f-e51b8728b4d4` は5.56秒で exit 130、report は interrupted、profile 残存0、port 解放を確認した。中断をテスト成功として数えてはいない。
 
 実校閲・実 Turnstile・実サービス編集画面・side pane のブラウザ chrome 開閉・Firefox・本番 BYOK の実通信・文体/事実確認品質は未実施。合成校閲 API の応答と操作用 LLM の実推論は別々の確認である。CI は個人の Access session を持たず、モデル不要の4件だけを実行する。
+
+## 独立 QA とレビューで見つかった点
+
+`c33e089` の独立 QA は実拡張10/10、7 model calls、16,720 tokens、184.94秒で成功した（run `01a11aab-4d89-7542-a899-5428044f63cb`）。215 steps、画像5枚、trace10件の参照と ZIP CRC を確認し、正常終了後の profile 残存0・port 解放、77 artifacts の leaks0を確認した。ただし128 output tokens の能力 preflight は `MODEL_CAPABILITY_FAILED` で失敗した。再実行の緑だけでは完了扱いせず、preflight の出力枠を512へ増やし、失敗 stage と finishReason/usage だけを診断に追加した。変更後の最初の確認は HTTP429で失敗し、その後の最小接続確認では HTTP200・choices を得た。429の原因は特定していない。
+
+レビューから、以下も修正した。最終 head の確認は PR の QA 欄で別に記録する。
+
+- escaped JSON の文字列が SDK で秘密値へ復元されないよう、JSON を解析して値・key を除去してから再 serialize する。escape fixture を含む transport 9件が成功。
+- `agent.act` の `maxInputTokens` は履歴全体の上限ではないことを明記し、transport で画像・履歴・toolsを含む256 KiBの request body 枠を追加。
+- モデルの保存操作は、先に合成 BYOK を保存し、標準へ変更させてから reload する。初期値と同じ画面だけでは永続化の根拠にしない。
+- 本文候補の競合が起きた後にもボタン画像を確認する。
+- 終了待機を直接 SIGKILL で打ち切る前に、runner の2回目・3回目の signal を通して detached app groups の停止を開始する。

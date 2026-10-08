@@ -16,7 +16,14 @@ export function extensionBrowser(): BrowserProvider {
       try {
         // test:e2e は偽校閲 API へ向けた development ビルド（chrome-mv3-dev）を読み込む。
         const dev = resolve('apps/extension/.output/chrome-mv3-dev');
-        await readFile(join(dev, 'manifest.json'));
+        try {
+          await readFile(join(dev, 'manifest.json'));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error('The development extension build is missing; run mise exec -- bun run build:e2e.');
+          }
+          throw error;
+        }
         const extension = dev;
         context = await chromium.launchPersistentContext(profile, {
           channel: 'chromium',

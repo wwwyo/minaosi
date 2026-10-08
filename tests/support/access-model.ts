@@ -4,6 +4,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 export const ACCESS_MODEL = 'workers-ai/@cf/google/gemma-4-26b-a4b-it';
 export const REQUEST_LIMIT = 60;
+export const REQUEST_BYTES_LIMIT = 262_144;
 const execFileAsync = promisify(execFile);
 const SDK_BASE = 'https://access.invalid/compat';
 const LOGIN_HINT = 'Run cloudflared access login --quiet with CF_AI_ACCESS_URL through mise in a human terminal, then retry.';
@@ -64,6 +65,9 @@ export function accessFetch(endpoint: string): typeof fetch {
     if (body.stream) throw new AccessError('ACCESS_REQUEST_INVALID', 'Streaming is not enabled for this E2E transport.');
     if (++requests > REQUEST_LIMIT) throw new AccessError('ACCESS_REQUEST_LIMIT', 'The worker exhausted its 60 HTTP model requests, including SDK retries.');
     body.max_tokens = Math.min(body.max_tokens ?? 2048, 2048);
+    if (Buffer.byteLength(JSON.stringify(body)) > REQUEST_BYTES_LIMIT) {
+      throw new AccessError('ACCESS_INPUT_LIMIT', 'Model request exceeded 256 KiB, including tool history and images.');
+    }
     const signal = AbortSignal.any([AbortSignal.timeout(60_000), ...(init.signal ? [init.signal] : [])]);
     const jwt = await accessSession(endpoint, signal);
     const headers = new Headers({ 'content-type': 'application/json', 'cf-access-token': jwt });
@@ -90,13 +94,21 @@ export function accessFetch(endpoint: string): typeof fetch {
       throw new AccessError('ACCESS_NETWORK_FAILED', 'Model request failed or exceeded 60 seconds.');
     }
     // Never forward upstream error bodies, headers, or the actual response URL to the SDK.
-    const safeText = text.replaceAll(endpoint, '[access-url]').replaceAll(new URL(endpoint).host, '[access-host]').replaceAll(jwt, '[access-session]');
     let payload: { choices?: unknown[] };
-    try { payload = JSON.parse(safeText); } catch { throw new AccessError('ACCESS_RESPONSE_INVALID', 'Expected valid model JSON.'); }
+    try { payload = JSON.parse(text); } catch { throw new AccessError('ACCESS_RESPONSE_INVALID', 'Expected valid model JSON.'); }
     if (!Array.isArray(payload?.choices) || payload.choices.length === 0) {
       throw new AccessError('ACCESS_RESPONSE_INVALID', 'Expected non-empty model choices.');
     }
-    return new Response(safeText, { headers: { 'content-type': 'application/json' } });
+    const host = new URL(endpoint).host;
+    const redact = (value: unknown): unknown => {
+      if (typeof value === 'string') return value.replaceAll(endpoint, '[access-url]').replaceAll(host, '[access-host]').replaceAll(jwt, '[access-session]');
+      if (Array.isArray(value)) return value.map(redact);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [redact(key), redact(item)]));
+      }
+      return value;
+    };
+    return new Response(JSON.stringify(redact(payload)), { headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
 }
 

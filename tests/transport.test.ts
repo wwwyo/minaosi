@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { accessEndpoint, accessFetch, accessSession, REQUEST_LIMIT } from './support/access-model';
+import { accessEndpoint, accessFetch, accessSession, REQUEST_LIMIT, REQUEST_BYTES_LIMIT } from './support/access-model';
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -110,11 +110,15 @@ test('unsupported model, HTML, malformed JSON and empty choices cannot pass as m
 });
 
 test('successful response cannot echo the endpoint or session into artifacts', async () => {
-  responseBody = JSON.stringify({ choices: [{ message: { content: `${server.url.href} ${session}` } }] });
+  // Slash/unicode escapes are decoded by the SDK and must be removed before it receives JSON.
+  responseBody = JSON.stringify({ choices: [{ message: { content: `${server.url.href} ${session}` } }], metadata: { [session]: server.url.host } })
+    .replaceAll('/', '\\/').replaceAll('.', '\\u002e');
   const response = await accessFetch(server.url.href)(sdkURL, post);
   const body = await response.text();
   expect(body).not.toContain(server.url.host);
   expect(body).not.toContain(session);
+  expect(body).not.toContain('fixture');
+  expect(JSON.stringify(JSON.parse(body))).not.toContain(session);
 });
 
 test('request budget includes every HTTP attempt, even SDK retries', async () => {
@@ -123,3 +127,9 @@ test('request budget includes every HTTP attempt, even SDK retries', async () =>
   await expect(fetcher(sdkURL, post)).rejects.toThrow('ACCESS_REQUEST_LIMIT');
   expect(requests).toHaveLength(REQUEST_LIMIT);
 }, 15_000);
+
+test('oversized input, including accumulated history, fails before session or HTTP', async () => {
+  await writeFile(join(dir, 'session'), 'missing');
+  await expect(accessFetch(server.url.href)(sdkURL, { method: 'POST', body: JSON.stringify({ messages: [{ content: 'x'.repeat(REQUEST_BYTES_LIMIT) }] }) })).rejects.toThrow('ACCESS_INPUT_LIMIT');
+  expect(requests).toHaveLength(0);
+});

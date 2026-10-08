@@ -22,7 +22,7 @@
 
 操作モデルは `workers-ai/@cf/google/gemma-4-26b-a4b-it` に固定する。[公式仕様](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/)は vision・function calling を持ち、2026-10-08 時点の価格は input $0.10 / output $0.30 per M tokens。SDK の schema 出力、画像判定、tool call は `check:e2e:model` で実通信確認する。単色の正負判定だけでは細かい UI の品質を保証できないため、実拡張の正・負の画像 assertion と `agent.act` も通す。
 
-Llama 3.1 8B の接続成功は vision の根拠にならない。Llama 4 Scout は事前の画像・schema・tool call を通過し、UI 操作も成功したが、実画像にある起動ボタンを否定したため採用しなかった。Gemma 4 はより安価な候補であり、assertion を緩めず選定・検証する。モデルの自動 fallback は設けず、非対応や品質の失敗を結果に残す。
+Llama 3.1 8B の接続成功は vision の根拠にならない。Llama 4 Scout は事前の画像・schema・tool call を通過し、UI 操作も成功したが、実画像にある起動ボタンを否定したため採用しなかった。より安価な Gemma 4 は、同じ assertion で実拡張を確認して採用した。将来のモデル変更時も assertion は緩めず、モデルの自動 fallback は設けない。非対応や品質の失敗を結果に残す。
 
 curl を request ごとに実行する案は認証が簡単だが、自動ログインや stdout/headers の扱いが SDK と合わない。ローカル proxy を設ける案は token が別サービスへ広がり、readiness・cleanup も増える。既存 SDK に小さな transport を接続してこの負担を避ける。
 
@@ -32,9 +32,11 @@ curl を request ごとに実行する案は認証が簡単だが、自動ログ
 | --- | --- | --- | --- |
 | ローカル `test:e2e` | E2E・拡張の変更、PR の独立 QA、操作モデル変更 | 実 Chromium 拡張、合成画面、実 Access モデルの操作・画像判定、DOM・永続化・送信の assertion | 実校閲の品質・Turnstile 検証・実サービスへの対応 |
 | CI `test:e2e:offline` | pull_request、main push、workflow_dispatch | 同じ実拡張のうちモデル不要の要件、transport の境界テスト、E2E 型チェック | `model` tag の操作・vision。API key や個人 session は CI に渡さない |
-| 実校閲 integration | 校閲の挙動・binding・provider を変える PR で明示的に実施 | `bun run api:dev` の workerd から実 AI・外部サービスへの通信、実 Turnstile、必要な実 surface | この PR では未実施。合成 API の緑を成功の代わりにしない |
+| 実校閲 integration | 校閲の挙動・binding・provider を変える PR で明示的に実施 | `bun run api:dev` の workerd から実 AI・外部サービスへの通信、実 Turnstile、必要な実 surface | 対象外の surface・ブラウザ・校閲品質は個別に記録する |
 
 Access に個人ログインしかない現状では、GitHub-hosted runner に実モデル E2E の無人実行を置けない。CI の緑は全 E2E の完了を意味しない。将来の無人経路には専用 identity・policy・課金責任の別設計が必要であり、今回は既存 Access policy を変更しない。
+
+この PR の実校閲 integration は未実施である。合成 API の成功を代わりにせず、[検証記録](e2e-validation.md)の未確認範囲として残す。
 
 ## 実行上限とライフサイクル
 
@@ -42,8 +44,8 @@ Access に個人ログインしかない現状では、GitHub-hosted runner に�
 - worker は1、retry は0、replay cache は off。固定の偽 API port `18787` と options URL の受け渡しが単一 worker を前提とするため、複数 run を同時に起動しない。
 - runner が site と偽 API を起動し、`/__health` を readiness とする。port 競合は失敗。各テストで観測用送信一覧を reset し、前のテストの送信を数えない。
 - attempt 120秒、launch 60秒、Chromium launch 30秒、操作15秒、通常 assertion 10秒、モデル judgment/HTTP 60秒、cleanup 30秒。既存の自動校閲の30秒待機は副作用の安定待ちとして維持する。
-- `agent.act` は最大10 steps/10 model calls（操作 smoke は6）、input は request あたり32,768 tokens。transport は worker あたり60 HTTP requests、output は各 request 最大2,048 tokens。runner の内蔵 SDK retry 5回も HTTP 上限へ数える。transport で再試行は足さない。最大 input は60×32,768、output は60×2,048の予算枠で、provider の画像 token 計測や価格変更まで保証する課金上限ではない。
-- wrapper は build/preflight を3分、run を15分に制限し、SIGTERM で runner の cleanup を開始、35秒で終わらなければ SIGKILL とする。runner は terminal と別の process group に置き、同じ interrupt が二重に届いて強制 teardown になることを防ぐ。強制終了や OS 停止では cleanup を保証できない。profile と port の残存を調べ、この run の残存だけを処理する。
+- `agent.act` は最大10 steps/10 model calls（操作 smoke は6）。`maxInputTokens: 32,768` は judgment の入力推定上限であり、act では観測を縮小する予算に使う。固定 runner は act の履歴・tools 全体にこの token 上限を検査しないため、request 全体32,768とは扱わない。transport は画像・履歴・tools を含む request body を256 KiB、worker を60 HTTP requests、output を各 request 最大2,048 tokens に制限する。provider が公表する context window は256,000 tokensであり、ローカルでは正確な画像 token 数を測定しない。runner の内蔵 SDK retry 5回も HTTP 上限へ数え、transport で再試行は足さない。output は60×2,048の枠で、実 input/token 単価による課金額は report と provider usage で確認する。
+- wrapper は build/preflight を3分、run を15分に制限し、SIGTERM で runner の cleanup を開始する。runner の attempt 120秒＋cleanup 30秒に5秒の余裕を置き、155秒で終わらなければ2回目の SIGTERM で worker を強制 teardown する。さらに cleanup の猶予を置き、190秒で3回目を送り runner 自身に detached app groups を終了させる。195秒でなお止まらなければ runner group を SIGKILL する。runner は terminal と別の process group に置き、同じ interrupt が二重に届くことを防ぐ。build/preflight の最終猶予は35秒。OS 停止や最終 SIGKILL では cleanup を保証できない。profile と port の残存を調べ、この run の残存だけを処理する。
 - build と runner に継承する環境変数を限定し、key・age 復号キーを渡さない。runner だけが Access URL を読む。site は `env -i`、Chromium は PATH/HOME だけを継承する。JWT は env に入れない。
 
 ## 証跡と運用

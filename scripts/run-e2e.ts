@@ -28,12 +28,24 @@ async function run(args: string[], childEnv: Record<string, string>, timeout: nu
   // A terminal interrupt must reach the runner once; sharing its group causes a second, forced teardown.
   const child = spawn(executable, args, { env: childEnv, stdio: 'inherit', detached: true });
   let stopped = false;
-  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const killTimers: ReturnType<typeof setTimeout>[] = [];
+  const killGroup = () => {
+    if (!child.pid) return;
+    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* The child may already have exited. */ }
+  };
   const stop = () => {
     if (stopped) return;
     stopped = true;
     child.kill('SIGTERM');
-    killTimer = setTimeout(() => child.kill('SIGKILL'), 35_000);
+    if (executable === 'node') {
+      // e2e's third signal kills its detached app groups; killing only the runner would orphan them.
+      // Let the runner's 120s attempt + 30s cleanup budget expire before forcing it.
+      killTimers.push(setTimeout(() => child.kill('SIGTERM'), 155_000));
+      killTimers.push(setTimeout(() => child.kill('SIGTERM'), 190_000));
+      killTimers.push(setTimeout(killGroup, 195_000));
+    } else {
+      killTimers.push(setTimeout(killGroup, 35_000));
+    }
   };
   const timer = setTimeout(stop, timeout);
   process.once('SIGINT', stop);
@@ -45,7 +57,7 @@ async function run(args: string[], childEnv: Record<string, string>, timeout: nu
     });
   } finally {
     clearTimeout(timer);
-    clearTimeout(killTimer);
+    for (const killTimer of killTimers) clearTimeout(killTimer);
     process.removeListener('SIGINT', stop);
     process.removeListener('SIGTERM', stop);
   }

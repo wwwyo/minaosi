@@ -41,6 +41,7 @@ mise exec -- bun run check:e2e:artifacts
 `ACCESS_MODEL_HTTP`・`ACCESS_RESPONSE_INVALID`・`MODEL_CAPABILITY_FAILED` はモデル対応と Gateway を調べる。
 HTML や assertion の緩和で成功にしない。`ACCESS_NETWORK_FAILED` は60秒の通信期限、
 `ACCESS_REQUEST_LIMIT` は worker の60 HTTP requests（SDK retry を含む）の枠に達したことを示す。
+`ACCESS_INPUT_LIMIT` は履歴・画像を含む request body の256 KiB上限に達したことを示す。
 実 URL/domain・JWT をログに転記せず、秘密を含む `mise env` 出力も公開しない。
 
 秘密不要の CI 相当部分は以下で実行できる。
@@ -58,11 +59,11 @@ mise exec -- bun run test:e2e:offline
 | [note-inline-review: API keyの設定](../docs/prd/note-inline-review/prd.md#acceptance-criteria) | BYOK設定を保存し、再読み込み後も入力し直さず保存できる | モデルの永続化と、必須のキーを再入力せず再保存できること。secure fieldの値は読み取らず、キーの完全一致や校閲への送信は検証しない |
 | [note-inline-review: 校閲の判定基準](../docs/prd/note-inline-review/prd.md#acceptance-criteria) | 校閲ルールを設定せず標準モードを保存できる | 規範設定・ファイル入力がなく、標準モードをそのまま保存・再読込できること |
 | [multi-surface: 通常のcontenteditable](../docs/prd/multi-surface/research.md) | 執筆画面に実際の拡張の起動ボタンが現れる | 実拡張のhost要素と、画像での起動ボタンの表示。isolated worldのclosed shadow rootはDOM readerで読めないため、表示はvision付きのagent.assertで判定する |
-| [multi-surface: 汎用判定と手動選択](../docs/prd/multi-surface/research.md) | 保存操作なしの本文、競合後の手動起動、パネルの確定・不明・無し | 実拡張で面積による検知、競合時も起動ボタンを維持することを確認する。公開tabs APIで合成画面を別タブに開き、実パネルの案内と実行ボタンを確認する。自動チェックの許可境界は共有ルールのテストで確認する |
+| [multi-surface: 汎用判定と手動選択](../docs/prd/multi-surface/research.md) | 保存操作なしの本文、競合後の手動起動用表示、パネルの確定・不明・無し | 面積による検知と、競合の前後で起動ボタンの画像を確認する（ボタンのクリックは未確認）。公開tabs APIで合成画面を別タブに開き、実パネルの案内と実行ボタンを確認する。自動チェックの許可境界は共有ルールのテストで確認する |
 | [multi-surface: 隣接ヘッダー](../docs/prd/multi-surface/research.md) | 本文の隣のヘッダーに保存操作がある執筆画面を検知する | host・起動ボタン画像・タイトルと本文の値 |
 | [auto-review: 自動開始・差分送信](../docs/prd/auto-review/prd.md#acceptance-criteria) | 本文を開くと自動で校閲され、編集の停止で変わった段落だけを再送する | 偽 API の初回2ブロックとtoken、編集後1ブロックと本文値、FAB リングの画像 |
 | [auto-review: 一時停止・再開](../docs/prd/auto-review/prd.md#acceptance-criteria) | パネルから自動校閲を一時停止・再開できる。止めている間は送信しない | 自己編集を含む停止窓で送信増分なし→再開後の段落 index と本文値 |
-| 今回の Access 操作要件 | Accessモデルが設定を保存し、保存状態が再読み込み後も残る | 実モデルの agent.act→実際の保存 status→reload 後の標準 radio と保存可否 |
+| 今回の Access 操作要件 | Accessモデルが設定を保存し、保存状態が再読み込み後も残る | 合成 BYOK を先に保存→実モデルで標準へ変更・保存→実際の status→reload 後の標準 radio と保存可否 |
 | 今回の vision の負例 | 編集領域のない画面には起動ボタンが表示されない | host 不在と、起動ボタンが無い画像の判定 |
 
 report の `titlePath` をテスト名に対応させる。各 attempt の `steps` が操作と assertion、
