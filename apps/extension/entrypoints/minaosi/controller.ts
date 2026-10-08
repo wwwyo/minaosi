@@ -359,8 +359,9 @@ export class Controller {
       if (el) this.factCheckedEls.add(el);
     }
     for (const el of this.factCheckedEls) if (!el.isConnected) this.factCheckedEls.delete(el);
+    // 常に生存中の要素から番号を組み直す（剪定前の next をそのまま返さない）
     const indices = blocks.filter((b) => this.factCheckedEls.has(b.element)).map((b) => b.index);
-    return indices.length ? { status: 'partial', sourceCheckedBlocks: indices } : next;
+    return { status: indices.length ? 'partial' : 'unavailable', sourceCheckedBlocks: indices };
   }
 
   /**
