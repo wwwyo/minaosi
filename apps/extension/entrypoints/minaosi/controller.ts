@@ -4,7 +4,6 @@ import { selectReviewEditor, type ReviewTrigger, type SurfaceAdapter } from './s
 import { blockText, captureInText, contextOf, indexOfRange, occurrences, applyReplacement, rangeAt, resolveSite, seamIndex, undoSite, minimalReplacement } from './surfaces/resolve';
 import type { ReviewedFinding, FactCheckSummary } from '@minaosi/api/rpc';
 import { isReviewProvider, type ReviewMode, type ReviewProvider, type ReviewRequest } from './review/providers';
-import { reviewModeItem, providerItem, PROVIDER_SETTINGS } from './store';
 import { Decorations } from './ui/decorations';
 import { renderFab, updateFab, initialReviewState, type ReviewState } from './ui/panel';
 import { PANEL_CSS } from './ui/styles';
@@ -31,9 +30,12 @@ export class Controller {
   private reviewSequence = 0;
   private providerLoad = 0;
   private disposed = false;
-  private unwatch: (() => void)[] = [];
+  private stopConfigWatch: (() => void) | null = null;
   private stopPanelWatch: (() => void) | null = null;
-  private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, apiKey: '', model: '' };
+  // 認証情報の実値は持たない。キーの有無だけを background に問い合わせる（ADR 0004）。
+  private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, model: '', hasKey: false };
+  /** background から設定を一度でも取得できたか。未取得のまま実行させない。 */
+  private configLoaded = false;
   /** 自動校閲の送信タイミング。編集検知・静穏時間・最小間隔はここに集約する */
   private readonly scheduler: AutoReviewScheduler;
   /** 前回送信したブロック本文（要素参照つき）。変わっていないブロックは再送しない */
@@ -137,24 +139,41 @@ export class Controller {
 
   async init() {
     if (this.disposed) return;
-    const reload = () => { void this.loadProvider(); };
-    this.unwatch = [reviewModeItem.watch(reload), providerItem.watch(reload),
-      ...Object.values(PROVIDER_SETTINGS).flatMap((settings) => [settings.key.watch(reload), settings.model.watch(reload)]),
-    ];
+    // content script から storage.local を直接読まない。設定変更は background が中継する。
+    const onConfig: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender) => {
+      if (sender?.id !== browser.runtime.id) return;
+      if (typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'minaosi:review-config-changed') {
+        void this.reloadConfig();
+      }
+    };
+    browser.runtime.onMessage.addListener(onConfig);
+    this.stopConfigWatch = () => browser.runtime.onMessage.removeListener(onConfig);
     this.scheduler.start();
-    await this.loadProvider();
+    await this.reloadConfig();
   }
 
-  private async loadProvider() {
+  private async reloadConfig() {
     const generation = ++this.providerLoad;
     this.s.connectionLoading = true;
     this.render();
-    const [mode, storedProvider] = await Promise.all([reviewModeItem.getValue(), providerItem.getValue()]);
-    const provider = isReviewProvider(storedProvider) ? storedProvider : 'anthropic';
-    const settings = PROVIDER_SETTINGS[provider];
-    const [apiKey, model] = await Promise.all([settings.key.getValue(), settings.model.getValue()]);
+    try {
+      const reply = (await browser.runtime.sendMessage({ type: 'minaosi:get-review-config' })) as {
+        ok?: unknown; mode?: unknown; provider?: unknown; model?: unknown; hasKey?: unknown;
+      } | undefined;
+      if (this.disposed || generation !== this.providerLoad) return;
+      if (reply?.ok === true && isReviewProvider(reply.provider)) {
+        this.config = {
+          mode: reply.mode === 'byok' ? 'byok' : 'default',
+          provider: reply.provider,
+          model: typeof reply.model === 'string' ? reply.model : '',
+          hasKey: reply.hasKey === true,
+        };
+        this.configLoaded = true;
+      }
+    } catch {
+      // background 未起動時は前回値を維持する。
+    }
     if (this.disposed || generation !== this.providerLoad) return;
-    this.config = { mode: mode === 'byok' ? 'byok' : 'default', provider, apiKey, model };
     this.s.connectionLoading = false;
     this.render();
     // 設定の読み込み・変更が済んだら一度自動校閲を試す（接続先が登録された直後に動き出す）
@@ -285,6 +304,17 @@ export class Controller {
 
   async run(trigger: ReviewTrigger, turnstile?: TurnstileProof) {
     if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
+    // 初期値を読み込み済みと扱わない。未取得なら再取得し、それでも駄目なら実行しない。
+    if (!this.configLoaded) await this.reloadConfig();
+    if (this.disposed) return;
+    if (!this.configLoaded) {
+      // 自動経路では設定未取得の失敗を表に出さない（手動はエラーとして見せる）
+      if (trigger === 'automatic') return;
+      this.s.phase = 'error';
+      this.s.error = '設定を読み込めませんでした。ページを開き直してください';
+      this.render();
+      return;
+    }
     if (!this.canRun(trigger)) return;
     if (trigger === 'automatic' && this.s.auto !== 'on') return;
     if (turnstile?.error) {
@@ -293,7 +323,7 @@ export class Controller {
       this.render();
       return;
     }
-    if (this.config.mode === 'byok' && (!this.config.apiKey || !this.config.model)) {
+    if (this.config.mode === 'byok' && (!this.config.hasKey || !this.config.model)) {
       // 接続先の未設定は自動経路では静かに諦める（書き手の操作を待つ）
       if (trigger === 'automatic') return;
       this.s.phase = 'error';
@@ -588,8 +618,8 @@ export class Controller {
     cancelAnimationFrame(this.staleRaf);
     this.scheduler.dispose();
     this.stopPanelWatch?.();
+    this.stopConfigWatch?.();
     ++this.providerLoad;
-    for (const unwatch of this.unwatch) unwatch();
     this.deco.dispose();
     this.host.remove();
   }

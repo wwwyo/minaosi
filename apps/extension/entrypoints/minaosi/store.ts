@@ -1,4 +1,4 @@
-import { storage } from '#imports';
+import { browser, storage } from '#imports';
 import type { ReviewMode, ReviewProvider } from './review/providers';
 /** BYOKのキーを拡張のオプションで登録し、ローカルに保持する。 */
 export const apiKeyItem = storage.defineItem<string>('local:apiKey', { fallback: '' });
@@ -18,4 +18,22 @@ export const PROVIDER_SETTINGS = {
 };
 
 // 設定画面を削除しても、過去の規範と試用キーがstorageに残り続けるため消す。
-void storage.removeItems(['local:opencodeKey', 'local:opencodeModel', 'local:styleGuide']);
+// content script からは制限後に届かないため失敗してよい。実際の消去は background／options が担う。
+void storage.removeItems(['local:opencodeKey', 'local:opencodeModel', 'local:styleGuide']).catch(() => {});
+
+/**
+ * storage.local を trusted context に限定する（ADR 0004）。
+ * BYOKキー等を content script（ページ同居プロセス）の読み取り範囲から外す。
+ * Firefox 等の未対応環境では何もしない。設定は保持されるが起動ごとに適用する。
+ */
+export async function restrictStorageToTrustedContexts(): Promise<void> {
+  const local = browser.storage?.local as unknown as
+    | { setAccessLevel?: (options: { accessLevel: 'TRUSTED_CONTEXTS' }) => Promise<void> }
+    | undefined;
+  if (typeof local?.setAccessLevel !== 'function') return;
+  try {
+    await local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
+  } catch {
+    // 未対応環境では無視する。キーの実値読みの分離（background 所有）は別途保つ。
+  }
+}
