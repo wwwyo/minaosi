@@ -3,4 +3,4 @@
 - Status: Accepted
 - Date: 2026-09-30
 
-[minaosi#7](https://github.com/wwwyo/minaosi/pull/7)（open）で note エディタ上の校閲パネル・FAB・執筆面から独立した pane を実装し、深夜には BYOK 校閲の実行面を TanStack AI + Cloudflare AI Gateway へ移す変更まで入った。宣言上の完了条件（Store submit）には未到達で、翌日へ持ち越し
+v1 の構成として、note エディタ上のインライン校閲（指摘は本文上で確認、適用は書き手が操作）＋ブラウザ標準の独立サイド pane、AI 連携は background → Hono Worker → TanStack AI → Cloudflare AI Gateway → provider の経路を採用して [minaosi#7](https://github.com/wwwyo/minaosi/pull/7)（open）で実装を進めた。標準（運営者キーの DeepSeek）と BYOK（利用者キー）を同一経路に載せ、TanStack AI の adapter で provider 差分を吸収する判断。日本語ルールは常時適用とし、ルールのトグル・一覧・送信同意画面・ログインは設けない範囲切りも同日確定。宣言上の完了条件（Store submit）には未到達で、翌日へ持ち越し
