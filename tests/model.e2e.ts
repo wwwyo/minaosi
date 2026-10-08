@@ -7,7 +7,7 @@ test('Accessモデルが設定を保存し、保存状態が再読み込み後�
   await app.open(optionsUrl);
   // A non-default saved state makes reload distinguish persistence from the default initial UI.
   await screen.getByRole('radio', /自分のAPIキー/).tap();
-  await screen.getByLabel('モデル').fill('e2e-synthetic-model');
+  await screen.getByLabel('モデル').fill('gpt-5.4-mini');
   await screen.getByLabel('APIキー').fill(secrets.get('byok-test-key'));
   await screen.getByRole('button', '保存する').tap();
   await expect(screen.getByRole('status')).toHaveText('保存しました');
