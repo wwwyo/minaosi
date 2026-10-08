@@ -421,6 +421,15 @@ export class Controller {
     return out;
   }
 
+  /**
+   * パネル操作（適用・元に戻す）で本文を書き換えた直後に呼ぶ。
+   * MutationObserver は自分の編集も拾うため、書いた結果を送信履歴へ記録して
+   * 未送信の差分と誤認させない（適用直後の自動再送で対応済み指摘と undo 情報が消えない）。
+   */
+  private recordSent(el: HTMLElement) {
+    this.lastSentBlocks.set(el, blockText(el));
+  }
+
   /* ---- 適用 / 元に戻す ---- */
 
   private applyMatch(fid: string, idx: number) {
@@ -459,6 +468,7 @@ export class Controller {
     // undo 用文脈を採れなかった適用は「元に戻す」が効かないため stale として表面化する
     m.stale = at === undefined;
     if (startIdx !== null) this.refreshAfterEdit(f.blockEl, startIdx, m.to.length - m.from.length, m);
+    this.recordSent(f.blockEl);
     this.syncResolved(f);
     this.s.selectedId = null;
   }
@@ -565,6 +575,7 @@ export class Controller {
         if (text.slice(at, at + m.from.length) === m.from) this.recapture(m, text, at);
         this.refreshAfterEdit(f.blockEl, at, m.from.length - m.to.length, m);
       }
+      this.recordSent(f.blockEl);
     }
     this.syncResolved(f);
     this.s.selectedId = null;
