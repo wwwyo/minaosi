@@ -53,6 +53,8 @@ mise exec -- bun run dev
 
 拡張のOriginは `chrome-extension://<拡張ID>` など。開発・本番とも、使用する拡張のOriginを設定する。Origin付きのリクエストは未設定では403となる。Chrome / Firefoxや開発版 / 配布版でOriginが違う場合はそれぞれ指定する。通常のWebサイトからのCORSは許可しない。Originのないリクエストにも同じモード別の認証条件を適用する。ローカルサーバーはループバックにだけbindする。
 
+Chromeでは、手動読み込み（パッケージ化されていない拡張機能）の拡張IDは、manifest に `key` を置かない限り読み込みフォルダのパスから導出される。worktree の `apps/extension/.output/chrome-mv3` を読み込むと ID がパスごとに変わり、worktree 削除で登録した ID が無効になって `ALLOWED_ORIGINS` 未登録の 403 が再発する（2026-10 観測）。開発用に Origin 登録する拡張IDは、main checkout の固定パスでビルドしたものから読み込んだ ID に限る。ID をパス非依存にする恒久対策として manifest に `key` を固定する方法があるが、Store 公開版の拡張ID との整合を確かめてから採用する。
+
 開発時のBYOK試用は、拡張のオプション画面でプロバイダーのキーを登録して行う（Gateway接続が必要）。Anthropic / OpenAIの実キーを開発QAに使わない。
 
 ## Worker の公開設定
