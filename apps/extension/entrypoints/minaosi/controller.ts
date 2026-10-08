@@ -31,6 +31,8 @@ export class Controller {
   private stopPanelWatch: (() => void) | null = null;
   // 認証情報の実値は持たない。キーの有無だけを background に問い合わせる（ADR 0004）。
   private config = { mode: 'default' as ReviewMode, provider: 'anthropic' as ReviewProvider, model: '', hasKey: false };
+  /** background から設定を一度でも取得できたか。未取得のまま実行させない。 */
+  private configLoaded = false;
 
   private s: Omit<ReviewState, 'findings'> & { findings: Finding[] } = {
     phase: 'idle',
@@ -116,7 +118,8 @@ export class Controller {
   async init() {
     if (this.disposed) return;
     // content script から storage.local を直接読まない。設定変更は background が中継する。
-    const onConfig: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message) => {
+    const onConfig: Parameters<typeof browser.runtime.onMessage.addListener>[0] = (message, sender) => {
+      if (sender?.id !== browser.runtime.id) return;
       if (typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'minaosi:review-config-changed') {
         void this.reloadConfig();
       }
@@ -142,6 +145,7 @@ export class Controller {
           model: typeof reply.model === 'string' ? reply.model : '',
           hasKey: reply.hasKey === true,
         };
+        this.configLoaded = true;
       }
     } catch {
       // background 未起動時は前回値を維持する。
@@ -210,6 +214,15 @@ export class Controller {
 
   async run(trigger: ReviewTrigger, turnstile?: TurnstileProof) {
     if (this.disposed || this.s.phase === 'running' || this.s.connectionLoading) return;
+    // 初期値を読み込み済みと扱わない。未取得なら再取得し、それでも駄目なら実行しない。
+    if (!this.configLoaded) await this.reloadConfig();
+    if (this.disposed) return;
+    if (!this.configLoaded) {
+      this.s.phase = 'error';
+      this.s.error = '設定を読み込めませんでした。ページを開き直してください';
+      this.render();
+      return;
+    }
     if (!this.canRun(trigger)) return;
     if (turnstile?.error) {
       this.s.phase = 'error';
