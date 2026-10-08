@@ -8,7 +8,8 @@
 
 | credential | 使う場所 | 今回の扱い |
 | --- | --- | --- |
-| `OPENCODE_API_KEY`・`OPENCODE_E2E_MODEL` | 旧 E2E 操作用 LLM | E2E から依存を外す |
+| `OPENCODE_API_KEY` | OpenCode Go の provider credential | E2E client は読まず、Gateway 側の保管・注入を接続の前提とする |
+| `OPENCODE_E2E_MODEL` | E2E 操作用モデルの選択 | global mise の `mimo-v2.6-flash` を維持し、runner/preflight に渡す。未設定は失敗 |
 | `CF_AI_ACCESS_URL` | E2E 操作用 LLM の HTTPS request URL | mise + age から読む。平文の URL/domain を文書・PR・ログに載せない |
 | Access session JWT | 操作用 LLM の HTTP transport | cloudflared の既存 session を subprocess の stdout pipe で受け取り、メモリ内で request に付ける |
 | 本番 `CF_AIG_TOKEN`・利用者の BYOK key | 校閲 API | 変更しない。`docs/review-gateway.md` の説明は有効 |
@@ -20,9 +21,11 @@
 
 `cloudflared access token --app` は既存 session を取得するだけで、`access curl` と異なり自動ログインを開始しない（[2026.9.3 の実装](https://github.com/cloudflare/cloudflared/blob/2026.9.3/cmd/cloudflared/access/cmd.go)）。取得を5秒に制限し、JWT の `exp` が60秒以内なら実推論前に失敗させる。これはローカルの期限確認であり、署名・policy は Access が検証する。各 request で session を取得し直すため、人が別 terminal で更新した session を使える。401/403/redirect は再ログインが必要として終了し、HTML を推論成功として扱わない。
 
-操作モデルは `workers-ai/@cf/google/gemma-4-26b-a4b-it` に固定する。[公式仕様](https://developers.cloudflare.com/workers-ai/models/gemma-4-26b-a4b-it/)は vision・function calling を持ち、2026-10-08 時点の価格は input $0.10 / output $0.30 per M tokens。SDK の schema 出力、画像判定、tool call は `check:e2e:model` で実通信確認する。単色の正負判定だけでは細かい UI の品質を保証できないため、実拡張の正・負の画像 assertion と `agent.act` も通す。
+操作モデルは global mise の `OPENCODE_E2E_MODEL=mimo-v2.6-flash` を使う。Access 認証への変更とモデル選択を分離し、Gateway の custom provider `opencode-go` に対する `custom-opencode-go/<モデルID>` へ変換する。未設定・provider prefix 付きの値は接続前に失敗し、別モデルや直接 OpenCode への fallback は設けない。[MiMo の画像対応](https://mimo.mi.com/docs/en-US/quick-start/usage-guide/multimodal-understanding/image-understanding)に加え、SDK の schema 出力・画像判定・tool call は `check:e2e:model`、実 UI の正負判定と操作は実拡張 E2E で確認する。
 
-Llama 3.1 8B の接続成功は vision の根拠にならない。Llama 4 Scout は事前の画像・schema・tool call を通過し、UI 操作も成功したが、実画像にある起動ボタンを否定したため採用しなかった。より安価な Gemma 4 は、同じ assertion で実拡張を確認して採用した。将来のモデル変更時も assertion は緩めず、モデルの自動 fallback は設けない。非対応や品質の失敗を結果に残す。
+この経路には Gateway 側の custom provider と provider key の安全な保管が必要である（[custom provider](https://developers.cloudflare.com/ai-gateway/configuration/custom-providers/)、[BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)）。upstream は既存の OpenCode Go の HTTPS API を使う。runner は Access session だけを送信し、provider key を env・SDK・Chromium に渡さない。OpenCode 操作用の User-Agent と worker ごとのランダム session ID は transport に付ける。Access の入口認証だけでは upstream の provider 認証を代替できない。
+
+当初は global のモデル指定を旧 key 設定と一緒に扱い、Gemma 4 を選定した。これは認証移行に伴う必要な変更ではなく、利用者が指定していた MiMo を見落とした判断だった。Gemma/Scout の実測は[過去の検証記録](e2e-validation.md)に残すが、MiMo の成功の根拠には使わない。Gateway の設定・実通信を確認できるまで、MiMo の Access 移行は完了としない。
 
 curl を request ごとに実行する案は認証が簡単だが、自動ログインや stdout/headers の扱いが SDK と合わない。ローカル proxy を設ける案は token が別サービスへ広がり、readiness・cleanup も増える。既存 SDK に小さな transport を接続してこの負担を避ける。
 
@@ -44,9 +47,9 @@ Access に個人ログインしかない現状では、GitHub-hosted runner に�
 - worker は1、retry は0、replay cache は off。固定の偽 API port `18787` と options URL の受け渡しが単一 worker を前提とするため、複数 run を同時に起動しない。
 - runner が site と偽 API を起動し、`/__health` を readiness とする。port 競合は失敗。各テストで観測用送信一覧を reset し、前のテストの送信を数えない。
 - attempt 120秒、launch 60秒、Chromium launch 30秒、操作15秒、通常 assertion 10秒、モデル judgment/HTTP 60秒、cleanup 30秒。既存の自動校閲の30秒待機は副作用の安定待ちとして維持する。
-- `agent.act` は最大10 steps/10 model calls（操作 smoke は6）。`maxInputTokens: 32,768` は judgment の入力推定上限であり、act では観測を縮小する予算に使う。固定 runner は act の履歴・tools 全体にこの token 上限を検査しないため、request 全体32,768とは扱わない。transport は画像・履歴・tools を含む request body を256 KiB、worker を60 HTTP requests、output を各 request 最大2,048 tokens に制限する。provider が公表する context window は256,000 tokensであり、ローカルでは正確な画像 token 数を測定しない。runner の内蔵 SDK retry 5回も HTTP 上限へ数え、transport で再試行は足さない。output は60×2,048の枠で、実 input/token 単価による課金額は report と provider usage で確認する。
+- `agent.act` は最大10 steps/10 model calls（操作 smoke は6）。`maxInputTokens: 32,768` は judgment の入力推定上限であり、act では観測を縮小する予算に使う。固定 runner は act の履歴・tools 全体にこの token 上限を検査しないため、request 全体32,768とは扱わない。transport は画像・履歴・tools を含む request body を256 KiB、worker を60 HTTP requests、output を各 request 最大2,048 tokens に制限する。ローカルでは正確な画像 token 数を測定しない。runner の内蔵 SDK retry 5回も HTTP 上限へ数え、transport で再試行は足さない。output は60×2,048の枠で、実 input/token 単価による課金額は report と provider usage で確認する。
 - wrapper は build/preflight を3分、run を15分に制限し、SIGTERM で runner の cleanup を開始する。runner の attempt 120秒＋cleanup 30秒に5秒の余裕を置き、155秒で終わらなければ2回目の SIGTERM で worker を強制 teardown する。さらに cleanup の猶予を置き、190秒で3回目を送り runner 自身に detached app groups を終了させる。195秒でなお止まらなければ runner group を SIGKILL する。runner は terminal と別の process group に置き、同じ interrupt が二重に届くことを防ぐ。build/preflight の最終猶予は35秒。OS 停止や最終 SIGKILL では cleanup を保証できない。profile と port の残存を調べ、この run の残存だけを処理する。
-- build と runner に継承する環境変数を限定し、key・age 復号キーを渡さない。runner だけが Access URL を読む。site は `env -i`、Chromium は PATH/HOME だけを継承する。JWT は env に入れない。
+- build と runner に継承する環境変数を限定し、key・age 復号キーを渡さない。runner と preflight だけに Access URL とモデル ID を渡す。site は `env -i`、Chromium は PATH/HOME だけを継承する。JWT は env に入れない。
 - wrapper は child の終了まで SIGINT/SIGTERM の handler を維持する。終了処理の途中で同じ signal を繰り返しても wrapper だけが終了せず、最初に開始した有限の終了待機を継続する。
 
 ## 証跡と運用

@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import { accessEndpoint, AccessError } from '../tests/support/access-model';
+import { accessEndpoint, accessModelId, AccessError } from '../tests/support/access-model';
 
 const [mode, ...files] = process.argv.slice(2);
 if (mode === '--help') {
-  console.log('Usage: bun scripts/run-e2e.ts <run|offline|preflight> [tests/<name>.e2e.ts ...]\nrun: real Access model; offline: deterministic tests only; preflight: vision/schema/tools.\nNo implicit login, credential fallback, retries or cache. Maximum run time: 15 minutes.');
+  console.log('Usage: bun scripts/run-e2e.ts <run|offline|preflight> [tests/<name>.e2e.ts ...]\nrun: real Access model; offline: deterministic tests only; preflight: vision/schema/tools.\nNo implicit login, credential fallback, test retries or cache. Maximum run time: 15 minutes.');
   process.exit(0);
 }
 if (!['run', 'offline', 'preflight'].includes(mode ?? '') || files.some((file) => !/^tests\/[\w-]+\.e2e\.ts$/.test(file)) || (mode === 'preflight' && files.length)) {
@@ -18,7 +18,7 @@ for (const name of ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'CI', 'TERM', 'NO_C
 }
 env.E2E_TELEMETRY_DISABLED = '1';
 if (mode !== 'offline') {
-  try { accessEndpoint(); } catch (error) {
+  try { accessEndpoint(); accessModelId(); } catch (error) {
     console.error(JSON.stringify({ status: 'failed', code: error instanceof AccessError ? error.code : 'ACCESS_CONFIG_INVALID' }));
     process.exit(2);
   }
@@ -64,10 +64,10 @@ async function run(args: string[], childEnv: Record<string, string>, timeout: nu
 }
 
 if (mode === 'preflight') {
-  process.exitCode = await run(['scripts/check-e2e-model.ts'], { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL! }, 180_000);
+  process.exitCode = await run(['scripts/check-e2e-model.ts'], { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, OPENCODE_E2E_MODEL: process.env.OPENCODE_E2E_MODEL! }, 180_000);
 } else {
   const build = await run(['run', 'build:e2e'], env, 180_000);
   if (build !== 0) process.exit(build);
-  const runnerEnv = mode === 'offline' ? { ...env, MINAOSI_E2E_OFFLINE: '1' } : { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL! };
+  const runnerEnv = mode === 'offline' ? { ...env, MINAOSI_E2E_OFFLINE: '1' } : { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, OPENCODE_E2E_MODEL: process.env.OPENCODE_E2E_MODEL! };
   process.exitCode = await run(['node_modules/e2e/dist/cli/bin.js', 'run', ...files, ...(mode === 'offline' ? ['--exclude-tag', 'model'] : [])], runnerEnv, 900_000, 'node');
 }

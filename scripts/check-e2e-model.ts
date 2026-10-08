@@ -1,6 +1,6 @@
 import { generateText, Output, jsonSchema, tool } from 'ai';
 import { chromium } from 'playwright';
-import { accessModel, ACCESS_MODEL, AccessError } from '../tests/support/access-model';
+import { accessModel, accessModelId, AccessError } from '../tests/support/access-model';
 
 // Preflight uses synthetic pixels only; the E2E runner still validates its own response grammars.
 let stage = 'configuration';
@@ -40,7 +40,7 @@ try {
     if (result.toolCalls.length !== 1 || result.toolCalls[0]?.toolName !== 'record_color' || (result.toolCalls[0].input as { color?: string }).color !== 'blue') {
       throw new AccessError('MODEL_TOOLS_INVALID', 'Model failed the synthetic tool call.');
     }
-    console.log(JSON.stringify({ status: 'passed', model: ACCESS_MODEL, checks: ['vision-red', 'vision-blue', 'json-schema', 'tool-call'], requests: 3 }));
+    console.log(JSON.stringify({ status: 'passed', model: accessModelId(), checks: ['vision-red', 'vision-blue', 'json-schema', 'tool-call'], requests: 3 }));
   } finally { await browser.close(); }
 } catch (error) {
   // SDK errors can contain response/request data; this CLI exposes only the safe transport error.

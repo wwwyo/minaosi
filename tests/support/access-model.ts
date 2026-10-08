@@ -1,8 +1,17 @@
+import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-export const ACCESS_MODEL = 'workers-ai/@cf/google/gemma-4-26b-a4b-it';
+const ACCESS_PROVIDER = 'custom-opencode-go';
+
+export function accessModelId(value = process.env.OPENCODE_E2E_MODEL): string {
+  if (!value) throw new AccessError('E2E_MODEL_MISSING', 'OPENCODE_E2E_MODEL is required; use the global mise model selection.');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) {
+    throw new AccessError('E2E_MODEL_INVALID', 'Expected a plain OpenCode Go model ID without a provider prefix.');
+  }
+  return `${ACCESS_PROVIDER}/${value}`;
+}
 export const REQUEST_LIMIT = 60;
 export const REQUEST_BYTES_LIMIT = 262_144;
 const execFileAsync = promisify(execFile);
@@ -57,6 +66,7 @@ export async function accessSession(endpoint: string, signal?: AbortSignal): Pro
 /** The SDK sees a placeholder URL and no auth headers, including in its errors and AI traces. */
 export function accessFetch(endpoint: string): typeof fetch {
   let requests = 0;
+  const operationSession = randomUUID();
   return (async (input: string | URL | Request, init?: RequestInit) => {
     if (String(input) !== `${SDK_BASE}/chat/completions` || init?.method !== 'POST' || typeof init.body !== 'string') {
       throw new AccessError('ACCESS_REQUEST_INVALID', 'Only non-streaming chat completions are supported.');
@@ -70,7 +80,7 @@ export function accessFetch(endpoint: string): typeof fetch {
     }
     const signal = AbortSignal.any([AbortSignal.timeout(60_000), ...(init.signal ? [init.signal] : [])]);
     const jwt = await accessSession(endpoint, signal);
-    const headers = new Headers({ 'content-type': 'application/json', 'cf-access-token': jwt });
+    const headers = new Headers({ 'content-type': 'application/json', 'cf-access-token': jwt, 'user-agent': 'wwwyo-e2e/0.1', 'x-opencode-session': operationSession });
     let response: Response;
     let text: string;
     try {
@@ -113,8 +123,9 @@ export function accessFetch(endpoint: string): typeof fetch {
 }
 
 export function accessModel() {
+  const modelId = accessModelId();
   return createOpenAICompatible({
     name: 'cloudflare-access', baseURL: SDK_BASE,
     fetch: accessFetch(accessEndpoint()), supportsStructuredOutputs: true,
-  })(ACCESS_MODEL);
+  })(modelId);
 }

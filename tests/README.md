@@ -8,7 +8,9 @@
 mise exec -- bun run test:e2e
 ```
 
-操作用モデルは Gemma 4 を固定し、mise + age の `CF_AI_ACCESS_URL` と既存の Access session を使う。
+操作用モデルは global mise の `OPENCODE_E2E_MODEL=mimo-v2.6-flash` を使う。
+`CF_AI_ACCESS_URL` と既存の Access session で、Gateway の OpenCode Go custom provider を呼ぶ。
+Gateway 側の provider 設定と key の安全な保管が必要であり、runner に provider key を渡さない。
 旧 OpenCode/Gateway key への fallback はない。[実行設計](../docs/e2e-execution.md)に責務・上限・認証境界を記録する。
 GUIから起動してageの復号キーが渡らない場合は、Keychainから子プロセスへ渡す。
 
@@ -36,6 +38,7 @@ mise exec -- bun run test:e2e
 mise exec -- bun run check:e2e:artifacts
 ```
 
+`E2E_MODEL_MISSING/INVALID` は global mise のモデル指定を確認する（provider prefix は付けない）。
 `ACCESS_URL_MISSING/INVALID` は mise 設定・age 復号経路を確認する。
 `ACCESS_SESSION_MISSING/INVALID/EXPIRED` と `ACCESS_DENIED`（401/403/redirect）はログインと policy を確認する。
 `ACCESS_MODEL_HTTP`・`ACCESS_RESPONSE_INVALID`・`MODEL_CAPABILITY_FAILED` はモデル対応と Gateway を調べる。

@@ -2,6 +2,22 @@
 
 2026-10-08、`wwwyo/e2e-access` のローカル実行。最終 head の独立 QA と CI の結果は PR の QA 欄で SHA とともに記録する。以下は実装中の実測であり、後続の変更に自動的に引き継がない。
 
+## MiMo 指定への修正
+
+操作モデルを global mise の `mimo-v2.6-flash` に戻し、Access の OpenCode Go custom provider 経路を選択する。モデルの未設定・不正値は wrapper が接続や browser 起動前に拒否する。Gemma の成功はこの経路の成功として扱わない。
+
+| コマンド・確認 | 結果 | 範囲 |
+| --- | --- | --- |
+| `mise exec -- bun run check:e2e` | 成功 | MiMo の環境変数・transport を含む E2E 型チェック |
+| `mise exec -- bun run test:e2e:transport` | 11/11 passed、347 assertions | 既存の認証境界に加え、MiMo の model ID 変換、未設定・不正値、操作 session の分離 |
+| `OPENCODE_E2E_MODEL` を空・provider prefix 付きにした preflight | `E2E_MODEL_MISSING` / `E2E_MODEL_INVALID`、exit 2 | 実モデルや browser を起動しない |
+| `mise exec -- bun run check:e2e:model` | `vision-red` で HTTP 502、exit 1 | `custom-opencode-go/mimo-v2.6-flash`。vision・schema・tool call の成功は未確認 |
+| OpenRouter の MiMo 経路の最小接続 | HTTP 400 | fallback として採用していない |
+
+この時点で cf CLI の管理認証は未設定だった。Access session 自体は取得できるが、Gateway の provider 設定・key 保管を管理 API で確認できていない。MiMo の実拡張 E2E は接続を解決してから検証し、成功が確認できるまで PR は draft とする。
+
+## Gemma の過去の検証
+
 | コマンド・確認 | 結果 | 範囲・証跡 |
 | --- | --- | --- |
 | `mise exec -- bun run check:e2e:model` | Gemma 4 の赤・青画像、JSON schema、画像 tool call の3 requests 成功 | 合成画像のみ。実 UI の細部はこの確認だけでは保証しない |
@@ -21,9 +37,9 @@
 
 実校閲・実 Turnstile・実サービス編集画面・side pane のブラウザ chrome 開閉・Firefox・本番 BYOK の実通信・文体/事実確認品質は未実施。合成校閲 API の応答と操作用 LLM の実推論は別々の確認である。CI は個人の Access session を持たず、モデル不要の4件だけを実行する。
 
-## 独立 QA とレビューで見つかった点
+## Gemma での独立 QA とレビュー
 
-`c33e089` の独立 QA は実拡張10/10、7 model calls、16,720 tokens、184.94秒で成功した（run `01a11aab-4d89-7542-a899-5428044f63cb`）。215 steps、画像5枚、trace10件の参照と ZIP CRC を確認し、正常終了後の profile 残存0・port 解放、77 artifacts の leaks0を確認した。ただし128 output tokens の能力 preflight は `MODEL_CAPABILITY_FAILED` で失敗した。再実行の緑だけでは完了扱いせず、preflight の出力枠を512へ増やし、失敗 stage と finishReason/usage だけを診断に追加した。変更後の最初の確認は HTTP429で失敗し、その後の最小接続確認では HTTP200・choices を得た。429の原因は特定していない。
+Gemma 4 を使った `c33e089` の独立 QA は実拡張10/10、7 model calls、16,720 tokens、184.94秒で成功した（run `01a11aab-4d89-7542-a899-5428044f63cb`）。215 steps、画像5枚、trace10件の参照と ZIP CRC を確認し、正常終了後の profile 残存0・port 解放、77 artifacts の leaks0を確認した。ただし128 output tokens の能力 preflight は `MODEL_CAPABILITY_FAILED` で失敗した。再実行の緑だけでは完了扱いせず、preflight の出力枠を512へ増やし、失敗 stage と finishReason/usage だけを診断に追加した。変更後の最初の確認は HTTP429で失敗し、その後の最小接続確認では HTTP200・choices を得た。429の原因は特定していない。
 
 レビューから、以下も修正した。最終 head の確認は PR の QA 欄で別に記録する。
 

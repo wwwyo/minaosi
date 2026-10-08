@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { accessEndpoint, accessFetch, accessSession, REQUEST_LIMIT, REQUEST_BYTES_LIMIT } from './support/access-model';
+import { accessEndpoint, accessModelId, accessFetch, accessSession, REQUEST_LIMIT, REQUEST_BYTES_LIMIT } from './support/access-model';
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -132,4 +132,28 @@ test('oversized input, including accumulated history, fails before session or HT
   await writeFile(join(dir, 'session'), 'missing');
   await expect(accessFetch(server.url.href)(sdkURL, { method: 'POST', body: JSON.stringify({ messages: [{ content: 'x'.repeat(REQUEST_BYTES_LIMIT) }] }) })).rejects.toThrow('ACCESS_INPUT_LIMIT');
   expect(requests).toHaveLength(0);
+});
+
+
+test('global model selection maps to Access OpenCode Go routing without an implicit model fallback', () => {
+  expect(accessModelId('mimo-v2.6-flash')).toBe('custom-opencode-go/mimo-v2.6-flash');
+  expect(() => accessModelId('')).toThrow('E2E_MODEL_MISSING');
+  for (const value of ['workers-ai/@cf/example/model', 'https://private.example/key', 'secret value']) {
+    try { accessModelId(value); throw new Error('accepted'); } catch (error) {
+      expect(String(error)).toContain('E2E_MODEL_INVALID');
+      expect(String(error)).not.toContain(value);
+    }
+  }
+});
+
+test('OpenCode operation session is stable within a worker and isolated between transports', async () => {
+  const first = accessFetch(server.url.href);
+  await first(sdkURL, post);
+  await first(sdkURL, post);
+  await accessFetch(server.url.href)(sdkURL, post);
+  const sessions = requests.map(request => request.headers.get('x-opencode-session'));
+  expect(sessions[0]).toMatch(/^[0-9a-f-]{36}$/);
+  expect(sessions[1]).toBe(sessions[0]);
+  expect(sessions[2]).not.toBe(sessions[0]);
+  expect(requests.every(request => request.headers.get('user-agent') === 'wwwyo-e2e/0.1')).toBe(true);
 });
