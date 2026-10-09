@@ -5,7 +5,6 @@
 接続環境で `CF_AI_ACCESS_URL`（Access で保護した HTTPS `/compat/chat/completions` URL）と `E2E_MODEL`（Gateway の provider/model 完全 ID）を設定し、Access にログインしてから実行する。モデルには画像認識・JSON schema 出力・tool calling が必要である。接続先と provider credential は環境側で用意し、E2E client に provider key を渡さない。
 
 ```sh
-mise exec -- bun run check:e2e:model
 mise exec -- bun run test:e2e
 ```
 
@@ -15,4 +14,4 @@ mise exec -- bun run test:e2e
 
 実校閲の品質、実 Turnstile、外部サービスの認証済み編集画面、ブラウザ chrome からの side pane 開閉、Firefox は検証しない。`test:e2e:offline` はモデル不要部分だけを確認するため、実モデル E2E の成功とは区別する。
 
-現在 head の結果・検証範囲・失敗と制限は PR に記録する。公開前に `check:e2e:artifacts` で秘密を検査し、画像の内容は目視でも確認する。
+モデルの接続診断と証跡の公開前検査は共通 `e2e` skill の helper を使う。現在 head の結果・検証範囲・失敗と制限は PR に記録する。
