@@ -62,7 +62,7 @@ bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 
 - E2E の導入・実装・実行・失敗調査は共通の `e2e` skill を使う。repo の設定は `e2e.config.ts`、実行は `mise exec -- bun run test:e2e`。repo 内に共通 skill を複製しない。
 - PRD の criterion と実行証跡を対応させ、`agent.act()` の後に実際の値・永続化・副作用を検証する。実 UI・実 AI・外部サービスの未確認項目は、ローカルテストの成功と分けて報告する。
-- 操作用 LLM は `CF_AI_ACCESS_URL` と既存の Access session を使う。旧 key への fallback やテスト内の対話ログインはしない。`check:e2e:model` で vision/schema/tool call を確認する。CI は `test:e2e:offline` のモデル不要部分のみ。責務と上限は `docs/e2e-execution.md`、復旧と要件対応は `tests/README.md` を参照する。
+- E2E はローカルで実行する。接続に必要な環境変数と検証範囲は `tests/README.md` を参照する。
 
 ### Hono
 

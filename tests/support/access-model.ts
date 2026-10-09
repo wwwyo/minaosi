@@ -3,14 +3,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
-const ACCESS_PROVIDER = 'custom-opencode-go';
-
-export function accessModelId(value = process.env.OPENCODE_E2E_MODEL): string {
-  if (!value) throw new AccessError('E2E_MODEL_MISSING', 'OPENCODE_E2E_MODEL is required; use the global mise model selection.');
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) {
-    throw new AccessError('E2E_MODEL_INVALID', 'Expected a plain OpenCode Go model ID without a provider prefix.');
+export function accessModelId(value = process.env.E2E_MODEL): string {
+  if (!value) throw new AccessError('E2E_MODEL_MISSING', 'E2E_MODEL is required.');
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*\/@?[a-zA-Z0-9][a-zA-Z0-9._/-]{0,191}$/.test(value)) {
+    throw new AccessError('E2E_MODEL_INVALID', 'Expected a Gateway provider/model identifier.');
   }
-  return `${ACCESS_PROVIDER}/${value}`;
+  return value;
 }
 export const REQUEST_LIMIT = 60;
 export const REQUEST_BYTES_LIMIT = 262_144;
@@ -26,7 +24,7 @@ export class AccessError extends Error {
 }
 
 export function accessEndpoint(value = process.env.CF_AI_ACCESS_URL): string {
-  if (!value) throw new AccessError('ACCESS_URL_MISSING', 'CF_AI_ACCESS_URL is required; run through mise with age decryption enabled.');
+  if (!value) throw new AccessError('ACCESS_URL_MISSING', 'CF_AI_ACCESS_URL is required.');
   let url: URL;
   try { url = new URL(value); } catch { throw new AccessError('ACCESS_URL_INVALID', 'Expected an HTTPS compat/chat/completions URL.'); }
   if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash
@@ -80,7 +78,7 @@ export function accessFetch(endpoint: string): typeof fetch {
     }
     const signal = AbortSignal.any([AbortSignal.timeout(60_000), ...(init.signal ? [init.signal] : [])]);
     const jwt = await accessSession(endpoint, signal);
-    const headers = new Headers({ 'content-type': 'application/json', 'cf-access-token': jwt, 'user-agent': 'wwwyo-e2e/0.1', 'x-opencode-session': operationSession });
+    const headers = new Headers({ 'content-type': 'application/json', 'cf-access-token': jwt, 'user-agent': 'minaosi-e2e/0.1', 'x-opencode-session': operationSession });
     let response: Response;
     let text: string;
     try {

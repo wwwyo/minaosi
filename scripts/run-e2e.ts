@@ -11,7 +11,7 @@ if (!['run', 'offline', 'preflight'].includes(mode ?? '') || files.some((file) =
   process.exit(2);
 }
 
-// Only runner transport needs the endpoint. Build, synthetic site and Chromium need no global secrets.
+// Only runner transport needs the endpoint. Build, synthetic site and Chromium need no model credentials.
 const env: Record<string, string> = {};
 for (const name of ['PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'CI', 'TERM', 'NO_COLOR', 'PLAYWRIGHT_BROWSERS_PATH']) {
   if (process.env[name] !== undefined) env[name] = process.env[name]!;
@@ -64,10 +64,10 @@ async function run(args: string[], childEnv: Record<string, string>, timeout: nu
 }
 
 if (mode === 'preflight') {
-  process.exitCode = await run(['scripts/check-e2e-model.ts'], { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, OPENCODE_E2E_MODEL: process.env.OPENCODE_E2E_MODEL! }, 180_000);
+  process.exitCode = await run(['scripts/check-e2e-model.ts'], { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, E2E_MODEL: process.env.E2E_MODEL! }, 180_000);
 } else {
   const build = await run(['run', 'build:e2e'], env, 180_000);
   if (build !== 0) process.exit(build);
-  const runnerEnv = mode === 'offline' ? { ...env, MINAOSI_E2E_OFFLINE: '1' } : { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, OPENCODE_E2E_MODEL: process.env.OPENCODE_E2E_MODEL! };
+  const runnerEnv = mode === 'offline' ? { ...env, MINAOSI_E2E_OFFLINE: '1' } : { ...env, CF_AI_ACCESS_URL: process.env.CF_AI_ACCESS_URL!, E2E_MODEL: process.env.E2E_MODEL! };
   process.exitCode = await run(['node_modules/e2e/dist/cli/bin.js', 'run', ...files, ...(mode === 'offline' ? ['--exclude-tag', 'model'] : [])], runnerEnv, 900_000, 'node');
 }

@@ -135,10 +135,12 @@ test('oversized input, including accumulated history, fails before session or HT
 });
 
 
-test('global model selection maps to Access OpenCode Go routing without an implicit model fallback', () => {
-  expect(accessModelId('mimo-v2.6-flash')).toBe('custom-opencode-go/mimo-v2.6-flash');
+test('model routing is supplied explicitly without an implicit provider or model fallback', () => {
+  for (const model of ['custom-fixture/vision-model', 'workers-ai/@cf/example/model']) {
+    expect(accessModelId(model)).toBe(model);
+  }
   expect(() => accessModelId('')).toThrow('E2E_MODEL_MISSING');
-  for (const value of ['workers-ai/@cf/example/model', 'https://private.example/key', 'secret value']) {
+  for (const value of ['plain-model', 'https://private.example/key', 'secret value']) {
     try { accessModelId(value); throw new Error('accepted'); } catch (error) {
       expect(String(error)).toContain('E2E_MODEL_INVALID');
       expect(String(error)).not.toContain(value);
@@ -155,5 +157,5 @@ test('OpenCode operation session is stable within a worker and isolated between 
   expect(sessions[0]).toMatch(/^[0-9a-f-]{36}$/);
   expect(sessions[1]).toBe(sessions[0]);
   expect(sessions[2]).not.toBe(sessions[0]);
-  expect(requests.every(request => request.headers.get('user-agent') === 'wwwyo-e2e/0.1')).toBe(true);
+  expect(requests.every(request => request.headers.get('user-agent') === 'minaosi-e2e/0.1')).toBe(true);
 });
