@@ -3,6 +3,9 @@ const server = Bun.serve({
   port: Number(process.env.PORT),
   fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/__health') {
+      return Response.json({ ready: api.port === 18787 });
+    }
     if (url.pathname === '/generic-layout') {
       const ambiguous = url.searchParams.has('ambiguous');
       return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8">

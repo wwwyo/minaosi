@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["bun"]
   },
-  "include": ["e2e.config.ts", "tests/**/*.ts"]
+  "include": ["e2e.config.ts", "tests/**/*.ts", "scripts/*e2e*.ts"]
 }
