@@ -10,8 +10,11 @@ mise exec -- bun run test:e2e
 
 操作用モデルは global mise の `OPENCODE_E2E_MODEL=mimo-v2.6-flash` を使う。
 `CF_AI_ACCESS_URL` と既存の Access session で、Gateway の OpenCode Go custom provider を呼ぶ。
-Gateway 側の provider 設定と key の安全な保管が必要であり、runner に provider key を渡さない。
+request model は `custom-opencode-go/mimo-v2.6-flash`。Gateway の provider key 設定には prefix のない `opencode-go` を使い、Secrets Store の秘密を関連付ける。runner に provider key を渡さない。
 旧 OpenCode/Gateway key への fallback はない。[実行設計](../docs/e2e-execution.md)に責務・上限・認証境界を記録する。
+
+能力 preflight と実拡張 E2E の両方を実施し、現在 head の結果を PR の QA 欄に記録する。
+単独の通信成功や過去の Gemma の成功で、この2つの QA 完了とはしない。
 GUIから起動してageの復号キーが渡らない場合は、Keychainから子プロセスへ渡す。
 
 ```sh
@@ -42,6 +45,7 @@ mise exec -- bun run check:e2e:artifacts
 `ACCESS_URL_MISSING/INVALID` は mise 設定・age 復号経路を確認する。
 `ACCESS_SESSION_MISSING/INVALID/EXPIRED` と `ACCESS_DENIED`（401/403/redirect）はログインと policy を確認する。
 `ACCESS_MODEL_HTTP`・`ACCESS_RESPONSE_INVALID`・`MODEL_CAPABILITY_FAILED` はモデル対応と Gateway を調べる。
+Gateway 側で HTTP 400・internalCode 2044（credentials required）が出る場合は、provider key 設定の `provider_slug: opencode-go` と秘密の関連付けを確認する。管理操作の入力は `cf` の `--body @/dev/stdin` で渡し、dry-run を含む出力をログに流さない。設定の詳細は[実行設計](../docs/e2e-execution.md)を参照する。
 HTML や assertion の緩和で成功にしない。`ACCESS_NETWORK_FAILED` は60秒の通信期限、
 `ACCESS_REQUEST_LIMIT` は worker の60 HTTP requests（SDK retry を含む）の枠に達したことを示す。
 `ACCESS_INPUT_LIMIT` は履歴・画像を含む request body の256 KiB上限に達したことを示す。

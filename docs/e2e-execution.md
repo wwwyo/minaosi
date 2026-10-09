@@ -23,9 +23,15 @@
 
 操作モデルは global mise の `OPENCODE_E2E_MODEL=mimo-v2.6-flash` を使う。Access 認証への変更とモデル選択を分離し、Gateway の custom provider `opencode-go` に対する `custom-opencode-go/<モデルID>` へ変換する。未設定・provider prefix 付きの値は接続前に失敗し、別モデルや直接 OpenCode への fallback は設けない。[MiMo の画像対応](https://mimo.mi.com/docs/en-US/quick-start/usage-guide/multimodal-understanding/image-understanding)に加え、SDK の schema 出力・画像判定・tool call は `check:e2e:model`、実 UI の正負判定と操作は実拡張 E2E で確認する。
 
-この経路には Gateway 側の custom provider と provider key の安全な保管が必要である（[custom provider](https://developers.cloudflare.com/ai-gateway/configuration/custom-providers/)、[BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)）。upstream は既存の OpenCode Go の HTTPS API を使う。runner は Access session だけを送信し、provider key を env・SDK・Chromium に渡さない。OpenCode 操作用の User-Agent と worker ごとのランダム session ID は transport に付ける。Access の入口認証だけでは upstream の provider 認証を代替できない。
+Gateway の [custom provider](https://developers.cloudflare.com/ai-gateway/configuration/custom-providers/) は slug を `opencode-go`、`base_url` を `https://opencode.ai/zen/go` とする。request の model は `custom-opencode-go/mimo-v2.6-flash` にする。2026-10-09、Access 経由の赤・青画像の schema 判定と画像付き tool call の単独実行で、この経路の通信を確認した。
 
-当初は global のモデル指定を旧 key 設定と一緒に扱い、Gemma 4 を選定した。これは認証移行に伴う必要な変更ではなく、利用者が指定していた MiMo を見落とした判断だった。Gemma/Scout の実測は[過去の検証記録](e2e-validation.md)に残すが、MiMo の成功の根拠には使わない。Gateway の設定・実通信を確認できるまで、MiMo の Access 移行は完了としない。
+[BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/) の秘密名は公式の `${gateway_id}_${provider_slug}_${alias}` に従う。今回動作を確認した構成では、Secrets Store に scope `ai_gateway` の秘密を先に作り、その `secret_id` を Gateway の provider key 設定に関連付けた。provider key 設定は `provider_slug: opencode-go`、`alias: default`、`default_config: true` とする。request model の `custom-` prefix はこの `provider_slug` には付けない。`custom-opencode-go` を provider key 設定に使った構成では、HTTP 400・internalCode 2044（credentials required）になった。
+
+管理操作は `cf` を使い、credential を含む入力は `--body @/dev/stdin` で渡す。dry-run を含む出力も秘密や ID を含む可能性があるため、メモリ内で必要な項目だけを確認し、実値をログ・文書・PR に載せない。credential 登録用の repo 専用 script は追加しない。
+
+runner は Access JWT だけを認証に使い、provider key を env・SDK・Chromium に渡さない。OpenCode 操作用の User-Agent と worker ごとのランダム session ID は transport に付ける。[Access JWT は Gateway の request credential として使える](https://developers.cloudflare.com/ai-gateway/configuration/cloudflare-access/)が、upstream の provider 認証には Gateway 側の保管・注入が必要である。既存の個人 Access policy、authentication、byok_only、zdr、cache、rate の設定は変更していない。
+
+当初は global のモデル指定を旧 key 設定と一緒に扱い、Gemma 4 を選定した。これは認証移行に伴う必要な変更ではなく、利用者が指定していた MiMo を見落とした判断だった。MiMo の指定を維持し、認証だけを Access へ移す。Gemma/Scout の実測は[過去の検証記録](e2e-validation.md)に残すが、MiMo の成功の根拠には使わない。接続設定後の能力 preflight は成功した。途中の失敗も検証記録に残し、現在 head の実拡張 E2E と独立 QA の結果は PR に SHA とともに記録する。能力確認と実拡張 E2E の両方が成功するまで移行の QA 完了とはしない。
 
 curl を request ごとに実行する案は認証が簡単だが、自動ログインや stdout/headers の扱いが SDK と合わない。ローカル proxy を設ける案は token が別サービスへ広がり、readiness・cleanup も増える。既存 SDK に小さな transport を接続してこの負担を避ける。
 

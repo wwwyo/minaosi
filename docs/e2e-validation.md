@@ -1,6 +1,6 @@
 # Access E2E 移行の検証記録
 
-2026-10-08、`wwwyo/e2e-access` のローカル実行。最終 head の独立 QA と CI の結果は PR の QA 欄で SHA とともに記録する。以下は実装中の実測であり、後続の変更に自動的に引き継がない。
+2026-10-08〜09、`wwwyo/e2e-access` のローカル実行。最終 head の独立 QA と CI の結果は PR の QA 欄で SHA とともに記録する。以下は実装中の実測であり、後続の変更に自動的に引き継がない。
 
 ## MiMo 指定への修正
 
@@ -14,7 +14,19 @@
 | `mise exec -- bun run check:e2e:model` | `vision-red` で HTTP 502、exit 1 | `custom-opencode-go/mimo-v2.6-flash`。vision・schema・tool call の成功は未確認 |
 | OpenRouter の MiMo 経路の最小接続 | HTTP 400 | fallback として採用していない |
 
-この時点で cf CLI の管理認証は未設定だった。Access session 自体は取得できるが、Gateway の provider 設定・key 保管を管理 API で確認できていない。MiMo の実拡張 E2E は接続を解決してから検証し、成功が確認できるまで PR は draft とする。
+上表の HTTP 502 時点では cf CLI の管理認証が未設定だった。2026-10-09、管理ログイン後に Access URL に対応する Gateway を確認し、OpenCode Go custom provider と Secrets Store の provider credential を設定した。Access の既存 policy、Gateway の authentication・byok_only・zdr・cache・rate 設定は維持した。
+
+| 接続設定後の確認 | 結果 |
+| --- | --- |
+| provider key を `custom-opencode-go` として登録 | HTTP 400、internalCode 2044（credentials required）。request model の prefix と設定側の slug は異なる |
+| provider key を `opencode-go`、alias `default` にして秘密を関連付け | Access 経由の実 MiMo 通信成功。provider key は stdin から Secrets Store に保存し、E2E client に渡していない |
+| 能力 preflight の初回 | 赤・青画像の schema 判定後、tool call で `MODEL_CAPABILITY_FAILED`。原因は特定できておらず、成功として数えない |
+| 能力 preflight の次の実行 | 赤画像の request が60秒で `ACCESS_CANCELLED`、exit 1。原因は未特定。timeout・assertion・schema は変更していない |
+| 同じ3 requests の診断実行 | 赤・青画像の schema 判定、青画像の tool call 成功、18.58秒 |
+| `mise exec -- bun run check:e2e:model` | 赤・青画像、JSON schema、画像 tool call の3 requests 成功、exit 0 |
+| 調査中の重複設定の cleanup | 誤った prefix の provider config と secret の削除を管理 API の再取得で確認。正しい config 1件、active secret 1件のみ |
+
+Gateway の単独接続成功だけでは QA 完了としない。現在 head の MiMo 実拡張 E2E・独立 QA・CI の実測は PR の QA 欄に SHA とともに記録する。接続遅延やモデル能力の失敗は有限時間で終了させ、key や別モデルへ fallback しない。
 
 ## Gemma の過去の検証
 
