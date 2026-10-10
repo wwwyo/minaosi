@@ -1,6 +1,6 @@
 # E2E
 
-実行・実装・失敗調査は共通の `e2e` skill に従う。E2E はローカルで実行する。
+実行・実装・失敗調査は共通の `e2e` skill に従う。E2E はローカルで実行する（背景は [ADR 0006](../docs/adr/0006-run-model-e2e-locally.md)）。
 
 接続環境で `CF_AI_ACCESS_URL`（Access で保護した HTTPS `/compat/chat/completions` URL）と `E2E_MODEL`（Gateway の provider/model 完全 ID）を設定し、Access にログインしてから実行する。モデルには画像認識・JSON schema 出力・tool calling が必要である。接続先と provider credential は環境側で用意し、E2E client に provider key を渡さない。
 

@@ -124,6 +124,8 @@ widget ページは校閲サーバーの `GET /turnstile` が配り、拡張の 
 
 `TURNSTILE_SECRET_KEY` が無く sitekey もテストキー以外なら `/review` は503を返す（fail closed）。本番で必ず実キーを設定する。テスト用の鍵ペアの一覧は [Testing](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) を参照。
 
+hidden widget が対話を要求して自動校閲が `blocked` に落ちる経路の実機確認には、`api:dev` の `TURNSTILE_SITE_KEY` に対話を必ず要求するテスト sitekey `3x00000000000000000000FF` を設定する候補がある（2026-10 時点で未検証）。`3x…FF` は visible 系のキーで、`execution: 'execute'`・`appearance: 'interaction-only'` の本番描画で対話要求が発火するかは未確認。`blocked` への遷移だけならトークンは `/review` へ送られず secret は不要。対話を突破して実行まで試す場合は `TURNSTILE_SECRET_KEY` に always-pass の `1x0000000000000000000000000000000AA` を明示する（自動選択と照合の緩和は既定のテストペアに限る）が、厳密照合（`action`・`cdata`）が効くため成功しない見込み。
+
 プレビューで拡張から校閲を実行するには、プレビューの hostname に対応した Turnstile 設定と Access 認証を送れる接続方式が必要。現在の拡張は `credentials: 'omit'` で API を呼ぶため、ブラウザで Access にログインするだけでは `/review` を呼べない。
 
 Workerの実行入口は `apps/api/src/index.ts`。通常のリクエスト処理と、Workers固有のDOクラスをここでexportする。DOクラスはWorker用の型チェックで検証し、BunのHTTP処理テストにはWorkersのruntime moduleを読み込ませない。

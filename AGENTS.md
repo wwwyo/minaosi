@@ -26,7 +26,7 @@ minaosi/
 ├── apps/
 │   ├── extension/ # WXT拡張。entrypoints/ がブラウザの入口
 │   └── api/       # Hono / Cloudflare Worker。src/ がBE実装
-├── docs/          # プロジェクト固有のドキュメントを収集する dir（共有・tracked）
+├── docs/          # プロジェクト固有のドキュメントを収集する dir（共有・tracked）。ADR の書き方は docs/adr/README.md
 └── .agent/        # 同上（個人メモ。gitignore される）
 ```
 
