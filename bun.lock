@@ -20,7 +20,7 @@
       "dependencies": {
         "@hono/zod-validator": "0.9.1",
         "@tanstack/ai": "0.58.0",
-        "@tanstack/ai-anthropic": "0.18.11",
+        "@tanstack/ai-anthropic": "0.21.1",
         "@tanstack/ai-cloudflare": "0.1.5",
         "@tanstack/ai-openai": "0.23.1",
         "entities": "8.1.0",
@@ -284,7 +284,7 @@
 
     "@tanstack/ai": ["@tanstack/ai@0.58.0", "", { "dependencies": { "@ag-ui/core": "0.1.1-canary.beta.0", "@standard-schema/spec": "^1.1.0", "@tanstack/ai-event-client": "^0.12.1", "@tanstack/ai-utils": "^0.4.1", "partial-json": "^0.1.7" }, "peerDependencies": { "@opentelemetry/api": ">=1.9.0" }, "optionalPeers": ["@opentelemetry/api"] }, "sha512-8+JjYQdpU/RCrN8VguyMbkZaNODgYXxKiI2ZVuXfpMq6UL/Dp5pHk3MJH/eaiYOyij/ZALbQHmXr81pStv14Yw=="],
 
-    "@tanstack/ai-anthropic": ["@tanstack/ai-anthropic@0.18.11", "", { "dependencies": { "@anthropic-ai/sdk": "^0.97.1", "@tanstack/ai-utils": "^0.4.1" }, "peerDependencies": { "@anthropic-ai/vertex-sdk": "^0.19.0", "@tanstack/ai": "^0.58.0" }, "optionalPeers": ["@anthropic-ai/vertex-sdk"] }, "sha512-jDQLrV+QrV0mn3gbMsIOpxI0BFFvfqLXZH7qcuXf8BYS/imqS0TNU6kXXcjdPFXoPO3Skicmiwep4zR9Bwaogw=="],
+    "@tanstack/ai-anthropic": ["@tanstack/ai-anthropic@0.21.1", "", { "dependencies": { "@anthropic-ai/sdk": "^0.97.1", "@tanstack/ai-utils": "^0.4.1" }, "peerDependencies": { "@anthropic-ai/vertex-sdk": "^0.19.0", "@tanstack/ai": "^0.68.0" }, "optionalPeers": ["@anthropic-ai/vertex-sdk"] }, "sha512-Barggy99BMv2q7t6Qqhlbll5xQLULZus0estLqwCWJXHK0BIC0bgd2/gbE9Qal7I3esDqt0M5k3v86tkWkc9qQ=="],
 
     "@tanstack/ai-cloudflare": ["@tanstack/ai-cloudflare@0.1.5", "", { "dependencies": { "@cloudflare/workers-types": "^4.20260317.1", "@tanstack/ai-utils": "^0.4.1", "@tanstack/openai-base": "^0.10.15", "openai": "^6.41.0" }, "peerDependencies": { "@tanstack/ai": "^0.58.0" } }, "sha512-eLufDnJ3NpTxWAP89z2UccQW+njIfw8HcRklIgOJzBXlxKSrbjWY1xYGhuwzXdI04c3Im7F2D6wLQRBE2gXG7w=="],
 
