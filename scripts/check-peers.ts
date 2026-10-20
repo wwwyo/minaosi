@@ -16,7 +16,7 @@
  *
  * 使い方: bun scripts/check-peers.ts
  */
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
 type Pkg = {
@@ -46,17 +46,34 @@ async function readPkg(file: string): Promise<Pkg | null> {
   return (await f.json()) as Pkg
 }
 
-/** base から見た name/package.json の解決を試し、解決先の package.json を dir とともに返す */
+/**
+ * base から見た name/package.json の解決を試し、解決先の package.json を dir とともに返す。
+ * `exports` が `./package.json` を公開していない package では Bun.resolveSync が失敗するので、
+ * その場合は祖先の node_modules を直接辿る。
+ */
 async function resolvePkg(name: string, base: string): Promise<{ dir: string; pkg: Pkg } | null> {
-  let file: string
-  try {
-    file = Bun.resolveSync(`${name}/package.json`, base)
-  } catch {
-    return null
-  }
+  const file = resolvePackageJson(name, base)
+  if (!file) return null
   const pkg = await readPkg(file)
   if (!pkg) return null
   return { dir: dirname(file), pkg }
+}
+
+function resolvePackageJson(name: string, base: string): string | null {
+  try {
+    return Bun.resolveSync(`${name}/package.json`, base)
+  } catch {
+    // exports で package.json が隠されている場合はモジュール解決では届かない
+  }
+
+  let dir = base
+  for (;;) {
+    const candidate = join(dir, 'node_modules', name, 'package.json')
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
 }
 
 function satisfies(version: string, range: string): boolean | null {
@@ -85,6 +102,7 @@ const workspaces = [
 
 const violations: Violation[] = []
 const checked = new Set<string>()
+const unresolvedDependents: string[] = []
 
 for (const wsDir of workspaces) {
   const ws = await readPkg(join(wsDir, 'package.json'))
@@ -100,7 +118,11 @@ for (const wsDir of workspaces) {
 
   for (const name of declared) {
     const dep = await resolvePkg(name, wsDir)
-    if (!dep) continue
+    if (!dep) {
+      // 未インストール（optionalDependencies のプラットフォーム差など）。黙って飛ばさずに可視化する
+      unresolvedDependents.push(`${wsName}: ${name}`)
+      continue
+    }
     const peers = dep.pkg.peerDependencies
     if (!peers) continue
 
@@ -142,7 +164,14 @@ for (const wsDir of workspaces) {
 }
 
 if (violations.length === 0) {
-  console.log(`peerDependencies: ${checked.size} 件の組み合わせを確認、不整合なし`)
+  if (unresolvedDependents.length > 0) {
+    console.log(
+      `peerDependencies: ${checked.size} 件の組み合わせを確認、不整合なし` +
+        `（未インストールのため未検査: ${unresolvedDependents.length} 件）`,
+    )
+  } else {
+    console.log(`peerDependencies: ${checked.size} 件の組み合わせを確認、不整合なし`)
+  }
   process.exit(0)
 }
 
