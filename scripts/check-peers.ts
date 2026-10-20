@@ -4,8 +4,15 @@
  *
  * bun は満たさない peer を `warn: incorrect peer dependency` として出すだけで exit 0 する
  * ため、adapter だけが先に上がって本体が古いままの状態が CI を通過してしまう。
- * ここでは各 workspace の宣言済み依存から peer を辿り、そのコードが実際に解決する版で
- * 判定して、満たさないものを失敗にする。
+ * ここでは repo root と各 workspace（`apps/*`）の宣言済み依存から peer を辿り、
+ * そのコードが実際に解決する版で判定して、満たさないものを失敗にする。
+ *
+ * 呼び出し元は `bun run check` と `apps/api` の check（Workers Builds の build command）。
+ * そのため api の gate でも repo 全体の peer 不整合で落ちるが、依存の整合はビルド経路に
+ * 依存しないので、ここは全体を見る。
+ *
+ * 対象は宣言済みの直接依存の peer まで。推移依存の peer は見ない（この repo は版が連動する
+ * パッケージをすべて直接宣言しているため）。
  *
  * 使い方: bun scripts/check-peers.ts
  */
@@ -61,17 +68,20 @@ function satisfies(version: string, range: string): boolean | null {
   }
 }
 
-const workspaces = readdirSync(join(root, 'apps'), { withFileTypes: true })
-  .filter((e) => e.isDirectory())
-  .map((e) => join(root, 'apps', e.name))
-  .filter((dir) => {
-    try {
-      readdirSync(dir)
-      return true
-    } catch {
-      return false
-    }
-  })
+const workspaces = [
+  root,
+  ...readdirSync(join(root, 'apps'), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => join(root, 'apps', e.name))
+    .filter((dir) => {
+      try {
+        readdirSync(dir)
+        return true
+      } catch {
+        return false
+      }
+    }),
+]
 
 const violations: Violation[] = []
 const checked = new Set<string>()
@@ -145,6 +155,6 @@ for (const v of violations) {
 }
 console.error(
   '\n解決方法: peer を要求する側と同じ系列のパッケージを、満たす版まで同時に上げてください' +
-    '（例: @tanstack/ai-cloudflare を上げるなら @tanstack/ai も ^0.68.0 以上へ）。',
+    '（依存 family は dependabot の group で 1 つの PR にまとまる）。',
 )
 process.exit(1)
