@@ -23,7 +23,7 @@
     "@tanstack/ai-cloudflare": "0.2.7",
     "@tanstack/ai-openai": "0.29.1",
     "entities": "8.1.0",
-    "hono": "4.13.9",
+    "hono": "4.13.13",
     "zod": "4.6.5"
   },
   "devDependencies": {

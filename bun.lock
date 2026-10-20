@@ -24,7 +24,7 @@
         "@tanstack/ai-cloudflare": "0.2.7",
         "@tanstack/ai-openai": "0.29.1",
         "entities": "8.1.0",
-        "hono": "4.13.9",
+        "hono": "4.13.13",
         "zod": "4.6.5",
       },
       "devDependencies": {
@@ -38,7 +38,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@minaosi/api": "workspace:*",
-        "hono": "4.13.9",
+        "hono": "4.13.13",
       },
       "devDependencies": {
         "wxt": "0.21.4",
@@ -518,7 +518,7 @@
 
     "giget": ["giget@3.3.1", "", { "bin": { "giget": "dist/cli.mjs" } }, "sha512-r+mvuDjrjMpsdw46Kmeydb8bdHm7wOKw8wNBtTndkjbPjgAp5oUJUxRE76wZFknxIPokfWvep2qSXK37aXE6zg=="],
 
-    "hono": ["hono@4.13.9", "", {}, "sha512-7dMkQmZoC4E6F7AtaQSPhlWAdnBti+j7rreMZl8QB4jFiEhP9TWbGWUMi8WYzBCgmgulxuvLQupKqo+Co6Omyg=="],
+    "hono": ["hono@4.13.13", "", {}, "sha512-CQ46U0ZkAGmbT/4UxdzzGJpacP2IeKgY4a5/tOI9AABbpOMfK739wfDXmv1usCk+3RkKj1hQy4/fjhiwa2xlrA=="],
 
     "hookable": ["hookable@6.1.2", "", {}, "sha512-+abwxtiEA52GCVIsQqut3S/uKTbUwYIp4Pe/vv+6py5XiXBCqMZHg6pA6Y5qhgLSEys0/cYuPbO0z1QFj5ZCmg=="],
 
