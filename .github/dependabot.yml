@@ -6,6 +6,12 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      # @tanstack/ai 本体と adapter は peer で版が連動するため、別々の PR に分かれないようにする
+      tanstack-ai:
+        patterns:
+          - "@tanstack/ai"
+          - "@tanstack/ai-*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
