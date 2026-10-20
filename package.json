@@ -29,7 +29,7 @@
     "@types/bun": "1.4.2",
     "ai": "7.0.130",
     "e2e": "0.20.0",
-    "playwright": "1.63.0",
+    "playwright": "1.64.0",
     "typescript": "7.0.2"
   }
 }
