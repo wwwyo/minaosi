@@ -38,7 +38,7 @@ minaosi/
 mise install   # mise.toml に従ってツールをインストール
 bun install
 bun run dev    # WXT dev server（拡張をロードしたブラウザが起動）
-bun run check  # typecheck
+bun run check  # typecheck と依存 peer の整合確認
 bun run build  # 拡張を apps/extension/.output/ へ build
 bun run zip    # 配布用 zip を apps/extension/.output/ へ生成
 ```

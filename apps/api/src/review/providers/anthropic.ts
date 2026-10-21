@@ -3,7 +3,16 @@ import { createAnthropicChat } from '@tanstack/ai-anthropic';
 import { INVALID_TOOL_INPUT } from '../errors';
 export { INVALID_TOOL_INPUT } from '../errors';
 
-/** 固定した TanStack adapter 版で失われる pause_turn の継続を補う。 */
+/**
+ * 固定した TanStack adapter 版で失われる pause_turn の継続を補う。
+ *
+ * adapter は stop_reason の pause_turn を他の終端理由と同じ RUN_FINISHED(stop) に落とすだけで、
+ * 中断までの content を引き継いで続きを要求しない（2026-10-21 時点の pin でソースを確認済み。
+ * `@tanstack/ai` 側にも pause_turn の扱いはない）。実モデルでの中断は未確認だが、起きると校閲が
+ * 途中の content だけを残して終わるため、messages に content を assistant として積み直し、
+ * 新しいリクエストで続きを要求する。family を上げたときは adapter の stop_reason 分岐を
+ * 見直し、pause_turn が専用扱い（継続要求）になっていたらこの wrapper は外す。
+ */
 export function anthropicAdapter(
   model: string,
   apiKey: string,
