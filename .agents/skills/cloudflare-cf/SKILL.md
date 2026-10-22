@@ -31,6 +31,14 @@ mise exec -- cf cli search "upload Worker secrets in bulk"
 - 秘密はユーザー指定どおりmise + ageで管理し、必要なプロセスに注入する。キーを引数・平文設定・ログへ書かない。Workerのsecret登録にはcf標準コマンドを使い、秘密値はstdinから渡す。repo固有の登録スクリプトは置かない。
 - BYOKキーと原稿の本文ログ・キャッシュを無効化している設計を維持する。一般的なobservabilityの推奨だけでこれらを有効化しない。
 
+## Workers Builds のビルド設定
+
+`minaosi-review` の build/deploy command は repo ではなく Cloudflare 側の Worker 設定にあり、`cf builds workers get <script-tag>` で読める（引数は Worker 名ではなく script tag。tag は `cf workers scripts search --name minaosi-review` の `id`）。本番と preview で command が別なので、preview の失敗を調べるときは `previews_base_config` も見る。
+
+preview 側の `cf previews deploy --prebuilt` は、ビルド出力の `buildContext.isPreview` が true でないと `Build Output was not created by a Preview build.` で落ちる。この値は `CLOUDFLARE_PREVIEW_BUILD=true` を付けてビルドしたときだけ true になり、その名前は `@cloudflare/vite-plugin` の版で変わる（2.0 で `CLOUDFLARE_VITE_PREVIEW_BUILD` → `CLOUDFLARE_PREVIEW_BUILD`）。ビルド出力の `apps/api/.cloudflare/output/v0/config.json` で実際の値を確認できる。このエラーが出たら、deploy command が立てる環境変数名と plugin が読む名前のずれを先に疑う。
+
+現行の deploy command は `CLOUDFLARE_PREVIEW_BUILD=true` を付けた手書きの `vite build` を挟んでおり、plugin 内部の名前をそのまま写している。`cf previews deploy --mode production`（`--prebuilt` を付けない）にビルドを任せれば cf が preview ビルド用の環境変数を自分で注入するため、名前の追随が要らなくなる（2026-10-22 時点では未適用）。deploy command の変更は repo に履歴が残らないので、変えたら理由を PR 本文か ADR に残す。
+
 ## 一次資料
 
 cfはbetaなので、インストール済みのhelpと現行の資料を確認する。
