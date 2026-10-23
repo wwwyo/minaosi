@@ -20,7 +20,7 @@ pf_unset() { "${PF[@]}" config unset "$1"     --repo "$REPO" --yes; }
 
 
 pf_set enabled 'true'
-pf_set model 'opencode-go/minimax-m3.1-flash-free'
+pf_set model 'opencode-go/beam-free'
 pf_set effort '1'
 pf_set progress-comments 'true'
 pf_set oss 'true'
