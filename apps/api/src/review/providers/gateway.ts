@@ -40,7 +40,10 @@ export async function reviewThroughGateway(
   const report = toolDefinition({
     name: REPORT_TOOL.name,
     description: REPORT_TOOL.description,
-    inputSchema: reportSchema,
+    // モデルへ送る schema は reportSchema（deepseek では fact を除く）。ただし検証には fact を許す
+    // 元の schema を使う。TanStack AI 0.7 は schema に合わない tool 入力を実行前に弾くため、
+    // 絞った schema で検証すると生成された fact が他の指摘ごと捨てられる。事実の除外は下の server で行う。
+    inputSchema: structuredClone(REPORT_TOOL.input_schema),
   }).server((input) => {
     const parsed = validateReport(input);
     if (!Array.isArray(parsed)) {
