@@ -24,7 +24,7 @@
     "api:worker:dev": "bun run --cwd apps/api dev:gateway"
   },
   "devDependencies": {
-    "@ai-sdk/openai-compatible": "3.0.62",
+    "@ai-sdk/openai-compatible": "3.0.73",
     "@e2e-dev/web": "0.13.0",
     "@types/bun": "1.4.3",
     "ai": "7.0.145",
