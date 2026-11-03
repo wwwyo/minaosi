@@ -29,6 +29,6 @@
   "devDependencies": {
     "cf": "1.0.0-beta.14",
     "@cloudflare/vite-plugin": "2.0.0-beta.v.5",
-    "vite": "8.3.3"
+    "vite": "8.3.5"
   }
 }
