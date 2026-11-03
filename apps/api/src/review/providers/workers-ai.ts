@@ -61,6 +61,7 @@ export async function reviewWithWorkersAi(request: WorkersAiReviewInput, env: Wo
     agentLoopStrategy: ({ iterationCount }) => findings === undefined && iterationCount < 12,
     abortController,
     debug: false,
+    threadId: crypto.randomUUID(),
   });
   // binding経路はAbortSignalを run() へ伝えないため、await自体をタイマーで打ち切る。
   // 打ち切り後も上流の推論は続行し得るが、呼び出し側は枠を解放して応答を返せる。

@@ -83,6 +83,7 @@ export async function reviewThroughGateway(
     abortController,
     agentLoopStrategy: ({ iterationCount }: { iterationCount: number }) => findings === undefined && iterationCount < 5,
     debug: false as const,
+    threadId: crypto.randomUUID(),
   };
   try {
     let stream;
