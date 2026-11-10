@@ -22,13 +22,13 @@
     "@tanstack/ai-anthropic": "1.0.0",
     "@tanstack/ai-cloudflare": "1.0.0",
     "@tanstack/ai-openai": "1.0.0",
-    "entities": "8.1.0",
+    "entities": "9.0.0",
     "hono": "4.13.13",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "cf": "1.0.0-beta.14",
-    "@cloudflare/vite-plugin": "2.0.0-beta.v.2",
-    "vite": "8.3.3"
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.5",
+    "vite": "8.3.5"
   }
 }
