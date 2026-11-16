@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "@hono/zod-validator": "0.9.1",
-    "@tanstack/ai": "1.0.0",
-    "@tanstack/ai-anthropic": "1.0.0",
-    "@tanstack/ai-cloudflare": "1.0.0",
-    "@tanstack/ai-openai": "1.0.0",
+    "@tanstack/ai": "1.4.0",
+    "@tanstack/ai-anthropic": "1.1.1",
+    "@tanstack/ai-cloudflare": "1.2.0",
+    "@tanstack/ai-openai": "1.1.1",
     "entities": "9.0.0",
     "hono": "4.13.16",
     "zod": "4.6.7"
